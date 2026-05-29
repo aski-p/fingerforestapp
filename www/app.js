@@ -1,6 +1,8 @@
 const sessionKey = "fruitUiLoggedIn";
 const loggedOutKey = "fruitUiLoggedOut";
 const fruitSessionKey = "fruitSessionToken";
+const fruitOwnerKey = "fruitOwnerKey";
+const fruitDeviceKey = "fruitDeviceId";
 const cachedStateKey = "fruitCachedState";
 const rememberLoginKey = "fruitRememberLogin";
 const rememberedLoginIdKey = "fruitRememberLoginId";
@@ -10,10 +12,10 @@ const themeKey = "fruitTheme";
 const fontKey = "fruitFont";
 const profilePhotoKey = "fruitProfilePhoto";
 const profilePhotoCacheKey = "fruitProfilePhotoCache";
-const securityMigrationKey = "fruitSecurityMigrationV70";
+const securityMigrationKey = "fruitSecurityMigrationV82";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "8.0";
-const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
+const appVersion = "8.3";
+const fallbackBaseUrl = "https://fingerfruit-production.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBase";
 const apiTimeoutMs = 8000;
 let updateRequired = false;
@@ -65,6 +67,26 @@ function storeRemove(key) {
   nativeStoreRemove(key);
 }
 
+function randomId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  const values = new Uint8Array(16);
+  window.crypto?.getRandomValues?.(values);
+  return Array.from(values, (value) => value.toString(16).padStart(2, "0")).join("") || `${Date.now()}-${Math.random()}`;
+}
+
+function deviceId() {
+  let value = storeGet(fruitDeviceKey);
+  if (!value) {
+    value = `device:${randomId()}`;
+    storeSet(fruitDeviceKey, value);
+  }
+  return value;
+}
+
+function expectedOwnerKey() {
+  return storeGet(fruitOwnerKey) || "";
+}
+
 const params = new URLSearchParams(location.search);
 const token = params.get("token") || storeGet("fruitToken") || "";
 if (token) storeSet("fruitToken", token);
@@ -73,6 +95,7 @@ function clearSessionStorage() {
   fruitSession = "";
   authValidated = false;
   storeRemove(fruitSessionKey);
+  storeRemove(fruitOwnerKey);
   storeRemove(cachedStateKey);
   storeSet(loggedOutKey, "1");
   try {
@@ -85,6 +108,7 @@ function clearSessionStorage() {
 function runSecurityMigration() {
   if (storeGet(securityMigrationKey) === "1") return;
   storeRemove(fruitSessionKey);
+  storeRemove(fruitOwnerKey);
   storeRemove(cachedStateKey);
   storeRemove(rememberedLoginIdKey);
   storeRemove(rememberedLoginPwKey);
@@ -100,6 +124,8 @@ function runSecurityMigration() {
         rememberedLoginIdKey,
         rememberedLoginPwKey,
         rememberLoginKey,
+        fruitOwnerKey,
+        "fruitSecurityMigrationV70",
         "fruitSecurityMigrationV58",
         "fruitSecurityMigrationV62",
       ].forEach((key) => window.FruitAndroid.removeLocal(key));
@@ -540,9 +566,11 @@ function setBusy(nextBusy) {
 }
 
 function loadRememberedLogin() {
-  clearRememberedLogin();
-  $("rememberLogin").checked = false;
+  const rememberedId = storeGet(rememberedLoginIdKey);
+  $("rememberLogin").checked = storeGet(rememberLoginKey) === "1" && !!rememberedId;
+  $("loginId").value = rememberedId || "";
   $("loginPw").value = "";
+  storeRemove(rememberedLoginPwKey);
 }
 
 async function restoreSavedLoginIfNeeded() {
@@ -556,8 +584,14 @@ async function restoreSavedLoginIfNeeded() {
   }
 }
 
-function saveRememberedLogin() {
-  clearRememberedLogin();
+function saveRememberedLogin(id) {
+  storeRemove(rememberedLoginPwKey);
+  if (!$("rememberLogin").checked || !id) {
+    clearRememberedLogin();
+    return;
+  }
+  storeSet(rememberLoginKey, "1");
+  storeSet(rememberedLoginIdKey, id);
 }
 
 function clearRememberedLogin() {
@@ -589,6 +623,8 @@ async function recoverSession() {
           "Content-Type": "application/json",
           "X-Fruit-Token": token,
           "X-Fruit-Session": fruitSession,
+          "X-Fruit-Owner": expectedOwnerKey(),
+          "X-Fruit-Device": deviceId(),
         },
       });
       const data = await res.json();
@@ -604,7 +640,7 @@ async function recoverSession() {
 
 function isAuthError(data, response) {
   const error = String(data?.error || "");
-  return response?.status === 401 || error.includes("로그인") || error.includes("세션");
+  return response?.status === 401 || error.includes("로그인") || error.includes("세션") || error.includes("기기 CID");
 }
 
 function clearAuthenticatedUi() {
@@ -624,6 +660,8 @@ async function api(path, payload, retrying = false) {
       "Content-Type": "application/json",
       "X-Fruit-Token": token,
       "X-Fruit-Session": fruitSession,
+      "X-Fruit-Owner": expectedOwnerKey(),
+      "X-Fruit-Device": deviceId(),
     },
   };
   if (payload !== undefined) {
@@ -984,6 +1022,11 @@ function preserveStateValue(merged, previous, cached, key) {
 
 function renderState(state) {
   state = mergeStatePhotos(state);
+  if (isUnlocked() && expectedOwnerKey() && state.ownerKey && expectedOwnerKey() !== state.ownerKey) {
+    clearAuthenticatedUi();
+    toast("기기 로그인 정보와 서버 계정이 달라서 세션을 초기화했습니다. 다시 로그인하세요.");
+    return;
+  }
   currentState = state;
   const unlocked = isUnlocked();
   if (unlocked && currentState.credentialsSaved !== false) {
@@ -1262,6 +1305,7 @@ $("loginBtn").addEventListener("click", async () => {
     setBusy(true);
     const result = await api("/api/login", { id, password });
     saveRememberedLogin(id, password);
+    if (result.ownerKey) storeSet(fruitOwnerKey, result.ownerKey);
     saveFruitSession(result.sessionToken || "");
     sessionStorage.setItem(sessionKey, "1");
     if (!$("rememberLogin").checked) $("loginPw").value = "";
@@ -1294,12 +1338,7 @@ $("logoutBtn").addEventListener("click", async () => {
     renderState(state);
     $("results").innerHTML = "";
     $("searchInput").value = "";
-    if (storeGet(rememberLoginKey) === "1") {
-      loadRememberedLogin();
-    } else {
-      $("loginId").value = "";
-      $("loginPw").value = "";
-    }
+    loadRememberedLogin();
     closeHistoryModal();
     toast("로그아웃했습니다. 이 계정의 모든 기기 세션을 종료했습니다.");
   } catch (err) {
@@ -1629,7 +1668,10 @@ $("searchInput").addEventListener("keydown", (event) => {
 $("rememberLogin").addEventListener("change", () => {
   if (!$("rememberLogin").checked) {
     clearRememberedLogin();
-    toast("저장된 아이디/비밀번호를 지웠습니다.");
+    toast("저장된 아이디를 지웠습니다.");
+  } else {
+    const id = $("loginId").value.trim();
+    if (id) saveRememberedLogin(id);
   }
 });
 

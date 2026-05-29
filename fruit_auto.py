@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import datetime as dt
+import hashlib
 import http.cookiejar
 import json
 import os
@@ -29,7 +30,7 @@ MIN_RUN_INTERVAL_MINUTES = 5
 MAX_RUN_INTERVAL_MINUTES = 60
 WAKE_REQUESTED = False
 QUIET_LOG_ACTIONS = {"balance", "check"}
-SESSION_SCHEMA_VERSION = 2
+SESSION_SCHEMA_VERSION = 4
 SESSION_TTL_SECONDS = 60 * 60
 
 PMS_LOGIN_PAGE = "http://pms.fingerservice.co.kr/tms/login"
@@ -245,12 +246,15 @@ def owner_key_for_employee_id(employee_id):
     employee_id = str(employee_id or "")
     if not employee_id:
         return None
+    direct_owner_key = f"forest:{employee_id}"
     state = load_all_state()
     for account_key, account in state.get("accounts", {}).items():
         if str(account.get("senderEmployeeId") or "") == employee_id:
             return account_key
-        if account_key == f"forest:{employee_id}":
+        if account_key == direct_owner_key:
             return account_key
+    if load_secrets().get("webPushSubscriptions", {}).get(direct_owner_key):
+        return direct_owner_key
     return None
 
 
@@ -499,8 +503,14 @@ def save_web_push_subscription(owner_key, subscription):
         raise FruitAutoError("유효한 Push 구독 정보가 없습니다.")
     secrets = load_secrets()
     subscriptions = secrets.setdefault("webPushSubscriptions", {})
-    owner_subscriptions = subscriptions.setdefault(owner_key, [])
     endpoint = subscription.get("endpoint")
+    for existing_owner_key, existing_subscriptions in subscriptions.items():
+        if existing_owner_key == owner_key:
+            continue
+        existing_subscriptions[:] = [
+            item for item in existing_subscriptions if item.get("endpoint") != endpoint
+        ]
+    owner_subscriptions = subscriptions.setdefault(owner_key, [])
     owner_subscriptions[:] = [
         item for item in owner_subscriptions if item.get("endpoint") != endpoint
     ]
@@ -1459,9 +1469,40 @@ def revoke_sessions_for_owner(secrets, owner_key):
 
 
 def session_owner_key(session):
-    if isinstance(session, dict) and session.get("version") == SESSION_SCHEMA_VERSION:
+    if isinstance(session, dict) and session.get("version") in (2, SESSION_SCHEMA_VERSION):
         return session.get("ownerKey")
     return None
+
+
+def session_device_hash(device_id):
+    value = str(device_id or "").strip()
+    if not value:
+        return None
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def require_device_id(device_id):
+    value = str(device_id or "").strip()
+    if not value:
+        raise FruitAutoError("기기 ID가 없는 세션은 사용할 수 없습니다. 앱을 업데이트한 뒤 다시 로그인하세요.")
+    return value
+
+
+def account_device_hash(account):
+    if not isinstance(account, dict):
+        return None
+    return account.get("deviceHash") or account.get("deviceCidHash")
+
+
+def assert_account_device(secrets, owner_key, device_id):
+    device_id = require_device_id(device_id)
+    account = secrets.get("accounts", {}).get(owner_key) or {}
+    expected_hash = account_device_hash(account)
+    if not expected_hash:
+        raise FruitAutoError("이 계정은 아직 기기 CID가 등록되지 않았습니다. 다시 로그인하세요.")
+    if expected_hash != session_device_hash(device_id):
+        raise FruitAutoError("등록된 기기 CID와 현재 기기 CID가 일치하지 않습니다. 이 기기에서는 로그인할 수 없습니다.")
+    return True
 
 
 def session_expires_at():
@@ -1478,17 +1519,22 @@ def session_expired(session):
     return age is not None and age > 0
 
 
-def new_session_record(owner_key):
+def new_session_record(owner_key, device_id=None):
+    device_id = require_device_id(device_id)
     return {
         "version": SESSION_SCHEMA_VERSION,
         "ownerKey": owner_key,
+        "deviceHash": session_device_hash(device_id),
         "createdAt": now_iso(),
         "expiresAt": session_expires_at(),
     }
 
 
-def owner_from_session(session_token):
+def owner_from_session(session_token, device_id=None):
     if not session_token:
+        return None
+    device_id = str(device_id or "").strip()
+    if not device_id:
         return None
     secrets = load_secrets()
     sessions = secrets.setdefault("sessions", {})
@@ -1498,18 +1544,25 @@ def owner_from_session(session_token):
         save_secrets(secrets)
         return None
     owner_key = session_owner_key(session)
+    expected_device_hash = session.get("deviceHash")
+    if not expected_device_hash or expected_device_hash != session_device_hash(device_id):
+        return None
     if owner_key and owner_key in secrets.get("accounts", {}):
+        try:
+            assert_account_device(secrets, owner_key, device_id)
+        except FruitAutoError:
+            return None
         session["expiresAt"] = session_expires_at()
         save_secrets(secrets)
         return owner_key
     return None
 
 
-def issue_session(owner_key=None):
-    state = load_all_state()
-    owner_key = owner_key or state.get("activeOwnerKey") or state.get("ownerKey")
+def issue_session(owner_key=None, device_id=None):
+    device_id = require_device_id(device_id)
     owner_key = require_owner(owner_key)
     secrets = load_secrets()
+    assert_account_device(secrets, owner_key, device_id)
     sessions = secrets.setdefault("sessions", {})
     changed = False
     for session_token, session_owner in list(sessions.items()):
@@ -1517,12 +1570,12 @@ def issue_session(owner_key=None):
             sessions.pop(session_token, None)
             changed = True
             continue
-        if session_owner_key(session_owner) == owner_key:
+        if session_owner_key(session_owner) == owner_key and session_owner.get("deviceHash") == session_device_hash(device_id):
             session_owner["expiresAt"] = session_expires_at()
             save_secrets(secrets)
             return {"sessionToken": session_token, "ownerKey": owner_key}
     session_token = uuid.uuid4().hex
-    sessions[session_token] = new_session_record(owner_key)
+    sessions[session_token] = new_session_record(owner_key, device_id)
     save_secrets(secrets)
     return {"sessionToken": session_token, "ownerKey": owner_key}
 
@@ -1565,7 +1618,8 @@ def account_login(owner_key):
     return client, employee_info, login_dataset, employee, sender_employee_id, sender_employee_name
 
 
-def save_credentials(pms_id, pms_password):
+def save_credentials(pms_id, pms_password, device_id=None):
+    device_id = require_device_id(device_id)
     client = Client()
     token, dataset = pms_login(client, pms_id, pms_password)
     employee_info = forest_login(client, token)
@@ -1578,14 +1632,31 @@ def save_credentials(pms_id, pms_password):
 
     account = get_account_state(owner_key)
     secrets = load_secrets()
-    secrets["accounts"] = {owner_key: {"pms_id": pms_id, "pms_password": pms_password}}
+    device_hash = session_device_hash(device_id)
+    secrets.setdefault("accounts", {})
+    existing_secret = secrets["accounts"].get(owner_key) or {}
+    existing_device_hash = account_device_hash(existing_secret)
+    if existing_device_hash and existing_device_hash != device_hash:
+        revoke_sessions_for_owner(secrets, owner_key)
+        save_secrets(secrets)
+        raise FruitAutoError("등록된 기기 CID와 현재 기기 CID가 일치하지 않습니다. 이 기기에서는 로그인할 수 없습니다.")
+    secrets["accounts"] = {
+        owner_key: {
+            **existing_secret,
+            "pms_id": pms_id,
+            "pms_password": pms_password,
+            "deviceHash": device_hash,
+            "deviceBoundAt": existing_secret.get("deviceBoundAt") or now_iso(),
+            "deviceUpdatedAt": now_iso(),
+        }
+    }
     secrets["sessions"] = {
         token: session
         for token, session in secrets.get("sessions", {}).items()
         if session_owner_key(session) == owner_key
     }
     session_token = uuid.uuid4().hex
-    secrets["sessions"][session_token] = new_session_record(owner_key)
+    secrets["sessions"][session_token] = new_session_record(owner_key, device_id)
     save_secrets(secrets)
 
     account.update(

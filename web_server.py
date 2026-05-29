@@ -21,7 +21,7 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "8.0"
+APP_VERSION = "8.3"
 VALID_THEMES = {
     "default",
     "dark",
@@ -489,14 +489,23 @@ class Handler(BaseHTTPRequestHandler):
         token = self.headers.get("X-Fruit-Token") or (query.get("token") or [""])[0]
         return token and token == read_token()
 
+    def device_id(self):
+        return (self.headers.get("X-Fruit-Device") or "").strip()
+
+    def expected_owner(self):
+        return (self.headers.get("X-Fruit-Owner") or "").strip()
+
     def session_owner(self):
         session_token = self.headers.get("X-Fruit-Session") or ""
-        return fruit_auto.owner_from_session(session_token), session_token
+        return fruit_auto.owner_from_session(session_token, self.device_id()), session_token
 
     def require_session_owner(self):
         owner_key, session_token = self.session_owner()
         if not owner_key:
             raise fruit_auto.FruitAutoError("로그인이 필요합니다.")
+        expected_owner = self.expected_owner()
+        if expected_owner and expected_owner != owner_key:
+            raise fruit_auto.FruitAutoError("현재 기기의 로그인 정보와 서버 세션이 일치하지 않습니다. 다시 로그인하세요.")
         return owner_key, session_token
 
     def read_json(self):
@@ -551,7 +560,9 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_json(200, {"ok": True, "state": public_state(owner_key)})
                 elif parsed.path == "/api/session":
                     owner_key, _session_token = self.session_owner()
-                    self.send_json(200, {"ok": True, "result": fruit_auto.issue_session(owner_key=owner_key)})
+                    if not owner_key:
+                        raise fruit_auto.FruitAutoError("로그인이 필요합니다.")
+                    self.send_json(200, {"ok": True, "result": fruit_auto.issue_session(owner_key=owner_key, device_id=self.device_id())})
                 elif parsed.path == "/api/saved-login":
                     owner_key, _session_token = self.require_session_owner()
                     self.send_json(200, {"ok": True, "result": saved_login_hint(owner_key)})
@@ -583,7 +594,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_json(404, {"ok": False, "error": "not found"})
             except Exception as exc:
                 error = sanitize_error(exc)
-                self.send_json(401 if "로그인" in error or "세션" in error else 500, {"ok": False, "error": error})
+                self.send_json(401 if "로그인" in error or "세션" in error or "기기 CID" in error else 500, {"ok": False, "error": error})
             return
 
         self.send_static()
@@ -596,7 +607,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             payload = self.read_json()
             if parsed.path == "/api/login":
-                result = fruit_auto.save_credentials(payload.get("id"), payload.get("password"))
+                result = fruit_auto.save_credentials(payload.get("id"), payload.get("password"), device_id=self.device_id())
             else:
                 owner_key, session_token = self.require_session_owner()
             if parsed.path == "/api/login":
@@ -665,7 +676,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(200, {"ok": True, "result": result})
         except Exception as exc:
             error = sanitize_error(exc)
-            self.send_json(401 if "로그인" in error or "세션" in error else 500, {"ok": False, "error": error})
+            self.send_json(401 if "로그인" in error or "세션" in error or "기기 CID" in error else 500, {"ok": False, "error": error})
 
 
 class FruitThreadingHTTPServer(ThreadingHTTPServer):
