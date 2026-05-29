@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#10b981">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <link rel="icon" href="/icons/apple-icon-192.png" type="image/png">
+    <title>fingerfruit 앱 설치</title>
+    <style>
+      @font-face {
+        font-family: "Pretendard";
+        src: url("/fonts/PretendardVariable.woff2") format("woff2-variations");
+        font-weight: 45 920;
+        font-style: normal;
+        font-display: swap;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #f7f9fc;
+        color: #111827;
+        font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main {
+        width: min(460px, 100%);
+        margin: 0 auto;
+        padding: max(28px, env(safe-area-inset-top)) 18px max(28px, env(safe-area-inset-bottom));
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+        line-height: 1.15;
+        letter-spacing: 0;
+      }
+      .app-icon {
+        width: 82px;
+        height: 82px;
+        margin-bottom: 16px;
+        border-radius: 22px;
+        box-shadow: 0 16px 36px rgba(16, 185, 129, 0.24);
+      }
+      .version {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        margin: 0 0 12px;
+        border-radius: 999px;
+        padding: 0 10px;
+        background: #e8f8ef;
+        color: #047857;
+        font-size: 12px;
+        font-weight: 900;
+      }
+      p {
+        margin: 0;
+        color: #667085;
+        font-size: 14px;
+        line-height: 1.55;
+        word-break: keep-all;
+      }
+      .card {
+        margin-top: 18px;
+        padding: 16px;
+        border: 1px solid #e3eaf2;
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+      }
+      h2 {
+        margin: 0 0 6px;
+        font-size: 17px;
+      }
+      a {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 50px;
+        margin-top: 14px;
+        border-radius: 8px;
+        background: #111827;
+        color: #ffffff;
+        font-size: 15px;
+        font-weight: 800;
+        text-decoration: none;
+      }
+      a.secondary {
+        background: #e8f8ef;
+        color: #047857;
+      }
+      .note {
+        margin-top: 18px;
+        padding: 12px;
+        border-radius: 8px;
+        background: #eef3f8;
+        color: #475467;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img class="app-icon" src="/icons/apple-icon-192.png" alt="">
+      <h1>fingerfruit 앱 설치</h1>
+      <div class="version">v8.0 · by aski</div>
+      <p>finger 열매 자동화 앱입니다. 휴대폰에서 아래 버튼을 눌러 설치 파일을 내려받으세요.</p>
+
+      <section class="card">
+        <h2>Android</h2>
+        <p>APK를 다운로드한 뒤 설치를 허용하면 앱으로 실행됩니다.</p>
+        <a href="/downloads/fingerfruit-android-v8.0.apk" download>안드로이드 APK v8.0 다운로드</a>
+      </section>
+
+      <section class="card">
+        <h2>iPhone</h2>
+        <p>Push 알림은 Safari에서 앱을 열고 공유 버튼의 홈 화면에 추가로 설치한 뒤 앱 안의 PUSH를 켜야 동작합니다.</p>
+        <a class="secondary" href="/downloads/fingerfruit-ios-v8.0.mobileconfig">아이폰 설치 파일 v8.0 다운로드</a>
+      </section>
+
+      <p class="note">설치 파일은 현재 열려 있는 최신 fingerfruit URL로 연결됩니다.</p>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#f7f9fc">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <link rel="icon" href="/icons/apple-icon-192.png" type="image/png">
+    <link rel="stylesheet" href="/styles.css?v=8.0">
+    <title>fingerfruit</title>
+  </head>
+  <body>
+    <main class="app">
+      <header class="hero">
+        <button id="heroProfileBtn" class="hero-identity" type="button" aria-label="내 프로필 수정">
+          <span class="profile-avatar hero-avatar" aria-hidden="true">
+            <span id="heroAvatarInitial">F</span>
+          </span>
+          <span class="hero-copy">
+            <span id="heroTitle" class="hero-title"><span id="heroTitleText">fingerfruit</span></span>
+          </span>
+        </button>
+        <div class="hero-actions">
+          <button id="settingsOpenBtn" class="settings-button" type="button" aria-label="설정">⚙</button>
+          <label id="pushControl" class="push-control hidden" aria-label="Push 알림">
+            <span>PUSH</span>
+            <input id="pushToggle" type="checkbox">
+            <i></i>
+          </label>
+          <button id="logoutBtn" class="logout hidden" type="button">로그아웃</button>
+        </div>
+      </header>
+
+      <section class="card login-card">
+        <div class="section-title">
+          <div class="login-heading">
+            <p class="label">STEP 1</p>
+            <h2>로그인</h2>
+          </div>
+        </div>
+        <div id="loginForm" class="login-form">
+          <label>
+            <span>PMS 아이디</span>
+            <input id="loginId" autocomplete="username" inputmode="numeric" placeholder="PMS 아이디">
+          </label>
+          <label>
+            <span>PMS 비밀번호</span>
+            <input id="loginPw" type="password" autocomplete="current-password" placeholder="비밀번호">
+          </label>
+          <label class="remember-login hidden">
+            <input id="rememberLogin" type="checkbox" disabled>
+            <i></i>
+            <span>로그인 정보 저장 안 함</span>
+          </label>
+          <button id="loginBtn" class="primary">로그인</button>
+        </div>
+        <div id="savedLogin" class="saved-login hidden">
+          <p>저장된 PMS 로그인 정보가 있습니다.</p>
+          <button id="resumeBtn" class="primary soft" type="button">앱 열기</button>
+        </div>
+        <div id="loginProfile" class="login-profile hidden" aria-live="polite">
+          <div class="profile-person">
+            <span id="loginUserAvatar" class="profile-avatar person-avatar" aria-hidden="true">
+              <span id="loginUserInitial">F</span>
+            </span>
+            <div>
+              <span>로그인 사용자</span>
+              <strong id="loginUserDisplay">-</strong>
+            </div>
+          </div>
+          <div class="login-profile-actions">
+            <span id="loginBadge" class="badge warn">필요</span>
+            <button id="historyOpenBtn" class="history-chip" type="button">내역조회</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="workspace" class="workspace locked">
+        <div class="balance-toolbar">
+          <div>
+            <span>API 조회 상태</span>
+            <strong id="balanceStatus">자동 갱신 대기</strong>
+          </div>
+          <button id="refreshBalanceBtn" type="button">새로고침</button>
+        </div>
+        <section class="status-grid">
+          <div class="metric">
+            <span>자동전송</span>
+            <strong id="autoState">잠김</strong>
+          </div>
+          <div class="metric">
+            <span>대상 직원</span>
+            <div class="metric-person">
+              <span id="targetAvatar" class="profile-avatar person-avatar" aria-hidden="true">
+                <span id="targetInitial">F</span>
+              </span>
+              <strong id="targetName">검색 후 선택</strong>
+            </div>
+          </div>
+          <div class="metric">
+            <span>보유 씨앗</span>
+            <strong id="seedCount">-</strong>
+          </div>
+          <div class="metric">
+            <span>보유 열매</span>
+            <strong id="berryCount">-</strong>
+          </div>
+          <div class="metric wide">
+            <span>씨앗 / 열매</span>
+            <strong id="balancePair">-</strong>
+          </div>
+        </section>
+
+        <section class="card getter-menu-card getter-card-target">
+          <div class="section-title">
+            <div>
+              <p class="label">STEP 2</p>
+              <h2>대상 직원</h2>
+            </div>
+            <span id="targetBadge" class="badge neutral">미선택</span>
+          </div>
+          <div class="searchrow">
+            <input id="searchInput" placeholder="이름, 사번, 부서 검색">
+            <button id="searchBtn" type="button">검색</button>
+          </div>
+          <div id="results" class="results" aria-live="polite"></div>
+        </section>
+
+        <section class="card getter-menu-card getter-card-transfer">
+          <div class="section-title">
+            <div>
+              <p class="label">STEP 3</p>
+              <h2>전송 설정</h2>
+            </div>
+          </div>
+          <label>
+            <span>전달 메시지</span>
+            <input id="giftMessage" placeholder="자동 전달">
+          </label>
+          <label class="berry-count-label">
+            <span>보낼 열매 수</span>
+            <div class="berry-count-row">
+              <input id="sendBerryCount" type="number" min="1" step="1" inputmode="numeric" placeholder="1">
+              <label class="send-all-option">
+                <input id="sendAllBerries" type="checkbox">
+                <span>열매전부</span>
+              </label>
+            </div>
+          </label>
+          <button id="messageBtn" type="button" class="secondary">저장</button>
+        </section>
+
+        <section class="control-card getter-menu-card getter-card-auto">
+          <div class="auto-heading">
+            <p class="label">STEP 4</p>
+            <div class="auto-title-row">
+              <h2>자동전송</h2>
+              <label class="switch">
+                <input id="autoToggle" type="checkbox">
+                <span></span>
+              </label>
+            </div>
+            <p id="controlHint">켜면 5분마다 한 번씩 보유 열매를 확인합니다.</p>
+          </div>
+          <div class="interval-control" aria-label="전송 시간 조절">
+            <div>
+              <span>전송 시간</span>
+              <strong id="intervalDisplay">10분</strong>
+            </div>
+            <button id="intervalAddBtn" type="button">+5분</button>
+            <button id="intervalResetBtn" type="button">리셋</button>
+          </div>
+          <button id="runBtn" type="button" class="dark">지금 한 번 실행</button>
+        </section>
+      </section>
+
+      <div id="historyModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
+        <div class="modal-panel history-panel">
+          <div class="modal-head">
+            <div>
+              <p class="label">FOREST</p>
+              <h2 id="historyModalTitle">내역조회</h2>
+            </div>
+            <button id="historyCloseBtn" class="icon-button" type="button" aria-label="내역 닫기">닫기</button>
+          </div>
+          <div class="history-date-picker">
+            <strong id="historySelectedDate">오늘</strong>
+            <button id="historyCalendarBtn" class="calendar-button" type="button" aria-label="날짜 선택">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 2v3M17 2v3M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/>
+              </svg>
+            </button>
+            <input id="historyDateInput" type="date" aria-label="조회 날짜 선택">
+          </div>
+          <div class="history-table">
+            <div id="historyBody" class="history-body">
+              <div class="history-empty">내역조회 버튼을 누르면 최신 내역을 불러옵니다.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="settingsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+        <div class="modal-panel settings-panel">
+          <div class="modal-head">
+            <div>
+              <p class="label">APP</p>
+              <h2 id="settingsModalTitle">설정</h2>
+            </div>
+            <button id="settingsCloseBtn" class="icon-button" type="button" aria-label="설정 닫기">닫기</button>
+          </div>
+          <div class="settings-body">
+            <section>
+              <h3>스킨</h3>
+              <div id="themeOptions" class="option-grid" aria-label="테마 선택"></div>
+            </section>
+            <section>
+              <h3>폰트</h3>
+              <div id="fontOptions" class="option-grid font-grid" aria-label="폰트 선택"></div>
+            </section>
+            <div class="settings-actions">
+              <button id="appearanceSaveBtn" class="primary compact" type="button">설정 저장</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="profileModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
+        <div class="modal-panel profile-panel">
+          <div class="modal-head">
+            <div>
+              <p class="label">PROFILE</p>
+              <h2 id="profileModalTitle">내 프로필</h2>
+            </div>
+            <button id="profileCloseBtn" class="icon-button" type="button" aria-label="프로필 닫기">닫기</button>
+          </div>
+          <div class="profile-body">
+            <button id="profilePreview" class="profile-avatar profile-preview" type="button" aria-label="프로필 사진 선택">
+              <span id="profilePreviewInitial">F</span>
+            </button>
+            <div class="profile-summary">
+              <span>접속자</span>
+              <strong id="profileUserName">fingerfruit</strong>
+            </div>
+            <input id="profilePhotoInput" class="profile-file-input" type="file" accept="image/*">
+            <div class="profile-actions">
+              <button id="profilePhotoPickBtn" class="secondary compact" type="button">사진 변경</button>
+              <button id="profilePhotoResetBtn" class="icon-button" type="button">기본 이미지</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="updateModal" class="modal hidden update-modal" role="dialog" aria-modal="true" aria-labelledby="updateModalTitle">
+        <div class="modal-panel update-panel">
+          <div class="modal-head">
+            <div>
+              <p class="label">UPDATE</p>
+              <h2 id="updateModalTitle">앱 업데이트 필요</h2>
+            </div>
+          </div>
+          <div class="update-body">
+            <strong id="updateVersionText">최신 버전을 확인했습니다.</strong>
+            <p id="updateMessage">새 버전이 있습니다. 업데이트 후 다시 실행해주세요.</p>
+            <button id="updateBtn" class="primary" type="button">업데이트</button>
+          </div>
+        </div>
+      </div>
+
+      <p id="toast" class="toast" role="status"></p>
+      <footer class="app-footer">
+        <span>v8.0 · by aski</span>
+        <a id="supportLink" class="support-link" href="https://qr.kakaopay.com/Ej7ruxJDq" target="_blank" rel="noopener" aria-label="카카오페이로 후원하기">후원하기</a>
+      </footer>
+    </main>
+    <script src="/app.js?v=8.0"></script>
+  </body>
+</html>

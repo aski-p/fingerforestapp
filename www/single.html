@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#11635a">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #edf3f0;
+  color: #15201d;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.shell {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  padding: 22px 16px 34px;
+}
+
+.topbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 2px 18px;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: #58716b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+h1,
+h2 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+h1 {
+  font-size: 30px;
+}
+
+h2 {
+  margin-bottom: 14px;
+  font-size: 18px;
+}
+
+.pill {
+  flex: 0 0 auto;
+  min-width: 68px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 800;
+  text-align: center;
+}
+
+.pill.on {
+  background: #0f766e;
+}
+
+.pill.off {
+  background: #7a8582;
+}
+
+.panel {
+  margin: 0 0 12px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #dbe5e1;
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(22, 45, 39, 0.06);
+}
+
+.compact {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.stat {
+  min-height: 76px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f7faf9;
+}
+
+.stat span,
+label span {
+  display: block;
+  margin-bottom: 7px;
+  color: #5d706b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.stat strong {
+  display: block;
+  word-break: break-word;
+  font-size: 20px;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid #cbd9d5;
+  border-radius: 8px;
+  background: #fff;
+  color: #15201d;
+  font-size: 16px;
+}
+
+button {
+  min-height: 46px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  background: #dce7e4;
+  color: #15201d;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.primary,
+.on {
+  width: 100%;
+  margin-top: 12px;
+  background: #11635a;
+  color: #fff;
+}
+
+.searchrow {
+  display: grid;
+  grid-template-columns: 1fr 92px;
+  gap: 8px;
+}
+
+.results {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.person {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #dbe5e1;
+  border-radius: 8px;
+  background: #f7faf9;
+}
+
+.person strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.person small {
+  color: #60746e;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.actions button {
+  margin: 0;
+}
+
+.offbtn {
+  background: #802c34;
+  color: #fff;
+}
+
+.ghost {
+  grid-column: 1 / -1;
+  background: #2f3f3b;
+  color: #fff;
+}
+
+.toast {
+  min-height: 24px;
+  margin: 14px 4px 0;
+  color: #24423b;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .compact,
+  .grid2,
+  .actions {
+    grid-template-columns: 1fr;
+  }
+
+  h1 {
+    font-size: 26px;
+  }
+}
+
+    </style>
+    <title>열매 자동전송</title>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="topbar">
+        <div>
+          <p class="eyebrow">PMS Forest</p>
+          <h1>열매 자동전송</h1>
+        </div>
+        <span id="statusPill" class="pill off">꺼짐</span>
+      </section>
+
+      <section class="panel compact">
+        <div class="stat">
+          <span>대상 직원</span>
+          <strong id="targetName">-</strong>
+        </div>
+        <div class="stat">
+          <span>보유 열매</span>
+          <strong id="berryCount">-</strong>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>로그인</h2>
+        <div class="grid2">
+          <label>
+            <span>PMS 아이디</span>
+            <input id="loginId" autocomplete="username" inputmode="numeric" placeholder="12405001">
+          </label>
+          <label>
+            <span>PMS 비밀번호</span>
+            <input id="loginPw" type="password" autocomplete="current-password" placeholder="비밀번호">
+          </label>
+        </div>
+        <button id="loginBtn" class="primary">로그인 저장</button>
+      </section>
+
+      <section class="panel">
+        <h2>직원 검색</h2>
+        <div class="searchrow">
+          <input id="searchInput" placeholder="이름, 사번, 부서 검색">
+          <button id="searchBtn">검색</button>
+        </div>
+        <div id="results" class="results"></div>
+      </section>
+
+      <section class="panel">
+        <h2>전달 설정</h2>
+        <label>
+          <span>전달 메시지</span>
+          <input id="giftMessage" placeholder="자동 전달">
+        </label>
+        <button id="messageBtn">메시지 저장</button>
+      </section>
+
+      <section class="actions">
+        <button id="onBtn" class="on">열매온</button>
+        <button id="offBtn" class="offbtn">열매오프</button>
+        <button id="runBtn" class="ghost">지금 한번 실행</button>
+      </section>
+
+      <p id="toast" class="toast" role="status"></p>
+    </main>
+    <script>
+const params = new URLSearchParams(location.search);
+const token = params.get("token") || localStorage.getItem("fruitToken") || "";
+if (token) localStorage.setItem("fruitToken", token);
+
+const $ = (id) => document.getElementById(id);
+
+function toast(message) {
+  $("toast").textContent = message;
+}
+
+async function api(path, payload) {
+  const options = {
+    headers: {
+      "Content-Type": "application/json",
+      "X-Fruit-Token": token,
+    },
+  };
+  if (payload !== undefined) {
+    options.method = "POST";
+    options.body = JSON.stringify(payload);
+  }
+  const res = await fetch(path, options);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || "요청 실패");
+  return data.result || data.state || data;
+}
+
+function fmtDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("ko-KR", { hour12: false });
+}
+
+function intervalMinutes(state) {
+  const minutes = Number(state && state.runIntervalMinutes || 5);
+  if (!Number.isFinite(minutes)) return 5;
+  return Math.max(5, Math.min(60, minutes));
+}
+
+function renderState(state) {
+  const enabled = !!state.enabled;
+  const pill = $("statusPill");
+  pill.textContent = enabled ? "켜짐" : "꺼짐";
+  pill.className = `pill ${enabled ? "on" : "off"}`;
+  $("targetName").textContent = state.targetEmployeeName || "-";
+  $("berryCount").textContent =
+    state.lastBerryCount === null || state.lastBerryCount === undefined
+      ? "-"
+      : `${state.lastBerryCount}개`;
+  $("giftMessage").value = state.giftMessage || "자동 전달";
+}
+
+async function refresh() {
+  try {
+    renderState(await api("/api/status"));
+  } catch (err) {
+    toast(`상태 조회 실패: ${err.message}`);
+  }
+}
+
+function renderResults(results) {
+  const box = $("results");
+  box.innerHTML = "";
+  if (!results.length) {
+    box.innerHTML = '<div class="person"><div>검색 결과가 없습니다.</div></div>';
+    return;
+  }
+  results.forEach((person) => {
+    const item = document.createElement("div");
+    item.className = "person";
+    item.innerHTML = `
+      <div>
+        <strong>${person.emp_nm} ${person.pos_nm || ""}</strong>
+        <small>${person.dept_nm || "-"} · ${person.emp_id}</small>
+      </div>
+      <button type="button">선택</button>
+    `;
+    item.querySelector("button").addEventListener("click", async () => {
+      const state = await api("/api/target", person);
+      renderState(state);
+      toast(`${person.emp_nm} 직원으로 설정했습니다.`);
+    });
+    box.appendChild(item);
+  });
+}
+
+$("loginBtn").addEventListener("click", async () => {
+  const id = $("loginId").value.trim();
+  const password = $("loginPw").value;
+  if (!id || !password) {
+    toast("아이디와 비밀번호를 입력하세요.");
+    return;
+  }
+  try {
+    const result = await api("/api/login", { id, password });
+    $("loginPw").value = "";
+    toast(`${result.user || "사용자"} 로그인 저장 완료`);
+    await refresh();
+  } catch (err) {
+    toast(`로그인 실패: ${err.message}`);
+  }
+});
+
+$("searchBtn").addEventListener("click", async () => {
+  const query = $("searchInput").value.trim();
+  if (!query) {
+    toast("검색어를 입력하세요.");
+    return;
+  }
+  try {
+    const data = await api("/api/search", { query });
+    renderResults(data.results || []);
+    toast(`검색 결과 ${(data.results || []).length}건`);
+  } catch (err) {
+    toast(`검색 실패: ${err.message}`);
+  }
+});
+
+$("messageBtn").addEventListener("click", async () => {
+  const state = await api("/api/message", { message: $("giftMessage").value.trim() });
+  renderState(state);
+  toast("전달 메시지를 저장했습니다.");
+});
+
+$("onBtn").addEventListener("click", async () => {
+  const state = await api("/api/on", {});
+  renderState(state);
+  toast(`열매 자동전송을 켰습니다. ${intervalMinutes(state)}분에 한 번만 실행합니다.`);
+});
+
+$("offBtn").addEventListener("click", async () => {
+  const state = await api("/api/off", {});
+  renderState(state);
+  toast("열매 자동전송을 껐습니다.");
+});
+
+$("runBtn").addEventListener("click", async () => {
+  toast("실행 중입니다...");
+  const result = await api("/api/run-now", {});
+  if (result.action === "sent") {
+    toast(`${result.target}에게 ${result.berries}개 전송 완료`);
+  } else if (result.action === "none") {
+    toast("보낼 열매가 없습니다. 이번 주기는 종료하고 다음 설정 시간에 다시 확인합니다.");
+  } else {
+    toast(`실행 결과: ${result.action}`);
+  }
+  await refresh();
+});
+
+refresh();
+setInterval(refresh, 30000);
+
+    </script>
+  </body>
+</html>
