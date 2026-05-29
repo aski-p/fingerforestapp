@@ -15,7 +15,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV82";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
 const appVersion = "8.3";
-const fallbackBaseUrl = "https://fingerfruit-production.up.railway.app";
+const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBase";
 const apiTimeoutMs = 8000;
 let updateRequired = false;
@@ -249,7 +249,7 @@ function apiBaseCandidates() {
   const currentBase = normalizeBaseUrl(location.origin);
   const fallbackBase = normalizeBaseUrl(fallbackBaseUrl);
   const activeBase = normalizeBaseUrl(storeGet(activeApiBaseKey));
-  return [activeBase, currentBase, fallbackBase].filter((item, index, list) => item && list.indexOf(item) === index);
+  return [currentBase, activeBase, fallbackBase].filter((item, index, list) => item && list.indexOf(item) === index);
 }
 
 function apiUrl(baseUrl, path) {
