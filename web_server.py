@@ -708,7 +708,10 @@ class FruitThreadingHTTPServer(ThreadingHTTPServer):
 
 def main():
     host = sys.argv[1] if len(sys.argv) > 1 else "0.0.0.0"
-    port = int(sys.argv[2]) if len(sys.argv) > 2 else PORT
+    port_arg = sys.argv[2] if len(sys.argv) > 2 else str(PORT)
+    if port_arg == "$PORT":
+        port_arg = os.environ.get("PORT") or str(PORT)
+    port = int(port_arg)
     httpd = FruitThreadingHTTPServer((host, port), Handler)
     WEB_PID_PATH.write_text(f"{os.getpid()}\n", encoding="utf-8")
     print(f"FruitAuto UI listening on http://{host}:{port}/")
