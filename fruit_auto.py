@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import argparse
 import datetime as dt
-import hashlib
 import http.cookiejar
 import json
 import os
@@ -32,6 +31,7 @@ WAKE_REQUESTED = False
 QUIET_LOG_ACTIONS = {"balance", "check"}
 SESSION_SCHEMA_VERSION = 4
 SESSION_TTL_SECONDS = 60 * 60
+KST = dt.timezone(dt.timedelta(hours=9))
 
 PMS_LOGIN_PAGE = "http://pms.fingerservice.co.kr/tms/login"
 PMS_LOGIN_API = "http://pms.fingerservice.co.kr/tms/v1/common/login"
@@ -62,6 +62,25 @@ DEFAULT_STATE = {
     "sendAllBerries": False,
     "runIntervalMinutes": DEFAULT_RUN_INTERVAL_MINUTES,
     "pushEnabled": True,
+    "worklogEnabled": False,
+    "worklogScheduleDays": [],
+    "worklogScheduleDates": [],
+    "worklogScheduleTime": "09:05",
+    "worklogTargetEmployeeName": None,
+    "worklogTargetEmployeeId": None,
+    "worklogTargetDutyId": None,
+    "worklogTargetDeptName": None,
+    "worklogTargetPositionName": None,
+    "worklogSeedCount": 0,
+    "worklogSeedMessage": "",
+    "worklogProjectId": None,
+    "worklogProjectName": None,
+    "worklogContent": "",
+    "worklogNextRunAt": None,
+    "worklogLastRunAt": None,
+    "worklogLastRunKey": None,
+    "worklogLastResult": None,
+    "worklogLastError": None,
 }
 
 
@@ -183,7 +202,7 @@ def load_json(path, default):
 
 def save_json(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
     with tmp.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2, sort_keys=True)
         f.write("\n")
@@ -1474,37 +1493,6 @@ def session_owner_key(session):
     return None
 
 
-def session_device_hash(device_id):
-    value = str(device_id or "").strip()
-    if not value:
-        return None
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
-
-
-def require_device_id(device_id):
-    value = str(device_id or "").strip()
-    if not value:
-        raise FruitAutoError("기기 ID가 없는 세션은 사용할 수 없습니다. 앱을 업데이트한 뒤 다시 로그인하세요.")
-    return value
-
-
-def account_device_hash(account):
-    if not isinstance(account, dict):
-        return None
-    return account.get("deviceHash") or account.get("deviceCidHash")
-
-
-def assert_account_device(secrets, owner_key, device_id):
-    device_id = require_device_id(device_id)
-    account = secrets.get("accounts", {}).get(owner_key) or {}
-    expected_hash = account_device_hash(account)
-    if not expected_hash:
-        raise FruitAutoError("이 계정은 아직 기기 CID가 등록되지 않았습니다. 다시 로그인하세요.")
-    if expected_hash != session_device_hash(device_id):
-        raise FruitAutoError("등록된 기기 CID와 현재 기기 CID가 일치하지 않습니다. 이 기기에서는 로그인할 수 없습니다.")
-    return True
-
-
 def session_expires_at():
     return iso_after(SESSION_TTL_SECONDS)
 
@@ -1519,12 +1507,10 @@ def session_expired(session):
     return age is not None and age > 0
 
 
-def new_session_record(owner_key, device_id=None):
-    device_id = require_device_id(device_id)
+def new_session_record(owner_key):
     return {
         "version": SESSION_SCHEMA_VERSION,
         "ownerKey": owner_key,
-        "deviceHash": session_device_hash(device_id),
         "createdAt": now_iso(),
         "expiresAt": session_expires_at(),
     }
@@ -1532,9 +1518,6 @@ def new_session_record(owner_key, device_id=None):
 
 def owner_from_session(session_token, device_id=None):
     if not session_token:
-        return None
-    device_id = str(device_id or "").strip()
-    if not device_id:
         return None
     secrets = load_secrets()
     sessions = secrets.setdefault("sessions", {})
@@ -1544,14 +1527,7 @@ def owner_from_session(session_token, device_id=None):
         save_secrets(secrets)
         return None
     owner_key = session_owner_key(session)
-    expected_device_hash = session.get("deviceHash")
-    if not expected_device_hash or expected_device_hash != session_device_hash(device_id):
-        return None
     if owner_key and owner_key in secrets.get("accounts", {}):
-        try:
-            assert_account_device(secrets, owner_key, device_id)
-        except FruitAutoError:
-            return None
         session["expiresAt"] = session_expires_at()
         save_secrets(secrets)
         return owner_key
@@ -1559,10 +1535,8 @@ def owner_from_session(session_token, device_id=None):
 
 
 def issue_session(owner_key=None, device_id=None):
-    device_id = require_device_id(device_id)
     owner_key = require_owner(owner_key)
     secrets = load_secrets()
-    assert_account_device(secrets, owner_key, device_id)
     sessions = secrets.setdefault("sessions", {})
     changed = False
     for session_token, session_owner in list(sessions.items()):
@@ -1570,12 +1544,12 @@ def issue_session(owner_key=None, device_id=None):
             sessions.pop(session_token, None)
             changed = True
             continue
-        if session_owner_key(session_owner) == owner_key and session_owner.get("deviceHash") == session_device_hash(device_id):
+        if session_owner_key(session_owner) == owner_key:
             session_owner["expiresAt"] = session_expires_at()
             save_secrets(secrets)
             return {"sessionToken": session_token, "ownerKey": owner_key}
     session_token = uuid.uuid4().hex
-    sessions[session_token] = new_session_record(owner_key, device_id)
+    sessions[session_token] = new_session_record(owner_key)
     save_secrets(secrets)
     return {"sessionToken": session_token, "ownerKey": owner_key}
 
@@ -1619,7 +1593,6 @@ def account_login(owner_key):
 
 
 def save_credentials(pms_id, pms_password, device_id=None):
-    device_id = require_device_id(device_id)
     client = Client()
     token, dataset = pms_login(client, pms_id, pms_password)
     employee_info = forest_login(client, token)
@@ -1632,31 +1605,20 @@ def save_credentials(pms_id, pms_password, device_id=None):
 
     account = get_account_state(owner_key)
     secrets = load_secrets()
-    device_hash = session_device_hash(device_id)
     secrets.setdefault("accounts", {})
     existing_secret = secrets["accounts"].get(owner_key) or {}
-    existing_device_hash = account_device_hash(existing_secret)
-    if existing_device_hash and existing_device_hash != device_hash:
-        revoke_sessions_for_owner(secrets, owner_key)
-        save_secrets(secrets)
-        raise FruitAutoError("등록된 기기 CID와 현재 기기 CID가 일치하지 않습니다. 이 기기에서는 로그인할 수 없습니다.")
-    secrets["accounts"] = {
-        owner_key: {
-            **existing_secret,
-            "pms_id": pms_id,
-            "pms_password": pms_password,
-            "deviceHash": device_hash,
-            "deviceBoundAt": existing_secret.get("deviceBoundAt") or now_iso(),
-            "deviceUpdatedAt": now_iso(),
-        }
+    secrets["accounts"][owner_key] = {
+        **existing_secret,
+        "pms_id": pms_id,
+        "pms_password": pms_password,
     }
     secrets["sessions"] = {
         token: session
         for token, session in secrets.get("sessions", {}).items()
-        if session_owner_key(session) == owner_key
+        if session_owner_key(session) != owner_key
     }
     session_token = uuid.uuid4().hex
-    secrets["sessions"][session_token] = new_session_record(owner_key, device_id)
+    secrets["sessions"][session_token] = new_session_record(owner_key)
     save_secrets(secrets)
 
     account.update(
@@ -1671,7 +1633,7 @@ def save_credentials(pms_id, pms_password, device_id=None):
             "updatedAt": now_iso(),
         }
     )
-    save_single_account_state(owner_key, account)
+    save_account_state(owner_key, account)
     log_event({"action": "credentials_saved", "ownerKey": owner_key, "user": dataset.get("SESS_USERNAME")})
     return {
         "success": True,
@@ -1830,10 +1792,26 @@ def set_enabled(enabled, owner_key=None):
 def logout(owner_key=None, session_token=None):
     owner_key = require_owner(owner_key)
     secrets = load_secrets()
-    secrets["sessions"] = {}
-    secrets["accounts"] = {}
+    if session_token:
+        secrets.setdefault("sessions", {}).pop(session_token, None)
+    else:
+        revoke_sessions_for_owner(secrets, owner_key)
+        secrets.setdefault("accounts", {}).pop(owner_key, None)
     save_secrets(secrets)
-    state = remove_account_state(owner_key)
+    if owner_key in secrets.get("accounts", {}):
+        state = get_account_state(owner_key)
+        state.update(
+            {
+                "enabled": False,
+                "status": "off",
+                "lastResult": "logged_out",
+                "lastAttemptResult": "logged_out",
+                "updatedAt": now_iso(),
+            }
+        )
+        save_account_state(owner_key, state)
+    else:
+        state = remove_account_state(owner_key)
     log_event({"action": "logged_out", "ownerKey": owner_key})
     return state
 
@@ -2005,6 +1983,290 @@ def check_once(dry_run=False, force=False, owner_key=None):
         raise
 
 
+def list_worklog_projects(owner_key=None):
+    owner_key = require_owner(owner_key)
+    _client, employee_info, _login_dataset, _employee, _sender_id, _sender_name = account_login(owner_key)
+    projects = []
+    seen = set()
+    for key in ("projEmp", "projInner"):
+        for row in employee_info.get(key) or []:
+            project_id = row.get("proj_id")
+            project_name = row.get("proj_nm")
+            if not project_id or not project_name or project_id in seen:
+                continue
+            seen.add(project_id)
+            projects.append({"id": project_id, "name": project_name, "source": key})
+    return projects
+
+
+def set_worklog_target(emp_id, name=None, duty_id=None, dept_nm=None, pos_nm=None, owner_key=None):
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    state.update(
+        {
+            "worklogTargetEmployeeId": emp_id,
+            "worklogTargetEmployeeName": name or state.get("worklogTargetEmployeeName"),
+            "worklogTargetDutyId": duty_id,
+            "worklogTargetDeptName": dept_nm,
+            "worklogTargetPositionName": pos_nm,
+            "updatedAt": now_iso(),
+        }
+    )
+    save_account_state(owner_key, state)
+    log_event({"action": "worklog_target_set", "ownerKey": owner_key, "targetEmployeeId": emp_id, "targetEmployeeName": name})
+    return state
+
+
+def normalize_schedule_days(days):
+    result = []
+    for item in days or []:
+        try:
+            value = int(item)
+        except (TypeError, ValueError):
+            continue
+        if 0 <= value <= 6 and value not in result:
+            result.append(value)
+    return result
+
+
+def normalize_schedule_dates(dates):
+    result = []
+    for item in dates or []:
+        text = str(item or "").strip()
+        try:
+            dt.date.fromisoformat(text)
+        except ValueError:
+            continue
+        if text not in result:
+            result.append(text)
+    return result
+
+
+def normalize_schedule_time(value):
+    text = str(value or DEFAULT_STATE["worklogScheduleTime"]).strip()
+    try:
+        hour, minute = [int(part) for part in text.split(":", 1)]
+    except (TypeError, ValueError):
+        raise FruitAutoError("예약 시간은 HH:MM 형식이어야 합니다.")
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        raise FruitAutoError("예약 시간이 올바르지 않습니다.")
+    return f"{hour:02d}:{minute:02d}"
+
+
+def set_worklog_settings(payload, owner_key=None):
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    seed_count = payload.get("seedCount", state.get("worklogSeedCount") or 0)
+    try:
+        seed_count = int(seed_count or 0)
+    except (TypeError, ValueError):
+        raise FruitAutoError("씨앗 개수는 숫자로 입력하세요.")
+    if seed_count < 0 or seed_count > 3:
+        raise FruitAutoError("씨앗 선물은 최대 3개까지 가능합니다.")
+    project_id = payload.get("projectId", state.get("worklogProjectId"))
+    project_name = payload.get("projectName", state.get("worklogProjectName"))
+    content = str(payload.get("content", state.get("worklogContent") or "") or "").strip()
+    enabled = bool(payload.get("enabled", state.get("worklogEnabled")))
+    if enabled:
+        if not project_id or not project_name:
+            raise FruitAutoError("업무일지 프로젝트를 선택하세요.")
+        if not content:
+            raise FruitAutoError("업무일지 내용을 입력하세요.")
+    target_employee_id = payload.get("targetEmployeeId", state.get("worklogTargetEmployeeId"))
+    target_employee_name = payload.get("targetEmployeeName", state.get("worklogTargetEmployeeName"))
+    target_dept_name = payload.get("targetDeptName", state.get("worklogTargetDeptName"))
+    target_position_name = payload.get("targetPositionName", state.get("worklogTargetPositionName"))
+    target_duty_id = payload.get("targetDutyId", state.get("worklogTargetDutyId"))
+    next_values = {
+        "worklogEnabled": enabled,
+        "worklogScheduleDays": normalize_schedule_days(payload.get("scheduleDays", state.get("worklogScheduleDays"))),
+        "worklogScheduleDates": normalize_schedule_dates(payload.get("scheduleDates", state.get("worklogScheduleDates"))),
+        "worklogScheduleTime": normalize_schedule_time(payload.get("scheduleTime", state.get("worklogScheduleTime"))),
+        "worklogSeedCount": seed_count,
+        "worklogSeedMessage": str(payload.get("seedMessage", state.get("worklogSeedMessage") or "") or ""),
+        "worklogTargetEmployeeId": target_employee_id,
+        "worklogTargetEmployeeName": target_employee_name,
+        "worklogTargetDeptName": target_dept_name,
+        "worklogTargetPositionName": target_position_name,
+        "worklogTargetDutyId": target_duty_id,
+        "worklogProjectId": project_id,
+        "worklogProjectName": project_name,
+        "worklogContent": content,
+        "updatedAt": now_iso(),
+    }
+    next_values["worklogNextRunAt"] = next_worklog_run_at({**state, **next_values})
+    state.update(next_values)
+    save_account_state(owner_key, state)
+    log_event({"action": "worklog_settings_saved", "ownerKey": owner_key, "enabled": enabled})
+    return state
+
+
+def worklog_schedule_matches(account, local_now):
+    schedule_time = normalize_schedule_time(account.get("worklogScheduleTime"))
+    hour, minute = [int(part) for part in schedule_time.split(":")]
+    scheduled = local_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if local_now < scheduled:
+        return False, scheduled
+    today = local_now.date().isoformat()
+    weekdays = normalize_schedule_days(account.get("worklogScheduleDays"))
+    dates = normalize_schedule_dates(account.get("worklogScheduleDates"))
+    if weekdays and local_now.weekday() in weekdays:
+        return True, scheduled
+    if dates and today in dates:
+        return True, scheduled
+    return False, scheduled
+
+
+def next_worklog_run_at(account, now=None):
+    if not account.get("worklogEnabled"):
+        return None
+    now = now or dt.datetime.now(dt.timezone.utc)
+    local_now = now.astimezone(KST)
+    schedule_time = normalize_schedule_time(account.get("worklogScheduleTime"))
+    hour, minute = [int(part) for part in schedule_time.split(":")]
+    weekdays = normalize_schedule_days(account.get("worklogScheduleDays"))
+    dates = normalize_schedule_dates(account.get("worklogScheduleDates"))
+    candidates = []
+    for offset in range(0, 370):
+        day = (local_now + dt.timedelta(days=offset)).date()
+        if weekdays and day.weekday() in weekdays:
+            candidates.append(day)
+        if dates and day.isoformat() in dates:
+            candidates.append(day)
+    for day in sorted(set(candidates)):
+        candidate = dt.datetime.combine(day, dt.time(hour, minute), tzinfo=KST)
+        if candidate > local_now:
+            return candidate.astimezone(dt.timezone.utc).replace(microsecond=0).isoformat()
+    return None
+
+
+def worklog_next_run_delay(account, now=None):
+    now = now or dt.datetime.now(dt.timezone.utc)
+    next_run = parse_iso(account.get("worklogNextRunAt")) or parse_iso(next_worklog_run_at(account, now))
+    if next_run is None:
+        return None
+    return max(0, int((next_run - now).total_seconds()))
+
+
+def worklog_due(account, now=None):
+    if not account.get("worklogEnabled"):
+        return False
+    now = now or dt.datetime.now(dt.timezone.utc)
+    local_now = now.astimezone(KST)
+    matches, scheduled = worklog_schedule_matches(account, local_now)
+    if not matches:
+        return False
+    run_key = scheduled.strftime("%Y-%m-%dT%H:%M")
+    return account.get("worklogLastRunKey") != run_key
+
+
+def save_worklog_once(owner_key=None, run_date=None, force=False):
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    if not force and not worklog_due(state):
+        state["worklogNextRunAt"] = next_worklog_run_at(state)
+        save_account_state(owner_key, state)
+        return {"action": "skipped", "reason": "worklog_not_due", "ownerKey": owner_key, "nextRunAt": state.get("worklogNextRunAt")}
+
+    if not state.get("worklogProjectId") or not state.get("worklogContent"):
+        raise FruitAutoError("업무일지 프로젝트와 내용을 먼저 저장하세요.")
+    seed_count = int(state.get("worklogSeedCount") or 0)
+    if seed_count < 0 or seed_count > 3:
+        raise FruitAutoError("씨앗 선물은 최대 3개까지 가능합니다.")
+    if seed_count and not state.get("worklogTargetEmployeeId"):
+        raise FruitAutoError("씨앗 선물 대상 직원을 선택하세요.")
+
+    client, employee_info, _login_dataset, employee, sender_employee_id, sender_employee_name = account_login(owner_key)
+    local_now = dt.datetime.now(KST)
+    if run_date:
+        target_date = dt.date.fromisoformat(str(run_date))
+    else:
+        matches, scheduled = worklog_schedule_matches(state, local_now)
+        target_date = scheduled.date() if matches else local_now.date()
+    std_dt = target_date.strftime("%Y%m%d")
+    std_mt = target_date.strftime("%Y%m")
+    std_yr = target_date.strftime("%Y")
+    data = {
+        "empId": employee["emp_id"],
+        "stdDt": std_dt,
+        "projId": state.get("worklogProjectId"),
+        "stdMt": std_mt,
+        "stdYr": std_yr,
+        "empNm": employee.get("emp_nm"),
+        "projNm": state.get("worklogProjectName"),
+        "workProsRate": 100,
+        "workDesc": state.get("worklogContent"),
+        "cfmYn": "N",
+        "workStTm": f"{std_dt}0900",
+        "workEdTm": f"{std_dt}1800",
+        "slfWorkPfmBerryCnt": 3,
+        "regId": employee["emp_id"],
+        "modId": employee["emp_id"],
+    }
+    if seed_count:
+        data.update(
+            {
+                "tgtEmpId": state.get("worklogTargetEmployeeId"),
+                "tgtEmpNm": state.get("worklogTargetEmployeeName"),
+                "dutyCd": state.get("worklogTargetDutyId"),
+                "dutyCds": employee.get("duty_id"),
+                "seedCnt": seed_count,
+                "tgtMsg": state.get("worklogSeedMessage") or "",
+            }
+        )
+    client.post_json(f"{FOREST_API}/saveDw", {"dwInsList": [data]})
+    run_key = f"{target_date.isoformat()}T{normalize_schedule_time(state.get('worklogScheduleTime'))}"
+    state.update(
+        {
+            "worklogLastRunAt": now_iso(),
+            "worklogLastRunKey": run_key,
+            "worklogLastResult": "sent",
+            "worklogLastError": None,
+            "worklogNextRunAt": next_worklog_run_at({**state, "worklogLastRunKey": run_key}),
+            "senderEmployeeId": sender_employee_id,
+            "senderEmployeeName": sender_employee_name,
+            "updatedAt": now_iso(),
+        }
+    )
+    save_account_state(owner_key, state)
+    event = {
+        "action": "worklog_sent",
+        "ownerKey": owner_key,
+        "stdDt": std_dt,
+        "projectId": state.get("worklogProjectId"),
+        "projectName": state.get("worklogProjectName"),
+        "seedCount": seed_count,
+        "targetEmployeeId": state.get("worklogTargetEmployeeId"),
+    }
+    log_event(event)
+    return {"action": "worklog_sent", "ownerKey": owner_key, "stdDt": std_dt, "projectName": state.get("worklogProjectName"), "seedCount": seed_count}
+
+
+def run_worklog_if_due(owner_key):
+    state = get_account_state(owner_key)
+    if not worklog_due(state):
+        next_run = next_worklog_run_at(state)
+        if next_run != state.get("worklogNextRunAt"):
+            state["worklogNextRunAt"] = next_run
+            save_account_state(owner_key, state)
+        return {"action": "skipped", "reason": "worklog_not_due", "ownerKey": owner_key}
+    try:
+        return save_worklog_once(owner_key=owner_key)
+    except Exception as exc:
+        state = get_account_state(owner_key)
+        state.update(
+            {
+                "worklogLastRunAt": now_iso(),
+                "worklogLastResult": "failed",
+                "worklogLastError": str(exc),
+                "worklogNextRunAt": next_worklog_run_at(state),
+                "updatedAt": now_iso(),
+            }
+        )
+        save_account_state(owner_key, state)
+        raise
+
+
 def enabled_owner_keys():
     state = load_all_state()
     secrets = load_secrets()
@@ -2012,6 +2274,16 @@ def enabled_owner_keys():
         owner_key
         for owner_key, account in state.get("accounts", {}).items()
         if account.get("enabled") and owner_key in secrets.get("accounts", {})
+    ]
+
+
+def active_owner_keys():
+    state = load_all_state()
+    secrets = load_secrets()
+    return [
+        owner_key
+        for owner_key, account in state.get("accounts", {}).items()
+        if owner_key in secrets.get("accounts", {}) and (account.get("enabled") or account.get("worklogEnabled"))
     ]
 
 
@@ -2045,13 +2317,24 @@ def scheduled_owner_keys():
     due = []
     next_delay = None
     for owner_key, account in state.get("accounts", {}).items():
-        if not account.get("enabled") or owner_key not in secrets.get("accounts", {}):
+        if owner_key not in secrets.get("accounts", {}):
             continue
-        delay = account_next_run_delay(account, now)
-        if delay <= 0:
+        account_due = False
+        if account.get("enabled"):
+            delay = account_next_run_delay(account, now)
+            if delay <= 0:
+                account_due = True
+            elif next_delay is None or delay < next_delay:
+                next_delay = delay
+        if account.get("worklogEnabled"):
+            delay = worklog_next_run_delay(account, now)
+            if delay is not None:
+                if delay <= 0 or worklog_due(account, now):
+                    account_due = True
+                elif next_delay is None or delay < next_delay:
+                    next_delay = delay
+        if account_due:
             due.append(owner_key)
-        elif next_delay is None or delay < next_delay:
-            next_delay = delay
     return due, next_delay
 
 
@@ -2092,10 +2375,16 @@ def run_daemon():
                 continue
             for owner_key in owners:
                 try:
-                    result = check_once(owner_key=owner_key)
-                    if result.get("reason") != "already_attempted_this_interval":
-                        log_event({"action": "daemon_tick", "ownerKey": owner_key, "result": result})
-                    notify_result(result)
+                    account = get_account_state(owner_key)
+                    if account.get("enabled") and account_next_run_delay(account) <= 0:
+                        result = check_once(owner_key=owner_key)
+                        if result.get("reason") != "already_attempted_this_interval":
+                            log_event({"action": "daemon_tick", "ownerKey": owner_key, "result": result})
+                        notify_result(result)
+                    if account.get("worklogEnabled"):
+                        result = run_worklog_if_due(owner_key)
+                        if result.get("action") == "worklog_sent":
+                            log_event({"action": "daemon_worklog_tick", "ownerKey": owner_key, "result": result})
                 except Exception as exc:
                     log_event({"action": "daemon_error", "ownerKey": owner_key, "error": str(exc)})
                     notify_result({"action": "failed", "error": str(exc), "ownerKey": owner_key})

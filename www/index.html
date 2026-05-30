@@ -7,7 +7,7 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <link rel="icon" href="/icons/apple-icon-192.png" type="image/png">
-    <link rel="stylesheet" href="/styles.css?v=8.3">
+    <link rel="stylesheet" href="/styles.css?v=9.1">
     <title>fingerfruit</title>
   </head>
   <body>
@@ -35,7 +35,6 @@
       <section class="card login-card">
         <div class="section-title">
           <div class="login-heading">
-            <p class="label">STEP 1</p>
             <h2>로그인</h2>
           </div>
         </div>
@@ -51,7 +50,7 @@
           <label class="remember-login">
             <input id="rememberLogin" type="checkbox">
             <i></i>
-            <span>아이디 기억하기</span>
+            <span>아이디/비밀번호 기억하기</span>
           </label>
           <button id="loginBtn" class="primary">로그인</button>
         </div>
@@ -106,16 +105,11 @@
             <span>보유 열매</span>
             <strong id="berryCount">-</strong>
           </div>
-          <div class="metric wide">
-            <span>씨앗 / 열매</span>
-            <strong id="balancePair">-</strong>
-          </div>
         </section>
 
         <section class="card getter-menu-card getter-card-target">
           <div class="section-title">
             <div>
-              <p class="label">STEP 2</p>
               <h2>대상 직원</h2>
             </div>
             <span id="targetBadge" class="badge neutral">미선택</span>
@@ -130,7 +124,6 @@
         <section class="card getter-menu-card getter-card-transfer">
           <div class="section-title">
             <div>
-              <p class="label">STEP 3</p>
               <h2>전송 설정</h2>
             </div>
           </div>
@@ -153,7 +146,6 @@
 
         <section class="control-card getter-menu-card getter-card-auto">
           <div class="auto-heading">
-            <p class="label">STEP 4</p>
             <div class="auto-title-row">
               <h2>자동전송</h2>
               <label class="switch">
@@ -172,6 +164,67 @@
             <button id="intervalResetBtn" type="button">리셋</button>
           </div>
           <button id="runBtn" type="button" class="dark">지금 한 번 실행</button>
+        </section>
+
+        <section class="card getter-menu-card worklog-card">
+          <div class="section-title">
+            <div>
+              <h2>업무일지 작성</h2>
+            </div>
+            <span id="worklogBadge" class="badge neutral">대기</span>
+          </div>
+          <div class="worklog-block">
+            <h3>씨앗 선물</h3>
+            <div class="searchrow">
+              <input id="worklogSearchInput" placeholder="업무일지 씨앗 받을 직원 검색">
+              <button id="worklogSearchBtn" type="button">검색</button>
+            </div>
+            <div id="worklogResults" class="results" aria-live="polite"></div>
+            <div id="worklogTarget" class="selected-person">선택된 직원 없음</div>
+            <label>
+              <span>보낼 씨앗 수</span>
+              <input id="worklogSeedCount" type="number" min="0" max="3" step="1" inputmode="numeric" placeholder="0">
+            </label>
+            <label>
+              <span>메시지</span>
+              <input id="worklogSeedMessage" placeholder="씨앗 선물 메시지">
+            </label>
+          </div>
+          <div class="worklog-block">
+            <h3>업무일지</h3>
+            <label>
+              <span>프로젝트</span>
+              <select id="worklogProjectSelect">
+                <option value="">프로젝트 선택</option>
+              </select>
+            </label>
+            <label>
+              <span>일지내용</span>
+              <textarea id="worklogContent" rows="5" placeholder="업무일지 내용을 입력"></textarea>
+            </label>
+          </div>
+          <div class="worklog-block">
+            <h3>자동 작성 시간</h3>
+            <div class="worklog-schedule-row">
+              <button id="worklogCalendarBtn" class="calendar-button" type="button" aria-label="업무일지 날짜 추가">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M7 2v3M17 2v3M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/>
+                </svg>
+              </button>
+              <button id="worklogDateInput" class="date-open-button" type="button">날짜 선택</button>
+              <input id="worklogTimeInput" type="time" value="09:05" aria-label="업무일지 시간">
+            </div>
+            <div id="worklogDateChips" class="date-chips" aria-live="polite"></div>
+          </div>
+          <label class="remember-login worklog-enable">
+            <input id="worklogEnabled" type="checkbox">
+            <i></i>
+            <span>예약 자동 작성 켜기</span>
+          </label>
+          <div class="worklog-actions">
+            <button id="worklogSaveBtn" type="button" class="primary">업무일지 설정 저장</button>
+            <button id="worklogRunBtn" type="button" class="secondary">지금 한 번 작성</button>
+          </div>
         </section>
       </section>
 
@@ -268,12 +321,39 @@
         </div>
       </div>
 
+      <div id="worklogCalendarModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="worklogCalendarTitle">
+        <div class="modal-panel worklog-calendar-panel">
+          <div class="modal-head">
+            <div>
+              <p class="label">DATE</p>
+              <h2 id="worklogCalendarTitle">업무일지 날짜 선택</h2>
+            </div>
+            <button id="worklogCalendarCloseBtn" class="icon-button" type="button" aria-label="날짜 선택 닫기">닫기</button>
+          </div>
+          <div class="worklog-calendar-body">
+            <div class="calendar-monthbar">
+              <button id="worklogCalendarPrevBtn" class="calendar-nav" type="button" aria-label="이전 달">‹</button>
+              <strong id="worklogCalendarMonth">2026년 5월</strong>
+              <button id="worklogCalendarNextBtn" class="calendar-nav" type="button" aria-label="다음 달">›</button>
+            </div>
+            <div class="calendar-weekdays" aria-hidden="true">
+              <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+            </div>
+            <div id="worklogCalendarGrid" class="calendar-grid"></div>
+          </div>
+          <div class="calendar-actions">
+            <button id="worklogCalendarResetBtn" class="secondary compact" type="button">선택 초기화</button>
+            <button id="worklogCalendarApplyBtn" class="primary compact" type="button">적용</button>
+          </div>
+        </div>
+      </div>
+
       <p id="toast" class="toast" role="status"></p>
       <footer class="app-footer">
-        <span>v8.3 · by aski</span>
+        <span>v9.1 · by aski</span>
         <a id="supportLink" class="support-link" href="https://qr.kakaopay.com/Ej7ruxJDq" target="_blank" rel="noopener" aria-label="카카오페이로 후원하기">후원하기</a>
       </footer>
     </main>
-    <script src="/app.js?v=8.3"></script>
+    <script src="/app.js?v=9.1"></script>
   </body>
 </html>

@@ -803,23 +803,38 @@ label {
   margin-bottom: 12px;
 }
 
-input {
+input,
+select,
+textarea {
   width: 100%;
-  height: 50px;
   border: 1px solid #d7e0ea;
   border-radius: 8px;
-  padding: 0 14px;
   background: #ffffff;
   color: #111827;
   font-size: 16px;
   outline: none;
 }
 
+input,
+select {
+  height: 50px;
+  padding: 0 14px;
+}
+
+textarea {
+  min-height: 132px;
+  resize: vertical;
+  padding: 12px 14px;
+  line-height: 1.45;
+}
+
 input::placeholder {
   color: #98a2b3;
 }
 
-input:focus {
+input:focus,
+select:focus,
+textarea:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
 }
@@ -1018,6 +1033,190 @@ input:focus {
   padding: 14px;
   color: #667085;
   font-weight: 900;
+}
+
+.worklog-card {
+  margin-top: 12px;
+}
+
+.worklog-block {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  border-top: 1px solid #eef2f6;
+  padding-top: 14px;
+}
+
+.worklog-block h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.selected-person {
+  min-height: 42px;
+  border: 1px solid #dbe8e2;
+  border-radius: 8px;
+  padding: 11px 12px;
+  background: #f2fbf5;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.worklog-schedule-row {
+  display: grid;
+  grid-template-columns: 50px 1fr 112px;
+  gap: 8px;
+  align-items: center;
+}
+
+.worklog-schedule-row .calendar-button {
+  position: static;
+  width: 50px;
+  height: 50px;
+  opacity: 1;
+}
+
+.date-open-button {
+  min-height: 50px;
+  border: 1px solid #d7e0ea;
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #fff;
+  color: #344054;
+  font-size: 15px;
+  font-weight: 900;
+  text-align: left;
+}
+
+.date-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.date-chip {
+  min-height: 36px;
+  border: 1px solid #dce8f0;
+  border-radius: 8px;
+  padding: 0 11px;
+  background: #f8fbfd;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.date-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.date-chip button {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #111827;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.worklog-enable {
+  margin-top: 14px;
+}
+
+.worklog-calendar-panel {
+  width: min(430px, 100%);
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+
+.worklog-calendar-body {
+  padding: 0 16px 12px;
+}
+
+.calendar-monthbar {
+  display: grid;
+  grid-template-columns: 42px 1fr 42px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.calendar-monthbar strong {
+  text-align: center;
+  color: #111827;
+  font-size: 18px;
+  font-weight: 1000;
+}
+
+.calendar-nav {
+  width: 42px;
+  height: 42px;
+  border: 1px solid #d7e0ea;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #344054;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.calendar-weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.calendar-weekdays {
+  margin-bottom: 6px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.calendar-day {
+  aspect-ratio: 1;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #1f2937;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.calendar-day.blank {
+  background: transparent;
+  pointer-events: none;
+}
+
+.calendar-day.today {
+  border-color: #b7791f;
+}
+
+.calendar-day.selected {
+  background: #4b2300;
+  color: #fff;
+}
+
+.calendar-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid #edf2f7;
+}
+
+.worklog-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .berry-count-row {

@@ -21,7 +21,7 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "8.3"
+APP_VERSION = "9.1"
 VALID_THEMES = {
     "default",
     "dark",
@@ -367,7 +367,7 @@ def public_state(owner_key=None, refresh_balance=False):
         state["credentialsSaved"] = False
     state["hasTarget"] = bool(state.get("targetEmployeeId"))
     state["daemonRunning"] = daemon_running()
-    state["activeAccountCount"] = len(fruit_auto.enabled_owner_keys())
+    state["activeAccountCount"] = len(fruit_auto.active_owner_keys())
     return attach_state_profile_photos(state)
 
 
@@ -469,7 +469,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Fruit-Token, X-Fruit-Session")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Fruit-Token, X-Fruit-Session, X-Fruit-Owner, X-Fruit-Device")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -478,7 +478,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Fruit-Token, X-Fruit-Session")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Fruit-Token, X-Fruit-Session, X-Fruit-Owner, X-Fruit-Device")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
@@ -585,6 +585,9 @@ class Handler(BaseHTTPRequestHandler):
                         )
                     )
                     self.send_json(200, {"ok": True, "result": {"items": items}})
+                elif parsed.path == "/api/worklog-projects":
+                    owner_key, _session_token = self.require_session_owner()
+                    self.send_json(200, {"ok": True, "result": {"projects": fruit_auto.list_worklog_projects(owner_key=owner_key)}})
                 elif parsed.path == "/api/notifications":
                     owner_key, _session_token = self.require_session_owner()
                     self.send_json(200, {"ok": True, "result": {"items": fruit_auto.notification_items(owner_key=owner_key)}})
@@ -647,6 +650,24 @@ class Handler(BaseHTTPRequestHandler):
                 result = upload_profile_photo(owner_key, payload.get("image"))
             elif parsed.path == "/api/profile-settings":
                 result = save_profile_settings(owner_key, payload)
+            elif parsed.path == "/api/worklog-target":
+                fruit_auto.set_worklog_target(
+                    payload.get("emp_id"),
+                    payload.get("emp_nm"),
+                    payload.get("duty_id"),
+                    payload.get("dept_nm"),
+                    payload.get("pos_nm"),
+                    owner_key=owner_key,
+                )
+                result = state_response(owner_key)
+            elif parsed.path == "/api/worklog-settings":
+                fruit_auto.set_worklog_settings(payload, owner_key=owner_key)
+                result = state_response(owner_key)
+                ensure_daemon_running()
+                wake_daemon()
+            elif parsed.path == "/api/worklog-run-now":
+                result = fruit_auto.save_worklog_once(owner_key=owner_key, force=True)
+                result = {**result, "state": state_response(owner_key)}
             elif parsed.path == "/api/interval":
                 fruit_auto.set_run_interval(payload.get("minutes"), owner_key=owner_key)
                 result = state_response(owner_key)
@@ -687,10 +708,7 @@ class FruitThreadingHTTPServer(ThreadingHTTPServer):
 
 def main():
     host = sys.argv[1] if len(sys.argv) > 1 else "0.0.0.0"
-    port_arg = sys.argv[2] if len(sys.argv) > 2 else os.environ.get("PORT")
-    if not port_arg or str(port_arg).startswith("$"):
-        port_arg = os.environ.get("PORT") or PORT
-    port = int(port_arg)
+    port = int(sys.argv[2]) if len(sys.argv) > 2 else PORT
     httpd = FruitThreadingHTTPServer((host, port), Handler)
     WEB_PID_PATH.write_text(f"{os.getpid()}\n", encoding="utf-8")
     print(f"FruitAuto UI listening on http://{host}:{port}/")

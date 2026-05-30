@@ -12,9 +12,9 @@ const themeKey = "fruitTheme";
 const fontKey = "fruitFont";
 const profilePhotoKey = "fruitProfilePhoto";
 const profilePhotoCacheKey = "fruitProfilePhotoCache";
-const securityMigrationKey = "fruitSecurityMigrationV82";
+const securityMigrationKey = "fruitSecurityMigrationV85";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "8.3";
+const appVersion = "9.0";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBase";
 const apiTimeoutMs = 8000;
@@ -84,7 +84,7 @@ function deviceId() {
 }
 
 function expectedOwnerKey() {
-  return storeGet(fruitOwnerKey) || "";
+  return currentOwnerKey || "";
 }
 
 const params = new URLSearchParams(location.search);
@@ -93,6 +93,7 @@ if (token) storeSet("fruitToken", token);
 
 function clearSessionStorage() {
   fruitSession = "";
+  currentOwnerKey = "";
   authValidated = false;
   storeRemove(fruitSessionKey);
   storeRemove(fruitOwnerKey);
@@ -139,20 +140,19 @@ const $ = (id) => document.getElementById(id);
 let currentState = {};
 let busy = false;
 runSecurityMigration();
-let fruitSession = storeGet(fruitSessionKey) || "";
+let fruitSession = "";
+let currentOwnerKey = "";
 let authValidated = false;
-try {
-  if (!fruitSession && window.FruitAndroid?.getSession) {
-    fruitSession = window.FruitAndroid.getSession() || "";
-    if (fruitSession) storeSet(fruitSessionKey, fruitSession);
-  }
-} catch (_err) {
-  // Native session restore is best-effort.
-}
 let recoveringSession = null;
 let pushSyncing = false;
 let selectedHistoryDate = localDateValue(new Date());
 let pendingAppearanceSettings = null;
+let worklogProjects = [];
+let selectedWorklogDates = [];
+let selectedWorklogDays = [];
+let calendarDraftDates = [];
+let worklogCalendarMonth = new Date();
+let pendingWorklogTarget = null;
 
 const themes = [
   { id: "default", label: "Fresh", swatch: ["#f7f9fc", "#10b981", "#111827"] },
@@ -567,10 +567,10 @@ function setBusy(nextBusy) {
 
 function loadRememberedLogin() {
   const rememberedId = storeGet(rememberedLoginIdKey);
-  $("rememberLogin").checked = storeGet(rememberLoginKey) === "1" && !!rememberedId;
+  const rememberedPw = storeGet(rememberedLoginPwKey);
+  $("rememberLogin").checked = storeGet(rememberLoginKey) === "1" && (!!rememberedId || !!rememberedPw);
   $("loginId").value = rememberedId || "";
-  $("loginPw").value = "";
-  storeRemove(rememberedLoginPwKey);
+  $("loginPw").value = rememberedPw || "";
 }
 
 async function restoreSavedLoginIfNeeded() {
@@ -584,14 +584,14 @@ async function restoreSavedLoginIfNeeded() {
   }
 }
 
-function saveRememberedLogin(id) {
-  storeRemove(rememberedLoginPwKey);
-  if (!$("rememberLogin").checked || !id) {
+function saveRememberedLogin(id, password) {
+  if (!$("rememberLogin").checked || !id || !password) {
     clearRememberedLogin();
     return;
   }
   storeSet(rememberLoginKey, "1");
   storeSet(rememberedLoginIdKey, id);
+  storeSet(rememberedLoginPwKey, password);
 }
 
 function clearRememberedLogin() {
@@ -604,12 +604,11 @@ function saveFruitSession(sessionToken) {
   fruitSession = sessionToken || "";
   if (fruitSession) {
     authValidated = true;
-    storeSet(fruitSessionKey, fruitSession);
     storeRemove(loggedOutKey);
     try {
-      if (window.FruitAndroid?.saveSession) window.FruitAndroid.saveSession(fruitSession);
+      if (window.FruitAndroid?.saveSession) window.FruitAndroid.saveSession("");
     } catch (_err) {
-      // Native session mirroring is best-effort.
+      // Native session clearing is best-effort. Login sessions are not persisted.
     }
   }
 }
@@ -647,7 +646,9 @@ function clearAuthenticatedUi() {
   clearSessionStorage();
   sessionStorage.removeItem(sessionKey);
   $("results").innerHTML = "";
+  $("worklogResults").innerHTML = "";
   $("searchInput").value = "";
+  $("worklogSearchInput").value = "";
   closeHistoryModal();
   closeSettingsModal();
   closeProfileModal();
@@ -939,6 +940,18 @@ function setLockedState(unlocked) {
     "refreshBalanceBtn",
     "intervalAddBtn",
     "intervalResetBtn",
+    "worklogSearchInput",
+    "worklogSearchBtn",
+    "worklogSeedCount",
+    "worklogSeedMessage",
+    "worklogProjectSelect",
+    "worklogContent",
+    "worklogCalendarBtn",
+    "worklogDateInput",
+    "worklogTimeInput",
+    "worklogEnabled",
+    "worklogSaveBtn",
+    "worklogRunBtn",
   ];
   controls.forEach((id) => {
     $(id).disabled = !unlocked;
@@ -1020,6 +1033,132 @@ function preserveStateValue(merged, previous, cached, key) {
   }
 }
 
+function renderWorklogDates() {
+  const box = $("worklogDateChips");
+  box.innerHTML = "";
+  const opener = $("worklogDateInput");
+  opener.textContent = selectedWorklogDates.length
+    ? `${selectedWorklogDates.length}개 날짜 선택됨`
+    : "날짜 선택";
+  if (!selectedWorklogDates.length) {
+    box.innerHTML = '<span class="empty">선택 날짜 없음</span>';
+    return;
+  }
+  selectedWorklogDates.forEach((date) => {
+    const chip = document.createElement("span");
+    chip.className = "date-chip";
+    chip.innerHTML = `${escapeHtml(date)} <button type="button" aria-label="${escapeHtml(date)} 삭제">×</button>`;
+    chip.querySelector("button").addEventListener("click", () => {
+      selectedWorklogDates = selectedWorklogDates.filter((item) => item !== date);
+      renderWorklogDates();
+    });
+    box.appendChild(chip);
+  });
+}
+
+function renderWorklogCalendar() {
+  const grid = $("worklogCalendarGrid");
+  const monthLabel = $("worklogCalendarMonth");
+  const year = worklogCalendarMonth.getFullYear();
+  const month = worklogCalendarMonth.getMonth();
+  const todayValue = localDateValue(new Date());
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  monthLabel.textContent = `${year}년 ${month + 1}월`;
+  grid.innerHTML = "";
+  for (let i = 0; i < firstDay; i += 1) {
+    const blank = document.createElement("span");
+    blank.className = "calendar-day blank";
+    grid.appendChild(blank);
+  }
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = localDateValue(new Date(year, month, day));
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = [
+      "calendar-day",
+      calendarDraftDates.includes(date) ? "selected" : "",
+      date === todayValue ? "today" : "",
+    ].filter(Boolean).join(" ");
+    button.textContent = String(day);
+    button.setAttribute("aria-pressed", calendarDraftDates.includes(date) ? "true" : "false");
+    button.addEventListener("click", () => {
+      calendarDraftDates = calendarDraftDates.includes(date)
+        ? calendarDraftDates.filter((item) => item !== date)
+        : [...calendarDraftDates, date].sort();
+      renderWorklogCalendar();
+    });
+    grid.appendChild(button);
+  }
+}
+
+function openWorklogCalendar() {
+  calendarDraftDates = [...selectedWorklogDates];
+  const anchor = selectedWorklogDates[0] || localDateValue(new Date());
+  const [year, month] = anchor.split("-").map(Number);
+  worklogCalendarMonth = new Date(year || new Date().getFullYear(), (month || new Date().getMonth() + 1) - 1, 1);
+  renderWorklogCalendar();
+  $("worklogCalendarModal").classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+
+function closeWorklogCalendar() {
+  $("worklogCalendarModal").classList.add("hidden");
+  if ($("historyModal").classList.contains("hidden") && $("settingsModal").classList.contains("hidden") && $("profileModal").classList.contains("hidden")) {
+    document.body.classList.remove("modal-open");
+  }
+}
+
+function setWorklogProjects(projects, selectedId = "") {
+  worklogProjects = projects || worklogProjects || [];
+  const select = $("worklogProjectSelect");
+  const current = selectedId || select.value || "";
+  select.innerHTML = '<option value="">프로젝트 선택</option>';
+  worklogProjects.forEach((project) => {
+    const option = document.createElement("option");
+    option.value = project.id;
+    option.textContent = project.name;
+    select.appendChild(option);
+  });
+  select.value = current;
+}
+
+async function loadWorklogProjects() {
+  if (!isUnlocked()) return;
+  try {
+    const data = await api("/api/worklog-projects");
+    setWorklogProjects(data.projects || [], currentState.worklogProjectId || "");
+  } catch (err) {
+    toast(`프로젝트 조회 실패: ${err.message}`);
+  }
+}
+
+function renderWorklogState(state) {
+  const unlocked = isUnlocked();
+  const worklogTarget = pendingWorklogTarget || {
+    emp_id: state.worklogTargetEmployeeId,
+    emp_nm: state.worklogTargetEmployeeName,
+    dept_nm: state.worklogTargetDeptName,
+    pos_nm: state.worklogTargetPositionName,
+    duty_id: state.worklogTargetDutyId,
+  };
+  selectedWorklogDays = [];
+  selectedWorklogDates = Array.isArray(state.worklogScheduleDates) ? [...state.worklogScheduleDates] : [];
+  $("worklogSeedCount").value = state.worklogSeedCount ?? 0;
+  $("worklogSeedMessage").value = state.worklogSeedMessage || "";
+  $("worklogContent").value = state.worklogContent || "";
+  $("worklogTimeInput").value = state.worklogScheduleTime || "09:05";
+  $("worklogEnabled").checked = !!state.worklogEnabled;
+  $("worklogTarget").textContent = worklogTarget.emp_id
+    ? employeeLabel(worklogTarget.emp_nm, worklogTarget.emp_id)
+    : "선택된 직원 없음";
+  setWorklogProjects(worklogProjects, state.worklogProjectId || "");
+  const badgeOk = unlocked && state.worklogEnabled;
+  $("worklogBadge").textContent = badgeOk ? `예약됨 ${fmtDate(state.worklogNextRunAt)}` : "대기";
+  $("worklogBadge").className = `badge ${badgeOk ? "ok" : "neutral"}`;
+  renderWorklogDates();
+}
+
 function renderState(state) {
   state = mergeStatePhotos(state);
   if (isUnlocked() && expectedOwnerKey() && state.ownerKey && expectedOwnerKey() !== state.ownerKey) {
@@ -1058,17 +1197,13 @@ function renderState(state) {
   applyAvatar($("targetAvatar"), $("targetInitial"), hasTarget ? targetLabel : "", targetPhoto);
   $("autoState").textContent = unlocked ? (enabled ? "켜짐" : "꺼짐") : "잠김";
   $("targetName").textContent = targetLabel;
-  $("berryCount").textContent =
-    unlocked && state.lastBerryCount !== null && state.lastBerryCount !== undefined
-      ? `${state.lastBerryCount}개`
-      : "-";
   $("seedCount").textContent =
     unlocked && state.lastSeedCount !== null && state.lastSeedCount !== undefined
       ? `${state.lastSeedCount}개`
       : "-";
-  $("balancePair").textContent =
-    unlocked && state.lastSeedCount !== null && state.lastSeedCount !== undefined && state.lastBerryCount !== null && state.lastBerryCount !== undefined
-      ? `${state.lastSeedCount}/${state.lastBerryCount}`
+  $("berryCount").textContent =
+    unlocked && state.lastBerryCount !== null && state.lastBerryCount !== undefined
+      ? `${state.lastBerryCount}개`
       : "-";
   $("intervalDisplay").textContent = `${intervalMinutes(state)}분`;
   $("balanceStatus").textContent = unlocked
@@ -1094,6 +1229,7 @@ function renderState(state) {
     : hasTarget
       ? `켜면 ${intervalMinutes(state)}분마다 한 번씩 보유 열매를 확인하고 ${sendModeText} 보냅니다.`
       : "대상 직원을 먼저 검색해서 선택하세요.";
+  renderWorklogState(state);
   try {
     if (unlocked && state.credentialsSaved !== false && window.FruitAndroid?.saveSettings) {
       window.FruitAndroid.saveSettings(enabled, state.pushEnabled !== false, intervalMinutes(state));
@@ -1186,6 +1322,7 @@ async function refreshHistory({ silent = false } = {}) {
 async function refresh({ silent = false } = {}) {
   try {
     renderState(await api("/api/status"));
+    await loadWorklogProjects();
   } catch (err) {
     if (String(err.message || "").includes("로그인") || String(err.message || "").includes("세션")) {
       clearAuthenticatedUi();
@@ -1294,6 +1431,54 @@ function renderResults(results) {
   });
 }
 
+function renderWorklogResults(results) {
+  const box = $("worklogResults");
+  box.innerHTML = "";
+  if (!results.length) {
+    box.innerHTML = '<div class="empty">검색 결과가 없습니다.</div>';
+    return;
+  }
+  results.forEach((person) => {
+    const item = document.createElement("div");
+    item.className = "person";
+    item.innerHTML = `
+      <div>
+        <strong>${escapeHtml(employeeLabel(person.emp_nm, person.emp_id))}</strong>
+        <small>${escapeHtml(person.dept_nm || "-")} · ${escapeHtml(person.pos_nm || "-")}</small>
+      </div>
+      <div class="person-actions">
+        <button type="button" data-action="select">선택</button>
+      </div>
+    `;
+    const selectWorklogPerson = async () => {
+      try {
+        setBusy(true);
+        pendingWorklogTarget = {
+          emp_id: person.emp_id,
+          emp_nm: person.emp_nm,
+          dept_nm: person.dept_nm,
+          pos_nm: person.pos_nm,
+          duty_id: person.duty_id,
+        };
+        renderWorklogState(currentState);
+        $("worklogResults").innerHTML = "";
+        $("worklogSearchInput").value = "";
+        const state = await api("/api/worklog-target", person);
+        pendingWorklogTarget = null;
+        renderState(state);
+        toast(`${person.emp_nm} 직원으로 설정했습니다.`);
+      } catch (err) {
+        toast(`업무일지 직원 설정 실패: ${err.message}`);
+      } finally {
+        setBusy(false);
+      }
+    };
+    item.querySelector('[data-action="select"]').addEventListener("click", selectWorklogPerson);
+    item.addEventListener("dblclick", selectWorklogPerson);
+    box.appendChild(item);
+  });
+}
+
 $("loginBtn").addEventListener("click", async () => {
   const id = $("loginId").value.trim();
   const password = $("loginPw").value;
@@ -1305,7 +1490,7 @@ $("loginBtn").addEventListener("click", async () => {
     setBusy(true);
     const result = await api("/api/login", { id, password });
     saveRememberedLogin(id, password);
-    if (result.ownerKey) storeSet(fruitOwnerKey, result.ownerKey);
+    currentOwnerKey = result.ownerKey || "";
     saveFruitSession(result.sessionToken || "");
     sessionStorage.setItem(sessionKey, "1");
     if (!$("rememberLogin").checked) $("loginPw").value = "";
@@ -1520,6 +1705,138 @@ document.addEventListener("keydown", (event) => {
     closeSettingsModal();
   } else if (event.key === "Escape" && !$("profileModal").classList.contains("hidden")) {
     closeProfileModal();
+  } else if (event.key === "Escape" && !$("worklogCalendarModal").classList.contains("hidden")) {
+    closeWorklogCalendar();
+  }
+});
+
+function selectedWorklogProject() {
+  const id = $("worklogProjectSelect").value;
+  return worklogProjects.find((project) => String(project.id) === String(id)) || null;
+}
+
+function worklogPayload(enabledOverride) {
+  const project = selectedWorklogProject();
+  const seedCount = Math.max(0, Math.min(3, Math.floor(Number($("worklogSeedCount").value || 0))));
+  const target = pendingWorklogTarget || {
+    emp_id: currentState.worklogTargetEmployeeId,
+    emp_nm: currentState.worklogTargetEmployeeName,
+    dept_nm: currentState.worklogTargetDeptName,
+    pos_nm: currentState.worklogTargetPositionName,
+    duty_id: currentState.worklogTargetDutyId,
+  };
+  $("worklogSeedCount").value = seedCount;
+  return {
+    enabled: enabledOverride ?? $("worklogEnabled").checked,
+    seedCount,
+    seedMessage: $("worklogSeedMessage").value.trim(),
+    targetEmployeeId: target.emp_id || "",
+    targetEmployeeName: target.emp_nm || "",
+    targetDeptName: target.dept_nm || "",
+    targetPositionName: target.pos_nm || "",
+    targetDutyId: target.duty_id || "",
+    projectId: project?.id || "",
+    projectName: project?.name || "",
+    content: $("worklogContent").value.trim(),
+    scheduleDays: selectedWorklogDays,
+    scheduleDates: selectedWorklogDates,
+    scheduleTime: $("worklogTimeInput").value || "09:05",
+  };
+}
+
+$("worklogSearchBtn").addEventListener("click", async () => {
+  const query = $("worklogSearchInput").value.trim();
+  if (!isUnlocked()) {
+    toast("먼저 로그인하세요.");
+    return;
+  }
+  if (!query) {
+    toast("검색어를 입력하세요.");
+    return;
+  }
+  try {
+    setBusy(true);
+    const data = await api("/api/search", { query });
+    renderWorklogResults(data.results || []);
+    toast(`검색 결과 ${(data.results || []).length}건`);
+  } catch (err) {
+    toast(`업무일지 직원 검색 실패: ${err.message}`);
+  } finally {
+    setBusy(false);
+  }
+});
+
+$("worklogSearchInput").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") $("worklogSearchBtn").click();
+});
+
+$("worklogCalendarBtn").addEventListener("click", () => {
+  openWorklogCalendar();
+});
+
+$("worklogDateInput").addEventListener("click", () => {
+  openWorklogCalendar();
+});
+
+$("worklogCalendarCloseBtn").addEventListener("click", closeWorklogCalendar);
+$("worklogCalendarModal").addEventListener("click", (event) => {
+  if (event.target === $("worklogCalendarModal")) closeWorklogCalendar();
+});
+$("worklogCalendarPrevBtn").addEventListener("click", () => {
+  worklogCalendarMonth = new Date(worklogCalendarMonth.getFullYear(), worklogCalendarMonth.getMonth() - 1, 1);
+  renderWorklogCalendar();
+});
+$("worklogCalendarNextBtn").addEventListener("click", () => {
+  worklogCalendarMonth = new Date(worklogCalendarMonth.getFullYear(), worklogCalendarMonth.getMonth() + 1, 1);
+  renderWorklogCalendar();
+});
+$("worklogCalendarResetBtn").addEventListener("click", () => {
+  calendarDraftDates = [];
+  renderWorklogCalendar();
+});
+$("worklogCalendarApplyBtn").addEventListener("click", () => {
+  selectedWorklogDates = [...calendarDraftDates].sort();
+  renderWorklogDates();
+  closeWorklogCalendar();
+});
+
+$("worklogSeedCount").addEventListener("input", () => {
+  const value = Math.max(0, Math.min(3, Math.floor(Number($("worklogSeedCount").value || 0))));
+  $("worklogSeedCount").value = value;
+});
+
+$("worklogSaveBtn").addEventListener("click", async () => {
+  if (!isUnlocked()) {
+    toast("먼저 로그인하세요.");
+    return;
+  }
+  try {
+    setBusy(true);
+    const state = await api("/api/worklog-settings", worklogPayload());
+    renderState(state);
+    toast(state.worklogEnabled ? "업무일지 예약을 저장했습니다." : "업무일지 설정을 저장했습니다.");
+  } catch (err) {
+    toast(`업무일지 저장 실패: ${err.message}`);
+  } finally {
+    setBusy(false);
+  }
+});
+
+$("worklogRunBtn").addEventListener("click", async () => {
+  if (!isUnlocked()) {
+    toast("먼저 로그인하세요.");
+    return;
+  }
+  try {
+    setBusy(true);
+    await api("/api/worklog-settings", worklogPayload(false));
+    const result = await api("/api/worklog-run-now", {});
+    renderState(result.state || currentState);
+    toast(`업무일지를 작성했습니다. ${result.projectName || ""}`);
+  } catch (err) {
+    toast(`업무일지 즉시 작성 실패: ${err.message}`);
+  } finally {
+    setBusy(false);
   }
 });
 
@@ -1671,7 +1988,8 @@ $("rememberLogin").addEventListener("change", () => {
     toast("저장된 아이디를 지웠습니다.");
   } else {
     const id = $("loginId").value.trim();
-    if (id) saveRememberedLogin(id);
+    const password = $("loginPw").value;
+    if (id && password) saveRememberedLogin(id, password);
   }
 });
 
