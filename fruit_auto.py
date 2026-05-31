@@ -1404,7 +1404,7 @@ def pair_official_history_transfer_times(rows):
         if best_index is not None:
             paired_received_indexes.add(best_index)
     for received_index, received in enumerate(rows):
-        if received.get("action") == "received" and received.get("timeSource") == "received_log":
+        if received.get("action") == "received":
             if received_index in paired_received_indexes:
                 continue
             received["_dropUnpairedReceived"] = True
