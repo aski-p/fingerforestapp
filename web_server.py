@@ -21,7 +21,7 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "9.1"
+APP_VERSION = "1.1.5"
 VALID_THEMES = {
     "default",
     "dark",
@@ -667,6 +667,7 @@ class Handler(BaseHTTPRequestHandler):
                 wake_daemon()
             elif parsed.path == "/api/worklog-run-now":
                 result = fruit_auto.save_worklog_once(owner_key=owner_key, force=True)
+                fruit_auto.notify_result(result)
                 result = {**result, "state": state_response(owner_key)}
             elif parsed.path == "/api/interval":
                 fruit_auto.set_run_interval(payload.get("minutes"), owner_key=owner_key)

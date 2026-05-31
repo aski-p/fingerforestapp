@@ -14,8 +14,9 @@ const profilePhotoKey = "fruitProfilePhoto";
 const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV85";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "9.1";
-const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
+const appVersion = "1.1.5";
+const primaryApiBaseUrl = "https://jobs-maple-readily-apart.trycloudflare.com";
+const fallbackBaseUrl = "";
 const activeApiBaseKey = "fruitActiveApiBase";
 const apiTimeoutMs = 8000;
 let updateRequired = false;
@@ -153,6 +154,26 @@ let selectedWorklogDays = [];
 let calendarDraftDates = [];
 let worklogCalendarMonth = new Date();
 let pendingWorklogTarget = null;
+let worklogDraftDirty = false;
+let activeAppearanceSettings = { theme: "default", font: "pretendard" };
+
+function isIosWebKit() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function enableReliableInputFocus(input) {
+  if (!input || !isIosWebKit()) return;
+  const focusFromTouch = () => {
+    if (document.activeElement !== input) input.focus({ preventScroll: true });
+    window.setTimeout(() => input.scrollIntoView({ block: "center", inline: "nearest" }), 80);
+  };
+  input.addEventListener("touchend", focusFromTouch, { passive: true });
+  input.addEventListener("focus", () => {
+    window.setTimeout(() => input.scrollIntoView({ block: "center", inline: "nearest" }), 180);
+  });
+}
+
+["loginId", "loginPw"].forEach((id) => enableReliableInputFocus($(id)));
 
 const themes = [
   { id: "default", label: "Fresh", swatch: ["#f7f9fc", "#10b981", "#111827"] },
@@ -247,9 +268,13 @@ function normalizeBaseUrl(value) {
 
 function apiBaseCandidates() {
   const currentBase = normalizeBaseUrl(location.origin);
+  const primaryBase = normalizeBaseUrl(primaryApiBaseUrl);
   const fallbackBase = normalizeBaseUrl(fallbackBaseUrl);
   const activeBase = normalizeBaseUrl(storeGet(activeApiBaseKey));
-  return [currentBase, activeBase, fallbackBase].filter((item, index, list) => item && list.indexOf(item) === index);
+  return [activeBase, currentBase, primaryBase, fallbackBase].filter((item, index, list) => {
+    if (!item || list.indexOf(item) !== index) return false;
+    return item !== "https://web-production-011c4.up.railway.app";
+  });
 }
 
 function apiUrl(baseUrl, path) {
@@ -282,7 +307,7 @@ async function resilientFetch(path, options = {}) {
     } finally {
       clearTimeout(timeoutId);
     }
-    if (baseUrl !== normalizeBaseUrl(fallbackBaseUrl) && shouldTryFallback(lastError, response)) continue;
+    if (shouldTryFallback(lastError, response)) continue;
   }
   throw lastError || new Error("서버 연결 실패");
 }
@@ -447,6 +472,13 @@ function applyAppearance() {
   previewAppearance({ theme, font });
 }
 
+function initializeAppearanceSettings() {
+  setAppearanceSettings({
+    theme: storeGet(themeKey) || "default",
+    font: storeGet(fontKey) || "pretendard",
+  });
+}
+
 function previewAppearance(settings = appearanceSettings()) {
   const theme = themes.some((item) => item.id === settings.theme) ? settings.theme : "default";
   const font = fonts.some((item) => item.id === settings.font) ? settings.font : "pretendard";
@@ -480,8 +512,8 @@ function scrollSelectedAppearanceIntoView() {
 }
 
 function appearanceSettings() {
-  const theme = storeGet(themeKey) || "default";
-  const font = storeGet(fontKey) || "pretendard";
+  const theme = activeAppearanceSettings.theme || "default";
+  const font = activeAppearanceSettings.font || "pretendard";
   return {
     theme: themes.some((item) => item.id === theme) ? theme : "default",
     font: fonts.some((item) => item.id === font) ? font : "pretendard",
@@ -491,6 +523,7 @@ function appearanceSettings() {
 function setAppearanceSettings(settings = {}) {
   const theme = themes.some((item) => item.id === settings.theme) ? settings.theme : "default";
   const font = fonts.some((item) => item.id === settings.font) ? settings.font : "pretendard";
+  activeAppearanceSettings = { theme, font };
   storeSet(themeKey, theme);
   storeSet(fontKey, font);
   applyAppearance();
@@ -896,8 +929,22 @@ function fmtTime(value) {
   return date.toLocaleTimeString("ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
     hour12: false,
   });
+}
+
+function fmtHistoryTime(item) {
+  const label = item.timeLabel || (item.action === "received" ? "받음" : "보냄");
+  if (!item.at) return "데이터없음";
+  const time = fmtTime(item.at);
+  return `${label} ${time}`;
+}
+
+function historyTimeMarkup(item) {
+  const label = item.timeLabel || (item.action === "received" ? "받음" : "보냄");
+  if (!item.at) return escapeHtml("데이터없음");
+  return `<span class="history-time-label">${escapeHtml(label)}</span><span class="history-time-clock">${escapeHtml(fmtTime(item.at))}</span>`;
 }
 
 function fmtNumber(value) {
@@ -967,6 +1014,13 @@ function employeeLabel(name, employeeNo) {
   const safeNo = String(employeeNo || "").trim();
   if (safeName && safeNo) return `${safeName} ${safeNo}`;
   return safeName || safeNo || "로그인 필요";
+}
+
+function employeeDetail(deptName, positionName) {
+  return [deptName, positionName]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function personNameLabel(name, fallback) {
@@ -1050,10 +1104,19 @@ function renderWorklogDates() {
     chip.innerHTML = `${escapeHtml(date)} <button type="button" aria-label="${escapeHtml(date)} 삭제">×</button>`;
     chip.querySelector("button").addEventListener("click", () => {
       selectedWorklogDates = selectedWorklogDates.filter((item) => item !== date);
+      markWorklogDraftDirty();
       renderWorklogDates();
     });
     box.appendChild(chip);
   });
+}
+
+function markWorklogDraftDirty() {
+  worklogDraftDirty = true;
+}
+
+function hasWorklogDraft() {
+  return worklogDraftDirty && isUnlocked();
 }
 
 function renderWorklogCalendar() {
@@ -1127,7 +1190,8 @@ async function loadWorklogProjects() {
   if (!isUnlocked()) return;
   try {
     const data = await api("/api/worklog-projects");
-    setWorklogProjects(data.projects || [], currentState.worklogProjectId || "");
+    const selectedId = hasWorklogDraft() ? $("worklogProjectSelect").value : currentState.worklogProjectId || "";
+    setWorklogProjects(data.projects || [], selectedId);
   } catch (err) {
     toast(`프로젝트 조회 실패: ${err.message}`);
   }
@@ -1142,16 +1206,24 @@ function renderWorklogState(state) {
     pos_nm: state.worklogTargetPositionName,
     duty_id: state.worklogTargetDutyId,
   };
-  selectedWorklogDays = [];
-  selectedWorklogDates = Array.isArray(state.worklogScheduleDates) ? [...state.worklogScheduleDates] : [];
-  $("worklogSeedCount").value = state.worklogSeedCount ?? 0;
-  $("worklogSeedMessage").value = state.worklogSeedMessage || "";
-  $("worklogContent").value = state.worklogContent || "";
-  $("worklogTimeInput").value = state.worklogScheduleTime || "09:05";
-  $("worklogEnabled").checked = !!state.worklogEnabled;
-  $("worklogTarget").textContent = worklogTarget.emp_id
-    ? employeeLabel(worklogTarget.emp_nm, worklogTarget.emp_id)
-    : "선택된 직원 없음";
+  if (!hasWorklogDraft()) {
+    selectedWorklogDays = [];
+    selectedWorklogDates = Array.isArray(state.worklogScheduleDates) ? [...state.worklogScheduleDates] : [];
+    $("worklogSeedCount").value = state.worklogSeedCount ?? 0;
+    $("worklogSeedMessage").value = state.worklogSeedMessage || "";
+    $("worklogContent").value = state.worklogContent || "";
+    $("worklogTimeInput").value = state.worklogScheduleTime || "09:05";
+    $("worklogEnabled").checked = !!state.worklogEnabled;
+  }
+  if (worklogTarget.emp_id) {
+    const detail = employeeDetail(worklogTarget.dept_nm, worklogTarget.pos_nm);
+    $("worklogTarget").innerHTML = `
+      <strong>${escapeHtml(employeeLabel(worklogTarget.emp_nm, worklogTarget.emp_id))}</strong>
+      ${detail ? `<small>${escapeHtml(detail)}</small>` : ""}
+    `;
+  } else {
+    $("worklogTarget").textContent = "선택된 직원 없음";
+  }
   setWorklogProjects(worklogProjects, state.worklogProjectId || "");
   const badgeOk = unlocked && state.worklogEnabled;
   $("worklogBadge").textContent = badgeOk ? `예약됨 ${fmtDate(state.worklogNextRunAt)}` : "대기";
@@ -1285,11 +1357,13 @@ function renderHistory(items) {
       item.targetPositionName || item.senderPositionName,
       "-"
     );
-    const myHistoryPhoto = item.avatarProfilePhotoUrl || item.senderProfilePhotoUrl || currentState.senderProfilePhotoUrl || getProfilePhoto();
-    const senderPhoto = item.senderIsMe ? myHistoryPhoto : item.avatarProfilePhotoUrl || item.senderProfilePhotoUrl;
+    const counterpartPhoto = item.avatarProfilePhotoUrl
+      || item.senderProfilePhotoUrl
+      || getCachedProfilePhoto(item.avatarEmployeeId || item.senderEmployeeId || item.targetEmployeeId);
+    const senderPhoto = counterpartPhoto || "";
     const avatarClass = senderPhoto ? "history-avatar has-photo" : "history-avatar";
     row.innerHTML = `
-      <time>${escapeHtml(fmtTime(item.at))}</time>
+      <time>${historyTimeMarkup(item)}</time>
       <div class="history-main">
         <strong>${escapeHtml(item.content || "-")}</strong>
         <span>${escapeHtml(senderName)} · ${escapeHtml(item.action === "received" ? "받음" : "보냄")}</span>
@@ -1495,8 +1569,8 @@ $("loginBtn").addEventListener("click", async () => {
     sessionStorage.setItem(sessionKey, "1");
     if (!$("rememberLogin").checked) $("loginPw").value = "";
     toast(`${result.user || "사용자"} 로그인 완료`);
-    await refresh({ silent: true });
     await loadProfileSettings({ silent: true });
+    await refresh({ silent: true });
   } catch (err) {
     sessionStorage.removeItem(sessionKey);
     renderState(currentState);
@@ -1792,10 +1866,12 @@ $("worklogCalendarNextBtn").addEventListener("click", () => {
 });
 $("worklogCalendarResetBtn").addEventListener("click", () => {
   calendarDraftDates = [];
+  markWorklogDraftDirty();
   renderWorklogCalendar();
 });
 $("worklogCalendarApplyBtn").addEventListener("click", () => {
   selectedWorklogDates = [...calendarDraftDates].sort();
+  markWorklogDraftDirty();
   renderWorklogDates();
   closeWorklogCalendar();
 });
@@ -1803,6 +1879,18 @@ $("worklogCalendarApplyBtn").addEventListener("click", () => {
 $("worklogSeedCount").addEventListener("input", () => {
   const value = Math.max(0, Math.min(3, Math.floor(Number($("worklogSeedCount").value || 0))));
   $("worklogSeedCount").value = value;
+  markWorklogDraftDirty();
+});
+
+[
+  "worklogSeedMessage",
+  "worklogProjectSelect",
+  "worklogContent",
+  "worklogTimeInput",
+  "worklogEnabled",
+].forEach((id) => {
+  $(id).addEventListener("input", markWorklogDraftDirty);
+  $(id).addEventListener("change", markWorklogDraftDirty);
 });
 
 $("worklogSaveBtn").addEventListener("click", async () => {
@@ -1813,6 +1901,7 @@ $("worklogSaveBtn").addEventListener("click", async () => {
   try {
     setBusy(true);
     const state = await api("/api/worklog-settings", worklogPayload());
+    worklogDraftDirty = false;
     renderState(state);
     toast(state.worklogEnabled ? "업무일지 예약을 저장했습니다." : "업무일지 설정을 저장했습니다.");
   } catch (err) {
@@ -1831,6 +1920,7 @@ $("worklogRunBtn").addEventListener("click", async () => {
     setBusy(true);
     await api("/api/worklog-settings", worklogPayload(false));
     const result = await api("/api/worklog-run-now", {});
+    worklogDraftDirty = false;
     renderState(result.state || currentState);
     toast(`업무일지를 작성했습니다. ${result.projectName || ""}`);
   } catch (err) {
@@ -1996,6 +2086,7 @@ $("rememberLogin").addEventListener("change", () => {
 $("supportLink").addEventListener("click", openSupportLink);
 
 async function initApp() {
+  initializeAppearanceSettings();
   renderAppearanceOptions();
   if (await checkAppVersion()) return;
   await restoreSavedLoginIfNeeded();

@@ -7,7 +7,7 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <link rel="icon" href="/icons/apple-icon-192.png" type="image/png">
-    <link rel="stylesheet" href="/styles.css?v=9.1">
+    <link rel="stylesheet" href="/styles.css?v=1.1.5">
     <title>fingerfruit</title>
   </head>
   <body>
@@ -41,11 +41,11 @@
         <div id="loginForm" class="login-form">
           <label>
             <span>PMS 아이디</span>
-            <input id="loginId" autocomplete="username" inputmode="numeric" placeholder="PMS 아이디">
+            <input id="loginId" type="text" autocomplete="username" inputmode="numeric" enterkeyhint="next" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="PMS 아이디">
           </label>
           <label>
             <span>PMS 비밀번호</span>
-            <input id="loginPw" type="password" autocomplete="current-password" placeholder="비밀번호">
+            <input id="loginPw" type="password" autocomplete="current-password" enterkeyhint="done" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="비밀번호">
           </label>
           <label class="remember-login">
             <input id="rememberLogin" type="checkbox">
@@ -350,10 +350,10 @@
 
       <p id="toast" class="toast" role="status"></p>
       <footer class="app-footer">
-        <span>v9.1 · by aski</span>
+        <span>v1.1.5 정식버전 · by aski</span>
         <a id="supportLink" class="support-link" href="https://qr.kakaopay.com/Ej7ruxJDq" target="_blank" rel="noopener" aria-label="카카오페이로 후원하기">후원하기</a>
       </footer>
     </main>
-    <script src="/app.js?v=9.1"></script>
+    <script src="/app.js?v=1.1.5"></script>
   </body>
 </html>
