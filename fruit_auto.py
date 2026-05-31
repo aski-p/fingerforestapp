@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import argparse
 import datetime as dt
+import hashlib
 import http.cookiejar
 import json
 import os
 import signal
+import sqlite3
 import subprocess
 import sys
 import time
@@ -22,6 +24,7 @@ STATE_PATH = DATA_DIR / "state.json"
 SECRETS_PATH = DATA_DIR / "secrets.json"
 LOG_PATH = DATA_DIR / "runs.log"
 HISTORY_PATH = DATA_DIR / "history.log"
+HISTORY_OBSERVATIONS_PATH = DATA_DIR / "history_observations.sqlite3"
 PID_PATH = DATA_DIR / "daemon.pid"
 WEB_PUSH_SCRIPT_PATH = BASE_DIR / "send_web_push.js"
 DEFAULT_RUN_INTERVAL_MINUTES = 5
@@ -53,6 +56,9 @@ DEFAULT_STATE = {
     "lastAttemptResult": None,
     "lastNoBerriesAt": None,
     "lastNoBerriesLogAt": None,
+    "pendingReceivedAt": None,
+    "pendingBerryCount": None,
+    "pendingTargetEmployeeId": None,
     "nextRunAt": None,
     "ownerKey": None,
     "senderEmployeeId": None,
@@ -237,9 +243,11 @@ def append_jsonl(path, event):
 
 
 def is_transfer_history_event(event):
+    action = event.get("action")
+    if action not in ("sent", "received"):
+        return False
     return (
         event.get("type") == "transfer"
-        and event.get("action") == "sent"
         and bool(event.get("ownerKey"))
         and bool(event.get("targetEmployeeId"))
         and int(event.get("berries") or 0) > 0
@@ -249,7 +257,7 @@ def is_transfer_history_event(event):
 def record_transfer_history(event):
     event = dict(event)
     event["type"] = "transfer"
-    event["action"] = "sent"
+    event.setdefault("action", "sent")
     if not is_transfer_history_event(event):
         raise FruitAutoError("invalid transfer history event")
     append_jsonl(HISTORY_PATH, event)
@@ -488,6 +496,24 @@ def received_notification_payload(result):
     }
 
 
+def worklog_completed_display(result):
+    completed_at = parse_iso(result.get("completedAt") or result.get("at"))
+    if completed_at is None:
+        completed_at = dt.datetime.now(dt.timezone.utc)
+    local_completed = completed_at.astimezone(KST)
+    return local_completed.strftime("%Y-%m-%d %H:%M")
+
+
+def worklog_notification_payload(result):
+    completed_display = worklog_completed_display(result)
+    return {
+        "title": "업무일지 작성 완료",
+        "body": f"{completed_display}에 업무일지 작성을 완료하였습니다.",
+        "tag": f"worklog-sent-{result.get('ownerKey')}-{result.get('stdDt') or int(time.time())}",
+        "url": "/",
+    }
+
+
 def ensure_web_push_keys():
     secrets = load_secrets()
     web_push = secrets.setdefault("webPush", {})
@@ -639,6 +665,15 @@ def notify_result(result):
                 "targetOwnerKey": target_owner_key,
             }
         )
+        return False
+    elif action == "worklog_sent":
+        if owner_key and not is_push_enabled(owner_key):
+            log_event({"action": "push_notify_skipped", "reason": "push_disabled", "ownerKey": owner_key})
+            return False
+        web_pushed = notify_web_push(worklog_notification_payload(result), [owner_key] if owner_key else [])
+        if web_pushed:
+            return True
+        log_event({"action": "push_notify_skipped", "reason": "no_owner_subscription", "ownerKey": owner_key})
         return False
     elif action in ("error", "failed"):
         if owner_key and not is_push_enabled(owner_key):
@@ -852,7 +887,655 @@ def event_local_date(event, timezone_offset_minutes=0):
     return local_time.date().isoformat()
 
 
+def selected_history_month(date=None, timezone_offset_minutes=0):
+    if date:
+        try:
+            parsed = dt.date.fromisoformat(str(date))
+            return parsed.strftime("%Y%m")
+        except ValueError:
+            pass
+    local_now = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=timezone_offset_minutes)
+    return local_now.strftime("%Y%m")
+
+
+def selected_history_day(date=None):
+    if not date:
+        return None
+    try:
+        return dt.date.fromisoformat(str(date)).day
+    except ValueError:
+        return None
+
+
+def parse_int(value, default=0):
+    try:
+        if value is None:
+            return default
+        text = str(value).replace(",", "").strip()
+        if text == "":
+            return default
+        return int(text)
+    except (TypeError, ValueError):
+        return default
+
+
+def normalize_history_message(value):
+    return str(value or "").replace("[열매선물]", "").strip()
+
+
+def history_date_from_month_day(month, day):
+    try:
+        if day is None:
+            return None
+        parsed = dt.datetime.strptime(f"{int(month):06d}{int(day):02d}", "%Y%m%d")
+        return parsed.date().isoformat()
+    except (TypeError, ValueError):
+        return None
+
+
+def official_history_fingerprint(row):
+    payload = {
+        "ownerKey": row.get("ownerKey"),
+        "employeeId": row.get("historyEmployeeId"),
+        "historyDate": row.get("historyDate"),
+        "action": row.get("action"),
+        "target": row.get("target"),
+        "targetEmployeeId": row.get("targetEmployeeId"),
+        "berries": row.get("berries"),
+        "remaining": row.get("remaining"),
+        "seeds": row.get("seeds"),
+        "content": normalize_history_message(row.get("content")),
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def parse_seed_berry_counts(value):
+    parts = str(value or "0/0").split("/")
+    berries = parse_int(parts[0] if len(parts) > 0 else 0)
+    seeds = parse_int(parts[1] if len(parts) > 1 else 0)
+    return seeds, berries
+
+
+def history_observation_db():
+    conn = sqlite3.connect(HISTORY_OBSERVATIONS_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS official_history_observations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_key TEXT NOT NULL,
+            employee_id TEXT NOT NULL,
+            history_date TEXT NOT NULL,
+            row_fingerprint TEXT NOT NULL,
+            ordinal INTEGER NOT NULL,
+            action TEXT NOT NULL,
+            counterpart_name TEXT,
+            counterpart_employee_id TEXT,
+            berries INTEGER,
+            remaining INTEGER,
+            seeds INTEGER,
+            content TEXT,
+            first_seen_at TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(owner_key, employee_id, history_date, row_fingerprint, ordinal)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_official_history_observations_scope "
+        "ON official_history_observations(owner_key, employee_id, history_date)"
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS official_history_observation_scopes (
+            owner_key TEXT NOT NULL,
+            employee_id TEXT NOT NULL,
+            history_date TEXT NOT NULL,
+            bootstrapped_at TEXT NOT NULL,
+            PRIMARY KEY(owner_key, employee_id, history_date)
+        )
+        """
+    )
+    return conn
+
+
+def sync_official_history_observations(owner_key, employee_id, history_date, rows, bootstrap_first_seen_at=None):
+    owner_key = str(owner_key or "")
+    employee_id = str(employee_id or "")
+    history_date = str(history_date or "")
+    scoped_rows = [row for row in rows if row.get("historyDate") == history_date and row.get("_officialFingerprint")]
+    if not owner_key or not employee_id or not history_date or not scoped_rows:
+        return {}
+
+    now = now_iso()
+    with history_observation_db() as conn:
+        existing_scope = conn.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM official_history_observations
+            WHERE owner_key = ? AND employee_id = ? AND history_date = ?
+            """,
+            (owner_key, employee_id, history_date),
+        ).fetchone()
+        scope_bootstrapped = conn.execute(
+            """
+            SELECT 1
+            FROM official_history_observation_scopes
+            WHERE owner_key = ? AND employee_id = ? AND history_date = ?
+            """,
+            (owner_key, employee_id, history_date),
+        ).fetchone()
+        existing_by_fingerprint = {}
+        for row in conn.execute(
+            """
+            SELECT *
+            FROM official_history_observations
+            WHERE owner_key = ? AND employee_id = ? AND history_date = ?
+            ORDER BY ordinal ASC
+            """,
+            (owner_key, employee_id, history_date),
+        ):
+            existing_by_fingerprint.setdefault(row["row_fingerprint"], []).append(row)
+
+        requested_by_fingerprint = {}
+        for row in scoped_rows:
+            requested_by_fingerprint.setdefault(row["_officialFingerprint"], []).append(row)
+
+        bootstrap_existing_date = scope_bootstrapped is None
+        for fingerprint, requested_rows in requested_by_fingerprint.items():
+            existing_rows = existing_by_fingerprint.get(fingerprint, [])
+            for ordinal in range(len(existing_rows) + 1, len(requested_rows) + 1):
+                sample = requested_rows[ordinal - 1]
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO official_history_observations (
+                        owner_key, employee_id, history_date, row_fingerprint, ordinal,
+                        action, counterpart_name, counterpart_employee_id, berries,
+                        remaining, seeds, content, first_seen_at, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        owner_key,
+                        employee_id,
+                        history_date,
+                        fingerprint,
+                        ordinal,
+                        sample.get("action") or "",
+                        sample.get("target") or "",
+                        sample.get("targetEmployeeId") or "",
+                        parse_int(sample.get("berries"), 0),
+                        parse_int(sample.get("remaining"), 0),
+                        parse_int(sample.get("seeds"), 0),
+                        sample.get("content") or "",
+                        bootstrap_first_seen_at if bootstrap_existing_date else now,
+                        now,
+                    ),
+                )
+
+        if bootstrap_existing_date:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO official_history_observation_scopes (
+                    owner_key, employee_id, history_date, bootstrapped_at
+                ) VALUES (?, ?, ?, ?)
+                """,
+                (owner_key, employee_id, history_date, now),
+            )
+
+        lookup = {}
+        refreshed = {}
+        for row in conn.execute(
+            """
+            SELECT *
+            FROM official_history_observations
+            WHERE owner_key = ? AND employee_id = ? AND history_date = ?
+            ORDER BY
+                CASE WHEN first_seen_at IS NULL THEN 1 ELSE 0 END,
+                first_seen_at DESC,
+                id DESC
+            """,
+            (owner_key, employee_id, history_date),
+        ):
+            refreshed.setdefault(row["row_fingerprint"], []).append(row)
+        for fingerprint, observed_rows in refreshed.items():
+            for index, row in enumerate(observed_rows, start=1):
+                lookup[(fingerprint, index)] = row["first_seen_at"]
+        return lookup
+
+
+def local_transfer_history_for_official(owner_key, employee_id, date=None, timezone_offset_minutes=0, limit=5000):
+    events = []
+    for event in reversed(read_jsonl(HISTORY_PATH, limit)):
+        if not is_transfer_history_event(event):
+            continue
+        if date and event_local_date(event, timezone_offset_minutes) != date:
+            continue
+        sent_by_me = event.get("ownerKey") == owner_key
+        received_by_me = employee_id and str(event.get("targetEmployeeId") or "") == str(employee_id)
+        if not sent_by_me and not received_by_me:
+            continue
+        events.append(event)
+    for event in reversed(read_jsonl(LOG_PATH, limit)):
+        if event.get("action") != "send_delay_wait":
+            continue
+        if str(event.get("ownerKey") or "") != str(owner_key or ""):
+            continue
+        received_at = event.get("receivedAt")
+        if not received_at:
+            continue
+        received_event = {
+            "type": "transfer",
+            "action": "received",
+            "at": received_at,
+            "timeSource": "balance_detected",
+            "berries": event.get("berries"),
+            "sender": event.get("target"),
+            "senderEmployeeName": event.get("target"),
+            "senderEmployeeId": event.get("targetEmployeeId") or "",
+            "targetEmployeeId": str(employee_id or ""),
+            "ownerKey": owner_key,
+            "message": event.get("message") or "",
+        }
+        if date and event_local_date(received_event, timezone_offset_minutes) != date:
+            continue
+        events.append(received_event)
+    events.sort(key=lambda item: parse_iso(item.get("at")) or dt.datetime.min.replace(tzinfo=dt.timezone.utc), reverse=True)
+    return events
+
+
+def transfer_history_fingerprint_exists(owner_key, fingerprint, action=None, occurrence=None, limit=20000):
+    if not fingerprint:
+        return False
+    for event in reversed(read_jsonl(HISTORY_PATH, limit)):
+        if not is_transfer_history_event(event):
+            continue
+        if str(event.get("ownerKey") or "") != str(owner_key or ""):
+            continue
+        if action and event.get("action") != action:
+            continue
+        if event.get("officialFingerprint") == fingerprint:
+            if occurrence is not None and parse_int(event.get("officialOccurrence"), None) != occurrence:
+                continue
+            return True
+    return False
+
+
+def official_received_history_rows(client, owner_key, employee_id, employee_name, employee_position, history_date):
+    try:
+        parsed_date = dt.date.fromisoformat(str(history_date))
+    except (TypeError, ValueError):
+        parsed_date = dt.datetime.now(KST).date()
+    month = parsed_date.strftime("%Y%m")
+    selected_day = parsed_date.day
+    content = client.post_json(f"{FOREST_API}/dwBerySeed", {"stdMt": month, "empId": employee_id})
+    if not isinstance(content, list):
+        return []
+    rows = []
+    for row in content:
+        day = parse_int(str(row.get("stdDt") or "").replace("일", ""), None)
+        if day != selected_day:
+            continue
+        delta = parse_int(row.get("stdDBerryPmCnt"))
+        if delta <= 0:
+            continue
+        seed_count, fruit_count = parse_seed_berry_counts(row.get("stdMBerryCnt"))
+        item = {
+            "at": None,
+            "displayTime": row.get("stdDt") or "",
+            "timeLabel": "받음",
+            "action": "received",
+            "ownerKey": owner_key,
+            "historyEmployeeId": str(employee_id or ""),
+            "historyDate": parsed_date.isoformat(),
+            "target": row.get("tgtEmpNm") or "",
+            "targetEmployeeId": "",
+            "targetPositionName": "",
+            "senderEmployeeId": employee_id,
+            "avatarEmployeeId": employee_id,
+            "displayName": display_employee(employee_name, employee_position),
+            "senderIsMe": False,
+            "seeds": seed_count,
+            "berries": abs(delta),
+            "remaining": fruit_count,
+            "delta": delta,
+            "content": row.get("tgtMsg") or "[열매선물]",
+            "source": "forest",
+        }
+        item["_officialFingerprint"] = official_history_fingerprint(item)
+        rows.append(item)
+    return rows
+
+
+def is_recent_observation(value, observed_at, window_seconds=120):
+    seen_at = parse_iso(value)
+    if not seen_at or not observed_at:
+        return False
+    return -30 <= (observed_at - seen_at).total_seconds() <= window_seconds
+
+
+def record_received_history_from_official(
+    client,
+    owner_key,
+    employee_id,
+    employee_name,
+    employee_position,
+    observed_at,
+    window_seconds=120,
+):
+    local_observed_at = observed_at.astimezone(KST)
+    history_date = local_observed_at.date().isoformat()
+    rows = official_received_history_rows(
+        client,
+        owner_key,
+        employee_id,
+        employee_name,
+        employee_position,
+        history_date,
+    )
+    if not rows:
+        return []
+    scope_was_bootstrapped = False
+    try:
+        with history_observation_db() as conn:
+            scope_was_bootstrapped = conn.execute(
+                """
+                SELECT 1
+                FROM official_history_observation_scopes
+                WHERE owner_key = ? AND employee_id = ? AND history_date = ?
+                """,
+                (str(owner_key or ""), str(employee_id or ""), str(history_date or "")),
+            ).fetchone() is not None
+    except Exception:
+        scope_was_bootstrapped = False
+    lookup = sync_official_history_observations(
+        owner_key,
+        employee_id,
+        history_date,
+        rows,
+        bootstrap_first_seen_at=observed_at.replace(microsecond=0).isoformat(),
+    )
+    if not scope_was_bootstrapped:
+        return []
+    recorded = []
+    occurrence_by_fingerprint = {}
+    for row in rows:
+        fingerprint = row.get("_officialFingerprint")
+        occurrence_by_fingerprint[fingerprint] = occurrence_by_fingerprint.get(fingerprint, 0) + 1
+        occurrence = occurrence_by_fingerprint[fingerprint]
+        first_seen_at = lookup.get((fingerprint, occurrence))
+        if not is_recent_observation(first_seen_at, observed_at, window_seconds):
+            continue
+        if transfer_history_fingerprint_exists(owner_key, fingerprint, action="received", occurrence=occurrence):
+            continue
+        event = {
+            "type": "transfer",
+            "action": "received",
+            "at": parse_iso(first_seen_at).replace(microsecond=0).isoformat(),
+            "timeSource": "official_observed",
+            "officialFingerprint": fingerprint,
+            "officialOccurrence": occurrence,
+            "berries": row.get("berries"),
+            "seeds": row.get("seeds"),
+            "remaining": row.get("remaining"),
+            "sender": row.get("target"),
+            "senderEmployeeName": row.get("target"),
+            "senderEmployeeId": row.get("targetEmployeeId") or "",
+            "senderPositionName": row.get("targetPositionName") or "",
+            "target": employee_name,
+            "targetEmployeeName": employee_name,
+            "targetEmployeeId": employee_id,
+            "targetPositionName": employee_position,
+            "ownerKey": owner_key,
+            "message": row.get("content"),
+        }
+        record_transfer_history(event)
+        recorded.append(event)
+    return recorded
+
+
+def employee_hint_from_event(event, action):
+    if action == "sent":
+        return {
+            "employeeId": str(event.get("targetEmployeeId") or ""),
+            "positionName": event.get("targetPositionName") or "",
+        }
+    return {
+        "employeeId": str(event.get("senderEmployeeId") or ""),
+        "positionName": event.get("senderPositionName") or "",
+    }
+
+
+def reliable_history_event_time(event):
+    if not event or not event.get("at"):
+        return None
+    if event.get("timeSource") in {"official_observed"}:
+        return None
+    return event.get("at")
+
+
+def local_history_hints_by_name(local_events):
+    hints = {}
+    for event in local_events:
+        target_name = event.get("target") or event.get("targetEmployeeName")
+        if target_name and event.get("targetEmployeeId"):
+            hints[str(target_name)] = {
+                "employeeId": str(event.get("targetEmployeeId") or ""),
+                "positionName": event.get("targetPositionName") or "",
+            }
+        sender_name = event.get("senderEmployeeName") or event.get("sender")
+        if sender_name and event.get("senderEmployeeId"):
+            hints[str(sender_name)] = {
+                "employeeId": str(event.get("senderEmployeeId") or ""),
+                "positionName": event.get("senderPositionName") or "",
+            }
+    return hints
+
+
+def match_official_history_event(local_events, used_indexes, action, counterpart, berries, message, remaining=None):
+    normalized_message = normalize_history_message(message)
+    for index, event in enumerate(local_events):
+        if event.get("timeSource") == "official_observed":
+            continue
+        sent_by_me = action == "sent"
+        if sent_by_me:
+            used_key = (index, "sent")
+            if used_key in used_indexes:
+                continue
+            event_counterpart = event.get("target") or event.get("targetEmployeeName")
+            if str(event.get("ownerKey") or "") != str(event.get("_historyOwnerKey") or ""):
+                continue
+            if remaining is not None and parse_int(event.get("remaining"), None) != remaining:
+                continue
+        else:
+            used_key = (index, "received")
+            if used_key in used_indexes:
+                continue
+            event_counterpart = event.get("senderEmployeeName") or event.get("sender")
+            if str(event.get("targetEmployeeId") or "") != str(event.get("_historyEmployeeId") or ""):
+                continue
+        if str(event_counterpart or "") != str(counterpart or ""):
+            continue
+        if parse_int(event.get("berries"), None) != berries:
+            continue
+        event_message = normalize_history_message(event.get("message"))
+        if normalized_message and event_message and normalized_message != event_message:
+            if not (action == "sent" and event_message == "자동 전달" and normalized_message in {"열매선물", "열매 선물"}):
+                continue
+        used_indexes.add(used_key)
+        return event
+    return None
+
+
+def row_counterpart_key(row):
+    return (
+        str(row.get("targetEmployeeId") or row.get("target") or ""),
+        parse_int(row.get("berries"), 0),
+    )
+
+
+def pair_official_history_transfer_times(rows):
+    paired_received_indexes = set()
+    for sent_index, sent in enumerate(rows):
+        if sent.get("action") != "sent" or sent.get("timeSource") != "local_log":
+            continue
+        sent_at = parse_iso(sent.get("at"))
+        if not sent_at:
+            continue
+        best_index = None
+        best_rank = None
+        for received_index, received in enumerate(rows):
+            if received_index in paired_received_indexes:
+                continue
+            if received.get("action") != "received" or received.get("timeSource") != "received_log":
+                continue
+            if str(sent.get("target") or "") != str(received.get("target") or ""):
+                continue
+            received_at = parse_iso(received.get("at"))
+            if not received_at:
+                continue
+            delta_seconds = (sent_at - received_at).total_seconds()
+            if delta_seconds < 0 or delta_seconds > get_run_interval_seconds() + 180:
+                continue
+            rank = (abs(sent_index - received_index), delta_seconds)
+            if best_rank is None or rank < best_rank:
+                best_index = received_index
+                best_rank = rank
+        if best_index is not None:
+            paired_received_indexes.add(best_index)
+    for received_index, received in enumerate(rows):
+        if received.get("action") == "received" and received.get("timeSource") == "received_log":
+            if received_index in paired_received_indexes:
+                continue
+            received["at"] = None
+            received["timeSource"] = "missing"
+    return rows
+
+
+def infer_official_history_times(rows):
+    return rows
+
+
+def remove_future_observed_history_times(rows):
+    latest_allowed = None
+    for row in rows:
+        row_time = parse_iso(row.get("at"))
+        if row_time and latest_allowed and row_time > latest_allowed and row.get("timeSource") == "observed_db":
+            row["at"] = None
+            row["timeSource"] = "missing"
+            row_time = None
+        if row_time:
+            latest_allowed = row_time if latest_allowed is None else min(latest_allowed, row_time)
+    return rows
+
+
+def sort_history_rows(rows):
+    def sort_key(index_row):
+        index, row = index_row
+        row_time = parse_iso(row.get("at"))
+        if row_time:
+            return (0, -row_time.timestamp(), index)
+        return (1, index, 0)
+
+    return [row for _index, row in sorted(enumerate(rows), key=sort_key)]
+
+
+def official_history(limit=40, owner_key=None, date=None, timezone_offset_minutes=0):
+    owner_key = require_owner(owner_key)
+    client, _employee_info, _login_dataset, _employee, sender_employee_id, sender_employee_name = account_login(owner_key)
+    state = get_account_state(owner_key)
+    sender_position_name = state.get("senderPositionName") or ""
+    month = selected_history_month(date, timezone_offset_minutes)
+    selected_day = selected_history_day(date)
+    content = client.post_json(f"{FOREST_API}/dwBerySeed", {"stdMt": month, "empId": sender_employee_id})
+    if not isinstance(content, list):
+        raise FruitAutoError("FOREST history did not return a list")
+
+    local_events = local_transfer_history_for_official(owner_key, sender_employee_id, date, timezone_offset_minutes)
+    for event in local_events:
+        event["_historyOwnerKey"] = owner_key
+        event["_historyEmployeeId"] = str(sender_employee_id or "")
+    used_local_indexes = set()
+    employee_hints = local_history_hints_by_name(local_events)
+    rows = []
+    for row in content:
+        day = parse_int(str(row.get("stdDt") or "").replace("일", ""), None)
+        if selected_day is not None and day != selected_day:
+            continue
+        seed_count, fruit_count = parse_seed_berry_counts(row.get("stdMBerryCnt"))
+        delta = parse_int(row.get("stdDBerryPmCnt"))
+        action = "received" if delta > 0 else "sent"
+        counterpart = row.get("tgtEmpNm") or ""
+        content_message = row.get("tgtMsg") or "[열매선물]"
+        matched_event = match_official_history_event(
+            local_events,
+            used_local_indexes,
+            action,
+            counterpart,
+            abs(delta),
+            content_message,
+            fruit_count if action == "sent" else None,
+        )
+        employee_hint = employee_hint_from_event(matched_event, action) if matched_event else employee_hints.get(str(counterpart), {})
+        counterpart_position_name = employee_hint.get("positionName") or ""
+        counterpart_employee_id = employee_hint.get("employeeId") or ""
+        sender_is_me = action == "sent"
+        avatar_employee_id = (counterpart_employee_id or sender_employee_id) if sender_is_me else sender_employee_id
+        display_name = display_employee(counterpart, counterpart_position_name)
+        history_date = history_date_from_month_day(month, day)
+        item = {
+                "at": reliable_history_event_time(matched_event),
+                "_matchedTimeSource": matched_event.get("timeSource") if matched_event else None,
+                "displayTime": row.get("stdDt") or "",
+                "timeLabel": "받음" if action == "received" else "보냄",
+                "action": action,
+                "ownerKey": owner_key,
+                "historyEmployeeId": str(sender_employee_id or ""),
+                "historyDate": history_date,
+                "target": counterpart,
+                "targetEmployeeId": counterpart_employee_id,
+                "targetPositionName": counterpart_position_name,
+                "senderEmployeeId": sender_employee_id if sender_is_me else (counterpart_employee_id or sender_employee_id),
+                "avatarEmployeeId": avatar_employee_id,
+                "displayName": display_name,
+                "senderIsMe": sender_is_me,
+                "seeds": seed_count,
+                "berries": abs(delta),
+                "remaining": fruit_count,
+                "delta": delta,
+                "content": content_message,
+                "source": "forest",
+        }
+        item["_officialFingerprint"] = official_history_fingerprint(item)
+        rows.append(item)
+    for row in rows:
+        if not row.get("at"):
+            row["timeSource"] = "missing"
+        else:
+            row["timeSource"] = "local_log"
+    rows = pair_official_history_transfer_times(rows)
+    rows = infer_official_history_times(remove_future_observed_history_times(sort_history_rows(rows))[:limit])
+    for row in rows:
+        row.pop("_officialFingerprint", None)
+        row.pop("_matchedTimeSource", None)
+        row.pop("ownerKey", None)
+        row.pop("historyEmployeeId", None)
+    return rows
+
+
 def history(limit=40, owner_key=None, date=None, timezone_offset_minutes=0):
+    try:
+        rows = official_history(
+            limit=limit,
+            owner_key=owner_key,
+            date=date,
+            timezone_offset_minutes=timezone_offset_minutes,
+        )
+        if rows:
+            return rows
+    except Exception as exc:
+        log_event({"action": "official_history_fallback", "ownerKey": owner_key, "error": str(exc)})
+
     owner_key = require_owner(owner_key)
     state = get_account_state(owner_key)
     my_employee_id = str(
@@ -943,6 +1626,18 @@ def notification_items(limit=20, owner_key=None):
     )
     rows = []
     for event in reversed(read_jsonl(HISTORY_PATH, limit * 5)):
+        if event.get("action") == "worklog_sent" and event.get("ownerKey") == owner_key:
+            rows.append(
+                {
+                    "id": f"{event.get('at')}:{event.get('ownerKey')}:worklog:{event.get('stdDt')}",
+                    "at": event.get("at"),
+                    "direction": "worklog",
+                    **worklog_notification_payload(event),
+                }
+            )
+            if len(rows) >= limit:
+                break
+            continue
         if not is_transfer_history_event(event):
             continue
         received_by_me = my_employee_id and str(event.get("targetEmployeeId") or "") == my_employee_id
@@ -1900,6 +2595,9 @@ def check_once(dry_run=False, force=False, owner_key=None):
             state["lastResult"] = "no_berries"
             state["lastAttemptResult"] = "no_berries"
             state["lastNoBerriesAt"] = checked_at
+            state["pendingReceivedAt"] = None
+            state["pendingBerryCount"] = None
+            state["pendingTargetEmployeeId"] = None
             should_log_no_berries = (
                 last_no_berries_log_age is None or last_no_berries_log_age >= 3600
             )
@@ -1924,6 +2622,60 @@ def check_once(dry_run=False, force=False, owner_key=None):
         requested_berries = get_send_berry_count(state)
         send_all_berries = get_send_all_berries(state)
         send_berries = berries if send_all_berries else min(berries, requested_berries)
+        pending_received_at = parse_iso(state.get("pendingReceivedAt"))
+        pending_target_id = str(state.get("pendingTargetEmployeeId") or "")
+        current_target_id = str(target.get("emp_id") or "")
+        pending_berry_count = parse_int(state.get("pendingBerryCount"), 0)
+        if pending_received_at is None or pending_target_id != current_target_id or berries > pending_berry_count:
+            pending_received_at = attempt_at
+            state["pendingReceivedAt"] = pending_received_at.isoformat()
+            state["pendingTargetEmployeeId"] = target.get("emp_id")
+        state["pendingBerryCount"] = berries
+        received_events = record_received_history_from_official(
+            client,
+            owner_key,
+            sender_employee_id,
+            sender_employee_name,
+            employee_position(employee),
+            pending_received_at,
+            window_seconds=interval_seconds + 120,
+        )
+        if received_events:
+            state["lastReceivedHistoryAt"] = received_events[0].get("at")
+            state["lastReceivedHistoryCount"] = len(received_events)
+            for received_event in received_events:
+                notify_web_push(received_notification_payload(received_event), [owner_key])
+        eligible_at = pending_received_at + dt.timedelta(seconds=interval_seconds)
+        if attempt_at < eligible_at:
+            remaining_seconds = max(0, int((eligible_at - attempt_at).total_seconds()))
+            state["nextRunAt"] = eligible_at.replace(microsecond=0).isoformat()
+            state["lastResult"] = f"waiting_send_delay_{remaining_seconds}s"
+            state["lastAttemptResult"] = state["lastResult"]
+            save_account_state(owner_key, state)
+            log_event(
+                {
+                    "action": "send_delay_wait",
+                    "berries": berries,
+                    "target": target_name,
+                    "targetEmployeeId": target.get("emp_id"),
+                    "ownerKey": owner_key,
+                    "receivedAt": state.get("pendingReceivedAt"),
+                    "eligibleAt": state.get("nextRunAt"),
+                    "remainingSeconds": remaining_seconds,
+                    "slot": slot,
+                }
+            )
+            return {
+                "action": "waiting",
+                "reason": "send_delay",
+                "berries": berries,
+                "target": target_name,
+                "targetEmployeeId": target.get("emp_id"),
+                "ownerKey": owner_key,
+                "receivedAt": state.get("pendingReceivedAt"),
+                "eligibleAt": state.get("nextRunAt"),
+                "remainingSeconds": remaining_seconds,
+            }
         if dry_run:
             state["lastResult"] = f"dry_run_would_send_{send_berries}"
             state["lastAttemptResult"] = state["lastResult"]
@@ -1940,6 +2692,9 @@ def check_once(dry_run=False, force=False, owner_key=None):
                 "balanceCheckedAt": now_iso(),
                 "lastResult": f"sent_{send_berries}_remaining_{remaining}",
                 "lastAttemptResult": f"sent_{send_berries}_remaining_{remaining}",
+                "pendingReceivedAt": None,
+                "pendingBerryCount": None,
+                "pendingTargetEmployeeId": None,
             }
         )
         save_account_state(owner_key, state)
@@ -2230,16 +2985,26 @@ def save_worklog_once(owner_key=None, run_date=None, force=False):
     )
     save_account_state(owner_key, state)
     event = {
+        "type": "worklog",
         "action": "worklog_sent",
         "ownerKey": owner_key,
         "stdDt": std_dt,
+        "completedAt": now_iso(),
         "projectId": state.get("worklogProjectId"),
         "projectName": state.get("worklogProjectName"),
         "seedCount": seed_count,
         "targetEmployeeId": state.get("worklogTargetEmployeeId"),
     }
     log_event(event)
-    return {"action": "worklog_sent", "ownerKey": owner_key, "stdDt": std_dt, "projectName": state.get("worklogProjectName"), "seedCount": seed_count}
+    append_jsonl(HISTORY_PATH, event)
+    return {
+        "action": "worklog_sent",
+        "ownerKey": owner_key,
+        "stdDt": std_dt,
+        "completedAt": event["completedAt"],
+        "projectName": state.get("worklogProjectName"),
+        "seedCount": seed_count,
+    }
 
 
 def run_worklog_if_due(owner_key):
@@ -2385,6 +3150,7 @@ def run_daemon():
                         result = run_worklog_if_due(owner_key)
                         if result.get("action") == "worklog_sent":
                             log_event({"action": "daemon_worklog_tick", "ownerKey": owner_key, "result": result})
+                            notify_result(result)
                 except Exception as exc:
                     log_event({"action": "daemon_error", "ownerKey": owner_key, "error": str(exc)})
                     notify_result({"action": "failed", "error": str(exc), "ownerKey": owner_key})

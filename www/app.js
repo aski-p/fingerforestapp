@@ -14,9 +14,9 @@ const profilePhotoKey = "fruitProfilePhoto";
 const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV85";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "1.1.5";
+const appVersion = "1.1.7";
 const primaryApiBaseUrl = "https://jobs-maple-readily-apart.trycloudflare.com";
-const fallbackBaseUrl = "";
+const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBase";
 const apiTimeoutMs = 8000;
 let updateRequired = false;
@@ -271,10 +271,7 @@ function apiBaseCandidates() {
   const primaryBase = normalizeBaseUrl(primaryApiBaseUrl);
   const fallbackBase = normalizeBaseUrl(fallbackBaseUrl);
   const activeBase = normalizeBaseUrl(storeGet(activeApiBaseKey));
-  return [activeBase, currentBase, primaryBase, fallbackBase].filter((item, index, list) => {
-    if (!item || list.indexOf(item) !== index) return false;
-    return item !== "https://web-production-011c4.up.railway.app";
-  });
+  return [activeBase, currentBase, primaryBase, fallbackBase].filter((item, index, list) => item && list.indexOf(item) === index);
 }
 
 function apiUrl(baseUrl, path) {

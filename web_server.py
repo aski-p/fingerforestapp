@@ -21,7 +21,7 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "1.1.5"
+APP_VERSION = "1.1.7"
 VALID_THEMES = {
     "default",
     "dark",
