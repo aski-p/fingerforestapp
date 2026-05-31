@@ -14,7 +14,7 @@ const profilePhotoKey = "fruitProfilePhoto";
 const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV85";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "1.1.7";
+const appVersion = "1.1.8";
 const primaryApiBaseUrl = "https://jobs-maple-readily-apart.trycloudflare.com";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBase";
@@ -429,6 +429,7 @@ function applyAvatar(button, initialEl, label, photoUrl = getProfilePhoto()) {
 function updateProfileUi(label, unlocked = isUnlocked(), photoUrl = getProfilePhoto()) {
   const displayLabel = unlocked ? label || "사용자" : "fingerfruit";
   const displayPhoto = unlocked ? photoUrl : "";
+  document.body.classList.toggle("logged-out", !unlocked);
   $("heroTitleText").textContent = displayLabel;
   $("profileUserName").textContent = displayLabel;
   applyAvatar($("heroProfileBtn").querySelector(".profile-avatar"), $("heroAvatarInitial"), displayLabel, displayPhoto);

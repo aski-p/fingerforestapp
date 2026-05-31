@@ -1407,8 +1407,7 @@ def pair_official_history_transfer_times(rows):
         if received.get("action") == "received" and received.get("timeSource") == "received_log":
             if received_index in paired_received_indexes:
                 continue
-            received["at"] = None
-            received["timeSource"] = "missing"
+            received["_dropUnpairedReceived"] = True
     return rows
 
 
@@ -1511,13 +1510,17 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
     for row in rows:
         if not row.get("at"):
             row["timeSource"] = "missing"
+        elif row.get("action") == "received" and row.get("_matchedTimeSource") == "balance_detected":
+            row["timeSource"] = "received_log"
         else:
             row["timeSource"] = "local_log"
     rows = pair_official_history_transfer_times(rows)
+    rows = [row for row in rows if not row.get("_dropUnpairedReceived")]
     rows = infer_official_history_times(remove_future_observed_history_times(sort_history_rows(rows))[:limit])
     for row in rows:
         row.pop("_officialFingerprint", None)
         row.pop("_matchedTimeSource", None)
+        row.pop("_dropUnpairedReceived", None)
         row.pop("ownerKey", None)
         row.pop("historyEmployeeId", None)
     return rows
