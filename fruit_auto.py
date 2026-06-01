@@ -950,6 +950,27 @@ def official_history_fingerprint(row):
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def official_seed_history_fingerprint(row):
+    payload = {
+        "ownerKey": row.get("ownerKey"),
+        "employeeId": row.get("historyEmployeeId"),
+        "historyDate": row.get("historyDate"),
+        "action": row.get("action"),
+        "target": row.get("target"),
+        "targetEmployeeId": row.get("targetEmployeeId"),
+        "seedDelta": abs(parse_int(row.get("delta"), 0)),
+        "remainingSeeds": row.get("seeds"),
+        "remainingBerries": row.get("remaining"),
+        "content": normalize_history_message(row.get("content")),
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def is_seed_history_message(value):
+    return "씨앗" in str(value or "")
+
+
 def parse_seed_berry_counts(value):
     parts = str(value or "0/0").split("/")
     berries = parse_int(parts[0] if len(parts) > 0 else 0)
@@ -997,7 +1018,127 @@ def history_observation_db():
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS official_seed_history_observations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_key TEXT NOT NULL,
+            employee_id TEXT NOT NULL,
+            history_date TEXT NOT NULL,
+            row_fingerprint TEXT NOT NULL,
+            ordinal INTEGER NOT NULL,
+            action TEXT NOT NULL,
+            counterpart_name TEXT,
+            counterpart_employee_id TEXT,
+            seed_delta INTEGER,
+            remaining_seeds INTEGER,
+            remaining_berries INTEGER,
+            content TEXT,
+            first_seen_at TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(owner_key, employee_id, history_date, row_fingerprint, ordinal)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_official_seed_history_observations_scope "
+        "ON official_seed_history_observations(owner_key, employee_id, history_date)"
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS official_seed_history_observation_scopes (
+            owner_key TEXT NOT NULL,
+            employee_id TEXT NOT NULL,
+            history_date TEXT NOT NULL,
+            bootstrapped_at TEXT NOT NULL,
+            PRIMARY KEY(owner_key, employee_id, history_date)
+        )
+        """
+    )
     return conn
+
+
+def sync_official_seed_history_observations(owner_key, employee_id, history_date, rows, observed_at=None):
+    owner_key = str(owner_key or "")
+    employee_id = str(employee_id or "")
+    history_date = str(history_date or "")
+    scoped_rows = [row for row in rows if row.get("historyDate") == history_date and row.get("_officialSeedFingerprint")]
+    if not owner_key or not employee_id or not history_date or not scoped_rows:
+        return {}
+
+    now = observed_at or now_iso()
+    with history_observation_db() as conn:
+        existing_by_fingerprint = {}
+        for row in conn.execute(
+            """
+            SELECT *
+            FROM official_seed_history_observations
+            WHERE owner_key = ? AND employee_id = ? AND history_date = ?
+            ORDER BY ordinal ASC
+            """,
+            (owner_key, employee_id, history_date),
+        ):
+            existing_by_fingerprint.setdefault(row["row_fingerprint"], []).append(row)
+
+        requested_by_fingerprint = {}
+        for row in scoped_rows:
+            requested_by_fingerprint.setdefault(row["_officialSeedFingerprint"], []).append(row)
+
+        for fingerprint, requested_rows in requested_by_fingerprint.items():
+            existing_rows = existing_by_fingerprint.get(fingerprint, [])
+            for ordinal in range(len(existing_rows) + 1, len(requested_rows) + 1):
+                sample = requested_rows[ordinal - 1]
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO official_seed_history_observations (
+                        owner_key, employee_id, history_date, row_fingerprint, ordinal,
+                        action, counterpart_name, counterpart_employee_id, seed_delta,
+                        remaining_seeds, remaining_berries, content, first_seen_at, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        owner_key,
+                        employee_id,
+                        history_date,
+                        fingerprint,
+                        ordinal,
+                        sample.get("action") or "",
+                        sample.get("target") or "",
+                        sample.get("targetEmployeeId") or "",
+                        abs(parse_int(sample.get("delta"), 0)),
+                        parse_int(sample.get("seeds"), 0),
+                        parse_int(sample.get("remaining"), 0),
+                        sample.get("content") or "",
+                        now,
+                        now,
+                    ),
+                )
+
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO official_seed_history_observation_scopes (
+                owner_key, employee_id, history_date, bootstrapped_at
+            ) VALUES (?, ?, ?, ?)
+            """,
+            (owner_key, employee_id, history_date, now),
+        )
+
+        lookup = {}
+        refreshed = {}
+        for row in conn.execute(
+            """
+            SELECT *
+            FROM official_seed_history_observations
+            WHERE owner_key = ? AND employee_id = ? AND history_date = ?
+            ORDER BY id ASC
+            """,
+            (owner_key, employee_id, history_date),
+        ):
+            refreshed.setdefault(row["row_fingerprint"], []).append(row)
+        for fingerprint, observed_rows in refreshed.items():
+            for index, row in enumerate(observed_rows, start=1):
+                lookup[(fingerprint, index)] = row["first_seen_at"]
+        return lookup
 
 
 def sync_official_history_observations(owner_key, employee_id, history_date, rows, bootstrap_first_seen_at=None):
@@ -1404,7 +1545,7 @@ def pair_official_history_transfer_times(rows):
         if best_index is not None:
             paired_received_indexes.add(best_index)
     for received_index, received in enumerate(rows):
-        if received.get("action") == "received":
+        if received.get("action") == "received" and received.get("historyKind") != "seed":
             if received_index in paired_received_indexes:
                 continue
             received["_dropUnpairedReceived"] = True
@@ -1466,6 +1607,7 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
         action = "received" if delta > 0 else "sent"
         counterpart = row.get("tgtEmpNm") or ""
         content_message = row.get("tgtMsg") or "[열매선물]"
+        is_seed_history = is_seed_history_message(content_message)
         matched_event = match_official_history_event(
             local_events,
             used_local_indexes,
@@ -1499,17 +1641,42 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
                 "displayName": display_name,
                 "senderIsMe": sender_is_me,
                 "seeds": seed_count,
-                "berries": abs(delta),
+                "berries": 0 if is_seed_history else abs(delta),
                 "remaining": fruit_count,
                 "delta": delta,
                 "content": content_message,
-                "source": "forest",
+                "source": "forest_seed" if is_seed_history else "forest",
+                "historyKind": "seed" if is_seed_history else "berry",
         }
-        item["_officialFingerprint"] = official_history_fingerprint(item)
+        if is_seed_history:
+            item["_officialSeedFingerprint"] = official_seed_history_fingerprint(item)
+        else:
+            item["_officialFingerprint"] = official_history_fingerprint(item)
         rows.append(item)
+    seed_rows_by_date = {}
+    for row in rows:
+        if row.get("historyKind") == "seed" and row.get("historyDate"):
+            seed_rows_by_date.setdefault(row.get("historyDate"), []).append(row)
+    for history_date, seed_rows in seed_rows_by_date.items():
+        lookup = sync_official_seed_history_observations(
+            owner_key,
+            sender_employee_id,
+            history_date,
+            seed_rows,
+        )
+        occurrence_by_fingerprint = {}
+        for row in seed_rows:
+            fingerprint = row.get("_officialSeedFingerprint")
+            occurrence_by_fingerprint[fingerprint] = occurrence_by_fingerprint.get(fingerprint, 0) + 1
+            first_seen_at = lookup.get((fingerprint, occurrence_by_fingerprint[fingerprint]))
+            if first_seen_at and not row.get("at"):
+                row["at"] = first_seen_at
+                row["_matchedTimeSource"] = "seed_observed"
     for row in rows:
         if not row.get("at"):
             row["timeSource"] = "missing"
+        elif row.get("_matchedTimeSource") == "seed_observed":
+            row["timeSource"] = "seed_observed"
         elif row.get("action") == "received" and row.get("_matchedTimeSource") == "balance_detected":
             row["timeSource"] = "received_log"
         else:
@@ -1519,6 +1686,7 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
     rows = infer_official_history_times(remove_future_observed_history_times(sort_history_rows(rows))[:limit])
     for row in rows:
         row.pop("_officialFingerprint", None)
+        row.pop("_officialSeedFingerprint", None)
         row.pop("_matchedTimeSource", None)
         row.pop("_dropUnpairedReceived", None)
         row.pop("ownerKey", None)

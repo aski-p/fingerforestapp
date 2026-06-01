@@ -14,7 +14,7 @@ const profilePhotoKey = "fruitProfilePhoto";
 const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV85";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "1.2.0";
+const appVersion = "1.3.0";
 const primaryApiBaseUrl = "https://jobs-maple-readily-apart.trycloudflare.com";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBase";
@@ -1336,6 +1336,7 @@ function filterPairedHistoryItems(items) {
   const usedSentIndexes = new Set();
   const keepReceivedIndexes = new Set();
   sorted.forEach((item, index) => {
+    if (item.historyKind === "seed") return;
     if (item.action !== "received") return;
     const receivedAt = Date.parse(item.at || "");
     if (!Number.isFinite(receivedAt)) return;
@@ -1359,7 +1360,7 @@ function filterPairedHistoryItems(items) {
       keepReceivedIndexes.add(index);
     }
   });
-  return sorted.filter((item, index) => item.action !== "received" || keepReceivedIndexes.has(index));
+  return sorted.filter((item, index) => item.historyKind === "seed" || item.action !== "received" || keepReceivedIndexes.has(index));
 }
 
 function renderHistory(items) {
