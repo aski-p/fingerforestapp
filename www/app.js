@@ -15,7 +15,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV85";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "2.2.0";
+const appVersion = "2.3.0";
 const primaryApiBaseUrl = "https://jobs-maple-readily-apart.trycloudflare.com";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBase";
@@ -1294,11 +1294,12 @@ function renderWorklogCalendar() {
   const year = worklogCalendarMonth.getFullYear();
   const month = worklogCalendarMonth.getMonth();
   const todayValue = localDateValue(new Date());
-  const firstDay = new Date(year, month, 1).getDay();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const firstVisibleOffset = firstWeekday === 0 ? 0 : firstWeekday - 1;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   monthLabel.textContent = `${year}년 ${month + 1}월`;
   grid.innerHTML = "";
-  for (let i = 0; i < firstDay; i += 1) {
+  for (let i = 0; i < firstVisibleOffset; i += 1) {
     const blank = document.createElement("span");
     blank.className = "calendar-day blank";
     grid.appendChild(blank);
@@ -1306,6 +1307,7 @@ function renderWorklogCalendar() {
   for (let day = 1; day <= daysInMonth; day += 1) {
     const date = localDateValue(new Date(year, month, day));
     const parsedDate = parseLocalDateValue(date);
+    if (parsedDate?.getDay() === 0) continue;
     const isWeekend = parsedDate ? parsedDate.getDay() === 0 || parsedDate.getDay() === 6 : false;
     const holidayName = koreanPublicHolidays[date] || "";
     const blockedReason = worklogBlockedDateReason(date);

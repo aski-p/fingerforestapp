@@ -21,11 +21,11 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "2.2.0"
+APP_VERSION = "2.3.0"
 RELEASE_NOTES = [
-    "업무일지 완료 Push가 오래 지연되어 뜨지 않도록 푸시 보관 시간을 짧게 제한했습니다.",
-    "앱을 다시 열 때 과거 업무일지 알림을 로컬 알림으로 재표시하지 않도록 막았습니다.",
-    "설치 페이지와 버전 체크 API의 최신 기준을 v2.2.0으로 맞췄습니다.",
+    "업무일지 날짜 선택 달력을 월~토 6열 표시로 변경했습니다.",
+    "일요일은 달력에서 숨기고 토요일/공휴일은 선택 불가 상태를 유지했습니다.",
+    "설치 페이지와 버전 체크 API의 최신 기준을 v2.3.0으로 맞췄습니다.",
 ]
 VALID_THEMES = {
     "default",
