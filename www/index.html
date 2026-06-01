@@ -7,7 +7,7 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <link rel="icon" href="/icons/apple-icon-192.png" type="image/png">
-    <link rel="stylesheet" href="/styles.css?v=2.3.0">
+    <link rel="stylesheet" href="/styles.css?v=2.5.0">
     <title>fingerfruit</title>
   </head>
   <body class="logged-out">
@@ -305,22 +305,6 @@
         </div>
       </div>
 
-      <div id="updateModal" class="modal hidden update-modal" role="dialog" aria-modal="true" aria-labelledby="updateModalTitle">
-        <div class="modal-panel update-panel">
-          <div class="modal-head">
-            <div>
-              <p class="label">UPDATE</p>
-              <h2 id="updateModalTitle">앱 업데이트 필요</h2>
-            </div>
-          </div>
-          <div class="update-body">
-            <strong id="updateVersionText">최신 버전을 확인했습니다.</strong>
-            <p id="updateMessage">새 버전이 있습니다. 업데이트 후 다시 실행해주세요.</p>
-            <button id="updateBtn" class="primary" type="button">업데이트</button>
-          </div>
-        </div>
-      </div>
-
       <div id="releaseNotesModal" class="modal hidden release-notes-modal" role="dialog" aria-modal="true" aria-labelledby="releaseNotesTitle">
         <div class="modal-panel release-notes-panel">
           <div class="modal-head">
@@ -359,7 +343,7 @@
               <button id="worklogCalendarNextBtn" class="calendar-nav" type="button" aria-label="다음 달">›</button>
             </div>
             <div class="calendar-weekdays" aria-hidden="true">
-              <span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+              <span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span>
             </div>
             <div id="worklogCalendarGrid" class="calendar-grid"></div>
           </div>
@@ -372,10 +356,10 @@
 
       <p id="toast" class="toast" role="status"></p>
       <footer class="app-footer">
-        <span>v2.3.0 정식버전 · by aski</span>
+        <span>v2.5.0 정식버전 · by aski</span>
         <a id="supportLink" class="support-link" href="https://qr.kakaopay.com/Ej7ruxJDq" target="_blank" rel="noopener" aria-label="카카오페이로 후원하기">후원하기</a>
       </footer>
     </main>
-    <script src="/app.js?v=2.3.0"></script>
+    <script src="/app.js?v=2.5.0"></script>
   </body>
 </html>

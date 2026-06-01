@@ -103,25 +103,35 @@
     <main>
       <img class="app-icon" src="/icons/apple-icon-192.png" alt="">
       <h1>fingerfruit 앱 설치</h1>
-      <div class="version">v2.3.0 정식버전 · by aski</div>
+      <div class="version">v2.5.0 정식버전 · by aski</div>
       <p>finger 열매 자동화 앱입니다. 휴대폰에서 아래 버튼을 눌러 설치 파일을 내려받으세요.</p>
 
       <section class="card">
         <h2>Android</h2>
         <p>APK를 다운로드한 뒤 설치를 허용하면 앱으로 실행됩니다.</p>
-        <a id="androidDownloadLink" href="/downloads/fingerfruit-android-v2.3.0.apk" download>안드로이드 APK v2.3.0 정식버전 다운로드</a>
+        <a id="androidDownloadLink" href="https://web-production-011c4.up.railway.app/android.apk" download>안드로이드 APK 최신버전 다운로드</a>
       </section>
 
       <section class="card">
         <h2>iPhone</h2>
         <p>Push 알림은 Safari에서 앱을 열고 공유 버튼의 홈 화면에 추가로 설치한 뒤 앱 안의 PUSH를 켜야 동작합니다.</p>
-        <a class="secondary" href="/downloads/fingerfruit-ios-v2.3.0.mobileconfig">아이폰 설치 파일 v2.3.0 정식버전 다운로드</a>
+        <a id="iosDownloadLink" class="secondary" href="https://web-production-011c4.up.railway.app/ios.mobileconfig">아이폰 설치 파일 최신버전 다운로드</a>
       </section>
 
       <p class="note">설치 파일은 현재 열려 있는 최신 fingerfruit URL로 연결됩니다.</p>
     </main>
     <script>
       const androidLink = document.getElementById("androidDownloadLink");
+      const iosLink = document.getElementById("iosDownloadLink");
+      fetch("https://web-production-011c4.up.railway.app/api/app-info")
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => {
+          const info = data && data.result ? data.result : null;
+          if (!info) return;
+          if (info.androidApkUrl) androidLink.href = info.androidApkUrl;
+          if (info.iosProfileUrl && iosLink) iosLink.href = info.iosProfileUrl;
+        })
+        .catch(() => {});
       androidLink.addEventListener("click", (event) => {
         const url = new URL(androidLink.getAttribute("href"), location.href).toString();
         if (window.FruitAndroid?.openSupport) {
