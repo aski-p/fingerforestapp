@@ -13,13 +13,17 @@ const fontKey = "fruitFont";
 const profilePhotoKey = "fruitProfilePhoto";
 const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV85";
+const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "1.4.0";
+const appVersion = "2.2.0";
 const primaryApiBaseUrl = "https://jobs-maple-readily-apart.trycloudflare.com";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBase";
 const apiTimeoutMs = 8000;
+const recentNotificationWindowMs = 2 * 60 * 1000;
 let updateRequired = false;
+let latestAppInfo = null;
+let releaseNotesShownThisSession = false;
 
 function nativeStoreGet(key) {
   try {
@@ -157,6 +161,74 @@ let pendingWorklogTarget = null;
 let worklogDraftDirty = false;
 let activeAppearanceSettings = { theme: "default", font: "pretendard" };
 
+let koreanPublicHolidays = {
+  "2025-01-01": "신정",
+  "2025-01-27": "임시공휴일",
+  "2025-01-28": "설날 연휴",
+  "2025-01-29": "설날",
+  "2025-01-30": "설날 연휴",
+  "2025-03-01": "삼일절",
+  "2025-03-03": "삼일절 대체공휴일",
+  "2025-05-01": "노동절",
+  "2025-05-05": "어린이날/부처님오신날",
+  "2025-05-06": "어린이날/부처님오신날 대체공휴일",
+  "2025-06-03": "대통령선거일",
+  "2025-06-06": "현충일",
+  "2025-07-17": "제헌절",
+  "2025-08-15": "광복절",
+  "2025-10-03": "개천절",
+  "2025-10-05": "추석 연휴",
+  "2025-10-06": "추석",
+  "2025-10-07": "추석 연휴",
+  "2025-10-08": "추석 대체공휴일",
+  "2025-10-09": "한글날",
+  "2025-12-25": "성탄절",
+  "2026-01-01": "신정",
+  "2026-02-16": "설날 연휴",
+  "2026-02-17": "설날",
+  "2026-02-18": "설날 연휴",
+  "2026-03-01": "삼일절",
+  "2026-03-02": "삼일절 대체공휴일",
+  "2026-05-01": "노동절",
+  "2026-05-05": "어린이날",
+  "2026-05-24": "부처님오신날",
+  "2026-05-25": "부처님오신날 대체공휴일",
+  "2026-06-03": "전국동시지방선거일",
+  "2026-06-06": "현충일",
+  "2026-07-17": "제헌절",
+  "2026-08-15": "광복절",
+  "2026-08-17": "광복절 대체공휴일",
+  "2026-09-24": "추석 연휴",
+  "2026-09-25": "추석",
+  "2026-09-26": "추석 연휴",
+  "2026-10-03": "개천절",
+  "2026-10-05": "개천절 대체공휴일",
+  "2026-10-09": "한글날",
+  "2026-12-25": "성탄절",
+  "2027-01-01": "신정",
+  "2027-02-06": "설날 연휴",
+  "2027-02-07": "설날",
+  "2027-02-08": "설날 연휴",
+  "2027-02-09": "설날 대체공휴일",
+  "2027-03-01": "삼일절",
+  "2027-05-01": "노동절",
+  "2027-05-05": "어린이날",
+  "2027-05-13": "부처님오신날",
+  "2027-06-06": "현충일",
+  "2027-07-17": "제헌절",
+  "2027-08-15": "광복절",
+  "2027-08-16": "광복절 대체공휴일",
+  "2027-09-14": "추석 연휴",
+  "2027-09-15": "추석",
+  "2027-09-16": "추석 연휴",
+  "2027-10-03": "개천절",
+  "2027-10-04": "개천절 대체공휴일",
+  "2027-10-09": "한글날",
+  "2027-10-11": "한글날 대체공휴일",
+  "2027-12-25": "성탄절",
+  "2027-12-27": "성탄절 대체공휴일",
+};
+
 function isIosWebKit() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
@@ -273,6 +345,7 @@ function syncModalOpenState() {
     "settingsModal",
     "profileModal",
     "updateModal",
+    "releaseNotesModal",
     "worklogCalendarModal",
   ].some(isModalVisible);
   document.body.classList.toggle("modal-open", visible);
@@ -325,12 +398,55 @@ async function resilientFetch(path, options = {}) {
   throw lastError || new Error("서버 연결 실패");
 }
 
+async function fetchLatestAppInfo() {
+  const bases = apiBaseCandidates();
+  const results = await Promise.allSettled(
+    bases.map(async (baseUrl) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), apiTimeoutMs);
+      try {
+        const res = await fetch(apiUrl(baseUrl, "/api/app-info"), {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data.ok || !data.result?.latestVersion) throw new Error("invalid app info");
+        return { baseUrl, info: data.result };
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }),
+  );
+  const valid = results
+    .filter((result) => result.status === "fulfilled")
+    .map((result) => result.value);
+  if (!valid.length) throw new Error("앱 버전 정보를 가져오지 못했습니다.");
+  const currentVersion = installedAppVersion();
+  const preferredBase = normalizeBaseUrl(primaryApiBaseUrl);
+  const nonDowngrade = valid.filter((item) => compareVersions(item.info.latestVersion, currentVersion) >= 0);
+  const candidates = nonDowngrade.length ? nonDowngrade : valid;
+  candidates.sort((a, b) => {
+    const versionCompare = compareVersions(b.info.latestVersion, a.info.latestVersion);
+    if (versionCompare !== 0) return versionCompare;
+    if (a.baseUrl === preferredBase && b.baseUrl !== preferredBase) return -1;
+    if (b.baseUrl === preferredBase && a.baseUrl !== preferredBase) return 1;
+    const bNotes = Array.isArray(b.info.releaseNotes) ? b.info.releaseNotes.length : 0;
+    const aNotes = Array.isArray(a.info.releaseNotes) ? a.info.releaseNotes.length : 0;
+    return bNotes - aNotes;
+  });
+  storeSet(activeApiBaseKey, candidates[0].baseUrl);
+  return candidates[0].info;
+}
+
 async function checkAppVersion() {
   try {
-    const res = await resilientFetch("/api/app-info", { cache: "no-store" });
-    const data = await res.json();
-    if (!data.ok || !data.result) return false;
-    const info = data.result;
+    const info = await fetchLatestAppInfo();
+    latestAppInfo = info;
+    if (info.publicHolidays && typeof info.publicHolidays === "object") {
+      koreanPublicHolidays = { ...koreanPublicHolidays, ...info.publicHolidays };
+      renderWorklogDates();
+    }
     const installed = installedAppVersion();
     const required = info.minSupportedVersion || info.latestVersion;
     if (compareVersions(installed, required) < 0 || compareVersions(installed, info.latestVersion) < 0) {
@@ -800,7 +916,10 @@ async function ensureWebPushSubscription() {
       applicationServerKey: urlBase64ToUint8Array(keyData.publicKey),
     });
   }
-  await api("/api/push/subscribe", { subscription: subscription.toJSON() });
+  const payload = subscription.toJSON();
+  payload.deviceId = deviceId();
+  payload.userAgent = navigator.userAgent || "";
+  await api("/api/push/subscribe", { subscription: payload });
   return subscription;
 }
 
@@ -863,6 +982,8 @@ async function checkReceivedNotifications({ silent = true } = {}) {
     }
     if (latest.id === lastShownId) return;
     storeSet(lastReceivedNotificationKey, latest.id);
+    const sentAt = latest.at ? new Date(latest.at).getTime() : 0;
+    if (!sentAt || Date.now() - sentAt > recentNotificationWindowMs) return;
     const shown = await showDeviceNotification(latest);
     if (!shown && !silent) toast("열매 수신 내역이 있습니다. 알림 권한을 확인하세요.");
   } catch (err) {
@@ -917,6 +1038,33 @@ function localDateValue(date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function parseLocalDateValue(value) {
+  const [year, month, day] = String(value || "").split("-").map((part) => Number(part));
+  const date = new Date(year, (month || 1) - 1, day || 1);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== (month || 1) - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+}
+
+function worklogBlockedDateReason(value) {
+  const date = parseLocalDateValue(value);
+  if (!date) return "날짜 오류";
+  const day = date.getDay();
+  if (day === 0) return "주말";
+  if (day === 6) return "주말";
+  return koreanPublicHolidays[value] || "";
+}
+
+function isWorklogAllowedDate(value) {
+  return !worklogBlockedDateReason(value);
 }
 
 function fmtHistorySelectedDate(value) {
@@ -1075,10 +1223,12 @@ function mergeStatePhotos(nextState) {
   }
   rememberProfilePhoto(senderId, merged.senderProfilePhotoUrl);
   rememberProfilePhoto(targetId, merged.targetProfilePhotoUrl);
-  preserveStateValue(merged, previous, cached, "lastSeedCount");
-  preserveStateValue(merged, previous, cached, "lastBerryCount");
-  preserveStateValue(merged, previous, cached, "balanceCheckedAt");
-  preserveStateValue(merged, previous, cached, "lastCheckedAt");
+  if (merged.credentialsSaved !== false) {
+    preserveStateValue(merged, previous, cached, "lastSeedCount");
+    preserveStateValue(merged, previous, cached, "lastBerryCount");
+    preserveStateValue(merged, previous, cached, "balanceCheckedAt");
+    preserveStateValue(merged, previous, cached, "lastCheckedAt");
+  }
   return merged;
 }
 
@@ -1103,6 +1253,10 @@ function preserveStateValue(merged, previous, cached, key) {
 }
 
 function renderWorklogDates() {
+  const allowedDates = selectedWorklogDates.filter(isWorklogAllowedDate);
+  if (allowedDates.length !== selectedWorklogDates.length) {
+    selectedWorklogDates = allowedDates;
+  }
   const box = $("worklogDateChips");
   box.innerHTML = "";
   const opener = $("worklogDateInput");
@@ -1151,16 +1305,36 @@ function renderWorklogCalendar() {
   }
   for (let day = 1; day <= daysInMonth; day += 1) {
     const date = localDateValue(new Date(year, month, day));
+    const parsedDate = parseLocalDateValue(date);
+    const isWeekend = parsedDate ? parsedDate.getDay() === 0 || parsedDate.getDay() === 6 : false;
+    const holidayName = koreanPublicHolidays[date] || "";
+    const blockedReason = worklogBlockedDateReason(date);
     const button = document.createElement("button");
     button.type = "button";
     button.className = [
       "calendar-day",
       calendarDraftDates.includes(date) ? "selected" : "",
       date === todayValue ? "today" : "",
+      blockedReason ? "blocked" : "",
+      isWeekend ? "weekend" : "",
+      holidayName ? "holiday" : "",
     ].filter(Boolean).join(" ");
-    button.textContent = String(day);
+    const label = holidayName || (isWeekend ? "휴무" : "");
+    button.innerHTML = `
+      <span class="calendar-day-number">${day}</span>
+      ${label ? `<small>${escapeHtml(label)}</small>` : ""}
+    `;
     button.setAttribute("aria-pressed", calendarDraftDates.includes(date) ? "true" : "false");
+    if (blockedReason) {
+      button.disabled = true;
+      button.title = blockedReason;
+      button.setAttribute("aria-label", `${date} ${blockedReason} 업무일지 작성 불가`);
+    }
     button.addEventListener("click", () => {
+      if (blockedReason) {
+        toast(`${date}은(는) ${blockedReason}이라 업무일지를 예약할 수 없습니다.`);
+        return;
+      }
       calendarDraftDates = calendarDraftDates.includes(date)
         ? calendarDraftDates.filter((item) => item !== date)
         : [...calendarDraftDates, date].sort();
@@ -1171,7 +1345,7 @@ function renderWorklogCalendar() {
 }
 
 function openWorklogCalendar() {
-  calendarDraftDates = [...selectedWorklogDates];
+  calendarDraftDates = selectedWorklogDates.filter(isWorklogAllowedDate);
   const anchor = selectedWorklogDates[0] || localDateValue(new Date());
   const [year, month] = anchor.split("-").map(Number);
   worklogCalendarMonth = new Date(year || new Date().getFullYear(), (month || new Date().getMonth() + 1) - 1, 1);
@@ -1323,6 +1497,7 @@ function renderState(state) {
     // Native setting mirroring is best-effort.
   }
   syncPushSubscriptionIfPossible(state);
+  if (unlocked) window.setTimeout(showReleaseNotesIfNeeded, 0);
 }
 
 function renderCachedState() {
@@ -1443,9 +1618,12 @@ async function refreshHistory({ silent = false } = {}) {
   }
 }
 
-async function refresh({ silent = false } = {}) {
+async function refresh({ silent = false, forceBalance = false } = {}) {
   try {
-    renderState(await api("/api/status"));
+    const state = forceBalance && isUnlocked()
+      ? await api("/api/refresh", {})
+      : await api("/api/status");
+    renderState(state);
     await loadWorklogProjects();
   } catch (err) {
     if (String(err.message || "").includes("로그인") || String(err.message || "").includes("세션")) {
@@ -1729,6 +1907,45 @@ function closeUpdateModal() {
   syncModalOpenState();
 }
 
+function releaseNotesSnoozed(info = latestAppInfo) {
+  if (!info?.latestVersion) return true;
+  try {
+    const snooze = JSON.parse(storeGet(releaseNotesSnoozeKey) || "null");
+    return snooze?.version === info.latestVersion && Number(snooze.until || 0) > Date.now();
+  } catch (_err) {
+    storeRemove(releaseNotesSnoozeKey);
+    return false;
+  }
+}
+
+function showReleaseNotesIfNeeded() {
+  const info = latestAppInfo;
+  if (updateRequired || releaseNotesShownThisSession || !isUnlocked() || !info?.latestVersion) return;
+  const installed = installedAppVersion();
+  if (compareVersions(info.latestVersion, installed) !== 0) return;
+  if (info.releaseNotesVersion && info.releaseNotesVersion !== info.latestVersion) return;
+  const notes = Array.isArray(info.releaseNotes) ? info.releaseNotes.filter(Boolean) : [];
+  if (!notes.length || releaseNotesSnoozed(info)) return;
+  releaseNotesShownThisSession = true;
+  $("releaseNotesTitle").textContent = `v${info.latestVersion} 수정사항`;
+  $("releaseNotesVersion").textContent = `v${info.latestVersion} 업데이트 내용`;
+  $("releaseNotesList").innerHTML = notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("");
+  $("releaseNotesSnooze").checked = false;
+  $("releaseNotesModal").classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+
+function closeReleaseNotesModal() {
+  if ($("releaseNotesSnooze").checked && latestAppInfo?.latestVersion) {
+    storeSet(releaseNotesSnoozeKey, JSON.stringify({
+      version: latestAppInfo.latestVersion,
+      until: Date.now() + 7 * 24 * 60 * 60 * 1000,
+    }));
+  }
+  $("releaseNotesModal").classList.add("hidden");
+  syncModalOpenState();
+}
+
 function closeTopModal() {
   if (isModalVisible("worklogCalendarModal")) {
     closeWorklogCalendar();
@@ -1748,6 +1965,10 @@ function closeTopModal() {
   }
   if (isModalVisible("updateModal")) {
     closeUpdateModal();
+    return true;
+  }
+  if (isModalVisible("releaseNotesModal")) {
+    closeReleaseNotesModal();
     return true;
   }
   return false;
@@ -1794,6 +2015,12 @@ $("settingsModal").addEventListener("click", (event) => {
 $("profileCloseBtn").addEventListener("click", closeProfileModal);
 $("profileModal").addEventListener("click", (event) => {
   if (event.target === $("profileModal")) closeProfileModal();
+});
+
+$("releaseNotesCloseBtn").addEventListener("click", closeReleaseNotesModal);
+$("releaseNotesOkBtn").addEventListener("click", closeReleaseNotesModal);
+$("releaseNotesModal").addEventListener("click", (event) => {
+  if (event.target === $("releaseNotesModal")) closeReleaseNotesModal();
 });
 
 $("profilePreview").addEventListener("click", () => $("profilePhotoInput").click());
@@ -1941,7 +2168,7 @@ $("worklogCalendarResetBtn").addEventListener("click", () => {
   renderWorklogCalendar();
 });
 $("worklogCalendarApplyBtn").addEventListener("click", () => {
-  selectedWorklogDates = [...calendarDraftDates].sort();
+  selectedWorklogDates = calendarDraftDates.filter(isWorklogAllowedDate).sort();
   markWorklogDraftDirty();
   renderWorklogDates();
   closeWorklogCalendar();
@@ -2169,8 +2396,9 @@ async function initApp() {
   updateProfileUi("fingerfruit", false);
   renderState({});
   renderCachedState();
-  await refresh({ silent: true });
+  await refresh({ silent: true, forceBalance: true });
   await loadProfileSettings({ silent: true });
+  showReleaseNotesIfNeeded();
 }
 
 initApp();

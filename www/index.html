@@ -7,7 +7,7 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <link rel="icon" href="/icons/apple-icon-192.png" type="image/png">
-    <link rel="stylesheet" href="/styles.css?v=1.4.0">
+    <link rel="stylesheet" href="/styles.css?v=2.2.0">
     <title>fingerfruit</title>
   </head>
   <body class="logged-out">
@@ -321,6 +321,28 @@
         </div>
       </div>
 
+      <div id="releaseNotesModal" class="modal hidden release-notes-modal" role="dialog" aria-modal="true" aria-labelledby="releaseNotesTitle">
+        <div class="modal-panel release-notes-panel">
+          <div class="modal-head">
+            <div>
+              <p class="label">WHAT'S NEW</p>
+              <h2 id="releaseNotesTitle">수정사항</h2>
+            </div>
+            <button id="releaseNotesCloseBtn" class="icon-button" type="button" aria-label="수정사항 닫기">닫기</button>
+          </div>
+          <div class="release-notes-body">
+            <strong id="releaseNotesVersion">최신 버전</strong>
+            <ul id="releaseNotesList"></ul>
+            <label class="release-notes-snooze">
+              <input id="releaseNotesSnooze" type="checkbox">
+              <i></i>
+              <span>일주일 동안 보지 않기</span>
+            </label>
+            <button id="releaseNotesOkBtn" class="primary" type="button">확인</button>
+          </div>
+        </div>
+      </div>
+
       <div id="worklogCalendarModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="worklogCalendarTitle">
         <div class="modal-panel worklog-calendar-panel">
           <div class="modal-head">
@@ -350,10 +372,10 @@
 
       <p id="toast" class="toast" role="status"></p>
       <footer class="app-footer">
-        <span>v1.4.0 정식버전 · by aski</span>
+        <span>v2.2.0 정식버전 · by aski</span>
         <a id="supportLink" class="support-link" href="https://qr.kakaopay.com/Ej7ruxJDq" target="_blank" rel="noopener" aria-label="카카오페이로 후원하기">후원하기</a>
       </footer>
     </main>
-    <script src="/app.js?v=1.4.0"></script>
+    <script src="/app.js?v=2.2.0"></script>
   </body>
 </html>

@@ -17,17 +17,22 @@ process.stdin.on("end", async () => {
       throw new Error("missing VAPID keys");
     }
     webpush.setVapidDetails(
-      "mailto:fruit-auto@localhost",
+      process.env.FRUIT_AUTO_VAPID_SUBJECT || "mailto:fruit-auto@example.com",
       vapid.publicKey,
       vapid.privateKey
     );
-    await webpush.sendNotification(subscription, JSON.stringify(payload || {}));
+    const options = {
+      TTL: Math.max(0, Number(payload?.ttlSeconds ?? 300) || 0),
+      urgency: payload?.urgency || "high",
+    };
+    await webpush.sendNotification(subscription, JSON.stringify(payload || {}), options);
     process.stdout.write(JSON.stringify({ ok: true }));
   } catch (error) {
     process.stdout.write(
       JSON.stringify({
         ok: false,
         statusCode: error.statusCode || null,
+        body: error.body || null,
         message: error.message,
       })
     );

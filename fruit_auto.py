@@ -83,10 +83,81 @@ DEFAULT_STATE = {
     "worklogProjectName": None,
     "worklogContent": "",
     "worklogNextRunAt": None,
+    "worklogScheduleUpdatedAt": None,
     "worklogLastRunAt": None,
     "worklogLastRunKey": None,
+    "worklogRunningRunKey": None,
+    "worklogRunningAt": None,
     "worklogLastResult": None,
     "worklogLastError": None,
+}
+
+KOREAN_PUBLIC_HOLIDAYS = {
+    "2025-01-01": "신정",
+    "2025-01-27": "임시공휴일",
+    "2025-01-28": "설날 연휴",
+    "2025-01-29": "설날",
+    "2025-01-30": "설날 연휴",
+    "2025-03-01": "삼일절",
+    "2025-03-03": "삼일절 대체공휴일",
+    "2025-05-01": "노동절",
+    "2025-05-05": "어린이날/부처님오신날",
+    "2025-05-06": "어린이날/부처님오신날 대체공휴일",
+    "2025-06-03": "대통령선거일",
+    "2025-06-06": "현충일",
+    "2025-07-17": "제헌절",
+    "2025-08-15": "광복절",
+    "2025-10-03": "개천절",
+    "2025-10-05": "추석 연휴",
+    "2025-10-06": "추석",
+    "2025-10-07": "추석 연휴",
+    "2025-10-08": "추석 대체공휴일",
+    "2025-10-09": "한글날",
+    "2025-12-25": "성탄절",
+    "2026-01-01": "신정",
+    "2026-02-16": "설날 연휴",
+    "2026-02-17": "설날",
+    "2026-02-18": "설날 연휴",
+    "2026-03-01": "삼일절",
+    "2026-03-02": "삼일절 대체공휴일",
+    "2026-05-01": "노동절",
+    "2026-05-05": "어린이날",
+    "2026-05-24": "부처님오신날",
+    "2026-05-25": "부처님오신날 대체공휴일",
+    "2026-06-03": "전국동시지방선거일",
+    "2026-06-06": "현충일",
+    "2026-07-17": "제헌절",
+    "2026-08-15": "광복절",
+    "2026-08-17": "광복절 대체공휴일",
+    "2026-09-24": "추석 연휴",
+    "2026-09-25": "추석",
+    "2026-09-26": "추석 연휴",
+    "2026-10-03": "개천절",
+    "2026-10-05": "개천절 대체공휴일",
+    "2026-10-09": "한글날",
+    "2026-12-25": "성탄절",
+    "2027-01-01": "신정",
+    "2027-02-06": "설날 연휴",
+    "2027-02-07": "설날",
+    "2027-02-08": "설날 연휴",
+    "2027-02-09": "설날 대체공휴일",
+    "2027-03-01": "삼일절",
+    "2027-05-01": "노동절",
+    "2027-05-05": "어린이날",
+    "2027-05-13": "부처님오신날",
+    "2027-06-06": "현충일",
+    "2027-07-17": "제헌절",
+    "2027-08-15": "광복절",
+    "2027-08-16": "광복절 대체공휴일",
+    "2027-09-14": "추석 연휴",
+    "2027-09-15": "추석",
+    "2027-09-16": "추석 연휴",
+    "2027-10-03": "개천절",
+    "2027-10-04": "개천절 대체공휴일",
+    "2027-10-09": "한글날",
+    "2027-10-11": "한글날 대체공휴일",
+    "2027-12-25": "성탄절",
+    "2027-12-27": "성탄절 대체공휴일",
 }
 
 
@@ -254,12 +325,32 @@ def is_transfer_history_event(event):
     )
 
 
+def is_seed_transfer_history_event(event):
+    action = event.get("action")
+    return (
+        action in ("sent", "received")
+        and event.get("type") == "seed_transfer"
+        and bool(event.get("ownerKey"))
+        and bool(event.get("targetEmployeeId"))
+        and int(event.get("seedDelta") or 0) > 0
+    )
+
+
 def record_transfer_history(event):
     event = dict(event)
     event["type"] = "transfer"
     event.setdefault("action", "sent")
     if not is_transfer_history_event(event):
         raise FruitAutoError("invalid transfer history event")
+    append_jsonl(HISTORY_PATH, event)
+
+
+def record_seed_transfer_history(event):
+    event = dict(event)
+    event["type"] = "seed_transfer"
+    event.setdefault("action", "sent")
+    if not is_seed_transfer_history_event(event):
+        raise FruitAutoError("invalid seed transfer history event")
     append_jsonl(HISTORY_PATH, event)
 
 
@@ -497,7 +588,7 @@ def received_notification_payload(result):
 
 
 def worklog_completed_display(result):
-    completed_at = parse_iso(result.get("completedAt") or result.get("at"))
+    completed_at = parse_iso(result.get("scheduledFor") or result.get("completedAt") or result.get("at"))
     if completed_at is None:
         completed_at = dt.datetime.now(dt.timezone.utc)
     local_completed = completed_at.astimezone(KST)
@@ -506,10 +597,11 @@ def worklog_completed_display(result):
 
 def worklog_notification_payload(result):
     completed_display = worklog_completed_display(result)
+    run_key = result.get("runKey") or result.get("scheduledFor") or result.get("stdDt") or int(time.time())
     return {
         "title": "업무일지 작성 완료",
         "body": f"{completed_display}에 업무일지 작성을 완료하였습니다.",
-        "tag": f"worklog-sent-{result.get('ownerKey')}-{result.get('stdDt') or int(time.time())}",
+        "tag": f"worklog-sent-{result.get('ownerKey')}-{run_key}",
         "url": "/",
     }
 
@@ -546,6 +638,20 @@ def save_web_push_subscription(owner_key, subscription):
     owner_key = require_owner(owner_key)
     if not isinstance(subscription, dict) or not subscription.get("endpoint"):
         raise FruitAutoError("유효한 Push 구독 정보가 없습니다.")
+    saved_at = now_iso()
+    device_id = str(
+        subscription.get("deviceId")
+        or subscription.get("_fingerfruitDeviceId")
+        or ""
+    ).strip()
+    user_agent = str(subscription.get("userAgent") or "")[:240]
+    subscription["updatedAt"] = saved_at
+    if "createdAt" not in subscription:
+        subscription["createdAt"] = saved_at
+    if device_id:
+        subscription["deviceId"] = device_id
+    if user_agent:
+        subscription["userAgent"] = user_agent
     secrets = load_secrets()
     subscriptions = secrets.setdefault("webPushSubscriptions", {})
     endpoint = subscription.get("endpoint")
@@ -557,9 +663,12 @@ def save_web_push_subscription(owner_key, subscription):
         ]
     owner_subscriptions = subscriptions.setdefault(owner_key, [])
     owner_subscriptions[:] = [
-        item for item in owner_subscriptions if item.get("endpoint") != endpoint
+        item for item in owner_subscriptions
+        if item.get("endpoint") != endpoint
+        and not (device_id and item.get("deviceId") == device_id)
     ]
     owner_subscriptions.append(subscription)
+    owner_subscriptions[:] = owner_subscriptions[-3:]
     save_secrets(secrets)
     log_event({"action": "web_push_subscribed", "ownerKey": owner_key})
     return {"subscribed": True, "count": len(owner_subscriptions)}
@@ -670,8 +779,18 @@ def notify_result(result):
         if owner_key and not is_push_enabled(owner_key):
             log_event({"action": "push_notify_skipped", "reason": "push_disabled", "ownerKey": owner_key})
             return False
+        if owner_key:
+            push_key = result.get("runKey") or f"{result.get('stdDt')}T{result.get('scheduleTime') or ''}"
+            state = get_account_state(owner_key)
+            if push_key and state.get("worklogLastPushRunKey") == push_key:
+                log_event({"action": "push_notify_skipped", "reason": "worklog_push_already_sent", "ownerKey": owner_key, "runKey": push_key})
+                return False
         web_pushed = notify_web_push(worklog_notification_payload(result), [owner_key] if owner_key else [])
         if web_pushed:
+            if owner_key and push_key:
+                state["worklogLastPushRunKey"] = push_key
+                state["worklogLastPushAt"] = now_iso()
+                save_account_state(owner_key, state)
             return True
         log_event({"action": "push_notify_skipped", "reason": "no_owner_subscription", "ownerKey": owner_key})
         return False
@@ -1248,7 +1367,7 @@ def sync_official_history_observations(owner_key, employee_id, history_date, row
 def local_transfer_history_for_official(owner_key, employee_id, date=None, timezone_offset_minutes=0, limit=5000):
     events = []
     for event in reversed(read_jsonl(HISTORY_PATH, limit)):
-        if not is_transfer_history_event(event):
+        if not is_transfer_history_event(event) and not is_seed_transfer_history_event(event):
             continue
         if date and event_local_date(event, timezone_offset_minutes) != date:
             continue
@@ -2950,18 +3069,33 @@ def normalize_schedule_days(days):
             value = int(item)
         except (TypeError, ValueError):
             continue
-        if 0 <= value <= 6 and value not in result:
+        if 0 <= value <= 4 and value not in result:
             result.append(value)
     return result
 
 
-def normalize_schedule_dates(dates):
+def worklog_blocked_date_reason(day):
+    if day.weekday() >= 5:
+        return "주말"
+    return KOREAN_PUBLIC_HOLIDAYS.get(day.isoformat(), "")
+
+
+def is_worklog_allowed_date(day):
+    return not worklog_blocked_date_reason(day)
+
+
+def normalize_schedule_dates(dates, reject_blocked=True):
     result = []
     for item in dates or []:
         text = str(item or "").strip()
         try:
-            dt.date.fromisoformat(text)
+            day = dt.date.fromisoformat(text)
         except ValueError:
+            continue
+        blocked_reason = worklog_blocked_date_reason(day)
+        if blocked_reason and reject_blocked:
+            raise FruitAutoError(f"{text}은(는) {blocked_reason}이라 업무일지를 예약할 수 없습니다.")
+        if blocked_reason:
             continue
         if text not in result:
             result.append(text)
@@ -3003,6 +3137,7 @@ def set_worklog_settings(payload, owner_key=None):
     target_dept_name = payload.get("targetDeptName", state.get("worklogTargetDeptName"))
     target_position_name = payload.get("targetPositionName", state.get("worklogTargetPositionName"))
     target_duty_id = payload.get("targetDutyId", state.get("worklogTargetDutyId"))
+    saved_at = now_iso()
     next_values = {
         "worklogEnabled": enabled,
         "worklogScheduleDays": normalize_schedule_days(payload.get("scheduleDays", state.get("worklogScheduleDays"))),
@@ -3018,7 +3153,8 @@ def set_worklog_settings(payload, owner_key=None):
         "worklogProjectId": project_id,
         "worklogProjectName": project_name,
         "worklogContent": content,
-        "updatedAt": now_iso(),
+        "worklogScheduleUpdatedAt": saved_at,
+        "updatedAt": saved_at,
     }
     next_values["worklogNextRunAt"] = next_worklog_run_at({**state, **next_values})
     state.update(next_values)
@@ -3034,8 +3170,10 @@ def worklog_schedule_matches(account, local_now):
     if local_now < scheduled:
         return False, scheduled
     today = local_now.date().isoformat()
+    if not is_worklog_allowed_date(local_now.date()):
+        return False, scheduled
     weekdays = normalize_schedule_days(account.get("worklogScheduleDays"))
-    dates = normalize_schedule_dates(account.get("worklogScheduleDates"))
+    dates = normalize_schedule_dates(account.get("worklogScheduleDates"), reject_blocked=False)
     if weekdays and local_now.weekday() in weekdays:
         return True, scheduled
     if dates and today in dates:
@@ -3051,10 +3189,12 @@ def next_worklog_run_at(account, now=None):
     schedule_time = normalize_schedule_time(account.get("worklogScheduleTime"))
     hour, minute = [int(part) for part in schedule_time.split(":")]
     weekdays = normalize_schedule_days(account.get("worklogScheduleDays"))
-    dates = normalize_schedule_dates(account.get("worklogScheduleDates"))
+    dates = normalize_schedule_dates(account.get("worklogScheduleDates"), reject_blocked=False)
     candidates = []
     for offset in range(0, 370):
         day = (local_now + dt.timedelta(days=offset)).date()
+        if not is_worklog_allowed_date(day):
+            continue
         if weekdays and day.weekday() in weekdays:
             candidates.append(day)
         if dates and day.isoformat() in dates:
@@ -3078,12 +3218,18 @@ def worklog_due(account, now=None):
     if not account.get("worklogEnabled"):
         return False
     now = now or dt.datetime.now(dt.timezone.utc)
-    local_now = now.astimezone(KST)
-    matches, scheduled = worklog_schedule_matches(account, local_now)
-    if not matches:
+    next_run = parse_iso(account.get("worklogNextRunAt"))
+    if next_run is None or now < next_run:
         return False
-    run_key = scheduled.strftime("%Y-%m-%dT%H:%M")
+    run_key = next_run.astimezone(KST).strftime("%Y-%m-%dT%H:%M")
     return account.get("worklogLastRunKey") != run_key
+
+
+def worklog_run_key_for_next_run(account):
+    next_run = parse_iso(account.get("worklogNextRunAt"))
+    if next_run is None:
+        return None
+    return next_run.astimezone(KST).strftime("%Y-%m-%dT%H:%M")
 
 
 def save_worklog_once(owner_key=None, run_date=None, force=False):
@@ -3093,89 +3239,164 @@ def save_worklog_once(owner_key=None, run_date=None, force=False):
         state["worklogNextRunAt"] = next_worklog_run_at(state)
         save_account_state(owner_key, state)
         return {"action": "skipped", "reason": "worklog_not_due", "ownerKey": owner_key, "nextRunAt": state.get("worklogNextRunAt")}
+    if not force:
+        due_run_key = worklog_run_key_for_next_run(state)
+        if due_run_key:
+            running_at = parse_iso(state.get("worklogRunningAt"))
+            running_fresh = running_at and (dt.datetime.now(dt.timezone.utc) - running_at).total_seconds() < 15 * 60
+            if state.get("worklogRunningRunKey") == due_run_key and running_fresh:
+                return {"action": "skipped", "reason": "worklog_already_running", "ownerKey": owner_key, "runKey": due_run_key}
+            state["worklogRunningRunKey"] = due_run_key
+            state["worklogRunningAt"] = now_iso()
+            save_account_state(owner_key, state)
 
-    if not state.get("worklogProjectId") or not state.get("worklogContent"):
-        raise FruitAutoError("업무일지 프로젝트와 내용을 먼저 저장하세요.")
-    seed_count = int(state.get("worklogSeedCount") or 0)
-    if seed_count < 0 or seed_count > 3:
-        raise FruitAutoError("씨앗 선물은 최대 3개까지 가능합니다.")
-    if seed_count and not state.get("worklogTargetEmployeeId"):
-        raise FruitAutoError("씨앗 선물 대상 직원을 선택하세요.")
+    try:
+        if not state.get("worklogProjectId") or not state.get("worklogContent"):
+            raise FruitAutoError("업무일지 프로젝트와 내용을 먼저 저장하세요.")
+        seed_count = int(state.get("worklogSeedCount") or 0)
+        if seed_count < 0 or seed_count > 3:
+            raise FruitAutoError("씨앗 선물은 최대 3개까지 가능합니다.")
+        if seed_count and not state.get("worklogTargetEmployeeId"):
+            raise FruitAutoError("씨앗 선물 대상 직원을 선택하세요.")
 
-    client, employee_info, _login_dataset, employee, sender_employee_id, sender_employee_name = account_login(owner_key)
-    local_now = dt.datetime.now(KST)
-    if run_date:
-        target_date = dt.date.fromisoformat(str(run_date))
-    else:
-        matches, scheduled = worklog_schedule_matches(state, local_now)
-        target_date = scheduled.date() if matches else local_now.date()
-    std_dt = target_date.strftime("%Y%m%d")
-    std_mt = target_date.strftime("%Y%m")
-    std_yr = target_date.strftime("%Y")
-    data = {
-        "empId": employee["emp_id"],
-        "stdDt": std_dt,
-        "projId": state.get("worklogProjectId"),
-        "stdMt": std_mt,
-        "stdYr": std_yr,
-        "empNm": employee.get("emp_nm"),
-        "projNm": state.get("worklogProjectName"),
-        "workProsRate": 100,
-        "workDesc": state.get("worklogContent"),
-        "cfmYn": "N",
-        "workStTm": f"{std_dt}0900",
-        "workEdTm": f"{std_dt}1800",
-        "slfWorkPfmBerryCnt": 3,
-        "regId": employee["emp_id"],
-        "modId": employee["emp_id"],
-    }
-    if seed_count:
-        data.update(
+        client, employee_info, _login_dataset, employee, sender_employee_id, sender_employee_name = account_login(owner_key)
+        local_now = dt.datetime.now(KST)
+        scheduled_for = parse_iso(state.get("worklogNextRunAt")) if not force else None
+        if run_date:
+            target_date = dt.date.fromisoformat(str(run_date))
+        elif scheduled_for is not None:
+            target_date = scheduled_for.astimezone(KST).date()
+        else:
+            matches, scheduled = worklog_schedule_matches(state, local_now)
+            target_date = scheduled.date() if matches else local_now.date()
+        std_dt = target_date.strftime("%Y%m%d")
+        std_mt = target_date.strftime("%Y%m")
+        std_yr = target_date.strftime("%Y")
+        data = {
+            "empId": employee["emp_id"],
+            "stdDt": std_dt,
+            "projId": state.get("worklogProjectId"),
+            "stdMt": std_mt,
+            "stdYr": std_yr,
+            "empNm": employee.get("emp_nm"),
+            "projNm": state.get("worklogProjectName"),
+            "workProsRate": 100,
+            "workDesc": state.get("worklogContent"),
+            "cfmYn": "N",
+            "workStTm": f"{std_dt}0900",
+            "workEdTm": f"{std_dt}1800",
+            "slfWorkPfmBerryCnt": 3,
+            "regId": employee["emp_id"],
+            "modId": employee["emp_id"],
+        }
+        if seed_count:
+            data.update(
+                {
+                    "tgtEmpId": state.get("worklogTargetEmployeeId"),
+                    "tgtEmpNm": state.get("worklogTargetEmployeeName"),
+                    "dutyCd": state.get("worklogTargetDutyId"),
+                    "dutyCds": employee.get("duty_id"),
+                    "seedCnt": seed_count,
+                    "tgtMsg": state.get("worklogSeedMessage") or "",
+                }
+            )
+        api_called_at = now_iso()
+        client.post_json(f"{FOREST_API}/saveDw", {"dwInsList": [data]})
+        remaining_seeds = None
+        remaining_berries = None
+        if seed_count:
+            remaining_seeds, remaining_berries = current_seed_fruit(client, employee)
+        schedule_time = normalize_schedule_time(state.get("worklogScheduleTime"))
+        run_key = f"{target_date.isoformat()}T{schedule_time}"
+        scheduled_for_iso = (
+            scheduled_for.astimezone(dt.timezone.utc).replace(microsecond=0).isoformat()
+            if scheduled_for is not None
+            else dt.datetime.combine(target_date, dt.time.fromisoformat(schedule_time), tzinfo=KST)
+            .astimezone(dt.timezone.utc)
+            .replace(microsecond=0)
+            .isoformat()
+        )
+        state.update(
             {
-                "tgtEmpId": state.get("worklogTargetEmployeeId"),
-                "tgtEmpNm": state.get("worklogTargetEmployeeName"),
-                "dutyCd": state.get("worklogTargetDutyId"),
-                "dutyCds": employee.get("duty_id"),
-                "seedCnt": seed_count,
-                "tgtMsg": state.get("worklogSeedMessage") or "",
+                "worklogLastRunAt": now_iso(),
+                "worklogLastRunKey": run_key,
+                "worklogLastResult": "sent",
+                "worklogLastError": None,
+                "worklogRunningRunKey": None,
+                "worklogRunningAt": None,
+                **(
+                    {
+                        "lastSeedCount": remaining_seeds,
+                        "lastBerryCount": remaining_berries,
+                        "balanceCheckedAt": now_iso(),
+                    }
+                    if seed_count
+                    else {}
+                ),
+                "worklogNextRunAt": next_worklog_run_at({**state, "worklogLastRunKey": run_key}),
+                "senderEmployeeId": sender_employee_id,
+                "senderEmployeeName": sender_employee_name,
+                "updatedAt": now_iso(),
             }
         )
-    client.post_json(f"{FOREST_API}/saveDw", {"dwInsList": [data]})
-    run_key = f"{target_date.isoformat()}T{normalize_schedule_time(state.get('worklogScheduleTime'))}"
-    state.update(
-        {
-            "worklogLastRunAt": now_iso(),
-            "worklogLastRunKey": run_key,
-            "worklogLastResult": "sent",
-            "worklogLastError": None,
-            "worklogNextRunAt": next_worklog_run_at({**state, "worklogLastRunKey": run_key}),
-            "senderEmployeeId": sender_employee_id,
-            "senderEmployeeName": sender_employee_name,
-            "updatedAt": now_iso(),
+        save_account_state(owner_key, state)
+        event = {
+            "type": "worklog",
+            "action": "worklog_sent",
+            "ownerKey": owner_key,
+            "stdDt": std_dt,
+            "runKey": run_key,
+            "scheduledFor": scheduled_for_iso,
+            "scheduleTime": schedule_time,
+            "completedAt": now_iso(),
+            "projectId": state.get("worklogProjectId"),
+            "projectName": state.get("worklogProjectName"),
+            "seedCount": seed_count,
+            "targetEmployeeId": state.get("worklogTargetEmployeeId"),
         }
-    )
-    save_account_state(owner_key, state)
-    event = {
-        "type": "worklog",
-        "action": "worklog_sent",
-        "ownerKey": owner_key,
-        "stdDt": std_dt,
-        "completedAt": now_iso(),
-        "projectId": state.get("worklogProjectId"),
-        "projectName": state.get("worklogProjectName"),
-        "seedCount": seed_count,
-        "targetEmployeeId": state.get("worklogTargetEmployeeId"),
-    }
-    log_event(event)
-    append_jsonl(HISTORY_PATH, event)
-    return {
-        "action": "worklog_sent",
-        "ownerKey": owner_key,
-        "stdDt": std_dt,
-        "completedAt": event["completedAt"],
-        "projectName": state.get("worklogProjectName"),
-        "seedCount": seed_count,
-    }
+        log_event(event)
+        append_jsonl(HISTORY_PATH, event)
+        if seed_count:
+            seed_event = {
+                "action": "sent",
+                "at": api_called_at,
+                "timeSource": "worklog_api_call",
+                "seedDelta": seed_count,
+                "berries": 0,
+                "seeds": remaining_seeds,
+                "remaining": remaining_berries,
+                "senderEmployeeId": sender_employee_id,
+                "senderEmployeeName": sender_employee_name,
+                "senderPositionName": employee_position(employee),
+                "target": state.get("worklogTargetEmployeeName"),
+                "targetEmployeeId": state.get("worklogTargetEmployeeId"),
+                "targetPositionName": state.get("worklogTargetPositionName"),
+                "ownerKey": owner_key,
+                "message": "",
+                "worklogStdDt": std_dt,
+                "worklogCompletedAt": event["completedAt"],
+            }
+            log_event({**seed_event, "action": "worklog_seed_sent"})
+            record_seed_transfer_history(seed_event)
+        return {
+            "action": "worklog_sent",
+            "ownerKey": owner_key,
+            "stdDt": std_dt,
+            "runKey": run_key,
+            "scheduleTime": schedule_time,
+            "scheduledFor": scheduled_for_iso,
+            "completedAt": event["completedAt"],
+            "projectName": state.get("worklogProjectName"),
+            "seedCount": seed_count,
+        }
+    except Exception:
+        if not force:
+            latest_state = get_account_state(owner_key)
+            if latest_state.get("worklogRunningRunKey") == state.get("worklogRunningRunKey"):
+                latest_state["worklogRunningRunKey"] = None
+                latest_state["worklogRunningAt"] = None
+                save_account_state(owner_key, latest_state)
+        raise
 
 
 def run_worklog_if_due(owner_key):

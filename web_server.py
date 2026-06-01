@@ -21,7 +21,12 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "1.4.0"
+APP_VERSION = "2.2.0"
+RELEASE_NOTES = [
+    "업무일지 완료 Push가 오래 지연되어 뜨지 않도록 푸시 보관 시간을 짧게 제한했습니다.",
+    "앱을 다시 열 때 과거 업무일지 알림을 로컬 알림으로 재표시하지 않도록 막았습니다.",
+    "설치 페이지와 버전 체크 API의 최신 기준을 v2.2.0으로 맞췄습니다.",
+]
 VALID_THEMES = {
     "default",
     "dark",
@@ -403,11 +408,19 @@ def app_info(handler):
     return {
         "latestVersion": APP_VERSION,
         "minSupportedVersion": APP_VERSION,
+        "releaseNotesVersion": APP_VERSION,
         "installUrl": install_url,
         "androidApkUrl": f"{base_url}/downloads/fingerfruit-android-v{APP_VERSION}.apk" if base_url else f"/downloads/fingerfruit-android-v{APP_VERSION}.apk",
         "iosProfileUrl": f"{base_url}/downloads/fingerfruit-ios-v{APP_VERSION}.mobileconfig" if base_url else f"/downloads/fingerfruit-ios-v{APP_VERSION}.mobileconfig",
         "message": "새 버전이 있습니다. 업데이트 후 다시 실행해주세요.",
+        "releaseNotes": RELEASE_NOTES,
+        "publicHolidays": fruit_auto.KOREAN_PUBLIC_HOLIDAYS,
     }
+
+
+def latest_download_file(prefix, suffix):
+    files = sorted((WWW_DIR / "downloads").glob(f"{prefix}*{suffix}"), key=lambda path: path.stat().st_mtime, reverse=True)
+    return files[0] if files else None
 
 
 def daemon_running():
@@ -521,6 +534,16 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/fonts/"):
             root = BASE_DIR
         path = (root / rel).resolve()
+        if parsed.path == "/android.apk":
+            latest_apk = latest_download_file("fingerfruit-android-v", ".apk")
+            if latest_apk:
+                path = latest_apk.resolve()
+                root = latest_apk.parent
+        elif parsed.path.startswith("/downloads/fingerfruit-android-v") and parsed.path.endswith(".apk") and not path.exists():
+            latest_apk = latest_download_file("fingerfruit-android-v", ".apk")
+            if latest_apk:
+                path = latest_apk.resolve()
+                root = latest_apk.parent
         if not str(path).startswith(str(root.resolve())) or not path.exists() or not path.is_file():
             self.send_error(404)
             return
@@ -532,7 +555,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(data)))
-        if parsed.path.startswith("/downloads/"):
+        if parsed.path.startswith("/downloads/") or parsed.path == "/android.apk":
             self.send_header("Content-Disposition", f'attachment; filename="{path.name}"')
         self.end_headers()
         if include_body:
