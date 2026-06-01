@@ -11,6 +11,7 @@ node_modules/
 fruit-auto-android.apk
 fruit-auto-ios.mobileconfig
 *.png
+!www/icons/*.png
 *.jpg
 *.jpeg
 *.zip
