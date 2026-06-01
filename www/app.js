@@ -14,7 +14,7 @@ const profilePhotoKey = "fruitProfilePhoto";
 const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV85";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "1.3.0";
+const appVersion = "1.4.0";
 const primaryApiBaseUrl = "https://jobs-maple-readily-apart.trycloudflare.com";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBase";
@@ -260,6 +260,22 @@ function showUpdateModal(info) {
   $("updateBtn").onclick = () => openInstallPage(info.installUrl);
   $("updateModal").classList.remove("hidden");
   document.body.classList.add("modal-open");
+}
+
+function isModalVisible(id) {
+  const element = $(id);
+  return !!element && !element.classList.contains("hidden");
+}
+
+function syncModalOpenState() {
+  const visible = [
+    "historyModal",
+    "settingsModal",
+    "profileModal",
+    "updateModal",
+    "worklogCalendarModal",
+  ].some(isModalVisible);
+  document.body.classList.toggle("modal-open", visible);
 }
 
 function normalizeBaseUrl(value) {
@@ -1166,9 +1182,7 @@ function openWorklogCalendar() {
 
 function closeWorklogCalendar() {
   $("worklogCalendarModal").classList.add("hidden");
-  if ($("historyModal").classList.contains("hidden") && $("settingsModal").classList.contains("hidden") && $("profileModal").classList.contains("hidden")) {
-    document.body.classList.remove("modal-open");
-  }
+  syncModalOpenState();
 }
 
 function setWorklogProjects(projects, selectedId = "") {
@@ -1692,9 +1706,7 @@ function closeSettingsModal() {
   $("settingsModal").classList.add("hidden");
   pendingAppearanceSettings = null;
   applyAppearance();
-  if ($("historyModal").classList.contains("hidden") && $("profileModal").classList.contains("hidden")) {
-    document.body.classList.remove("modal-open");
-  }
+  syncModalOpenState();
 }
 
 function closeProfileModal() {
@@ -1704,17 +1716,46 @@ function closeProfileModal() {
   } else {
     updateProfileUi("fingerfruit", false, "");
   }
-  if ($("historyModal").classList.contains("hidden") && $("settingsModal").classList.contains("hidden")) {
-    document.body.classList.remove("modal-open");
-  }
+  syncModalOpenState();
 }
 
 function closeHistoryModal() {
   $("historyModal").classList.add("hidden");
-  if ($("settingsModal").classList.contains("hidden") && $("profileModal").classList.contains("hidden")) {
-    document.body.classList.remove("modal-open");
-  }
+  syncModalOpenState();
 }
+
+function closeUpdateModal() {
+  $("updateModal").classList.add("hidden");
+  syncModalOpenState();
+}
+
+function closeTopModal() {
+  if (isModalVisible("worklogCalendarModal")) {
+    closeWorklogCalendar();
+    return true;
+  }
+  if (isModalVisible("profileModal")) {
+    closeProfileModal();
+    return true;
+  }
+  if (isModalVisible("settingsModal")) {
+    closeSettingsModal();
+    return true;
+  }
+  if (isModalVisible("historyModal")) {
+    closeHistoryModal();
+    return true;
+  }
+  if (isModalVisible("updateModal")) {
+    closeUpdateModal();
+    return true;
+  }
+  return false;
+}
+
+window.FruitAppBack = {
+  handleBackPress: closeTopModal,
+};
 
 $("historyOpenBtn").addEventListener("click", () => {
   if (!isUnlocked()) {
@@ -1809,14 +1850,8 @@ $("historyModal").addEventListener("click", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !$("historyModal").classList.contains("hidden")) {
-    closeHistoryModal();
-  } else if (event.key === "Escape" && !$("settingsModal").classList.contains("hidden")) {
-    closeSettingsModal();
-  } else if (event.key === "Escape" && !$("profileModal").classList.contains("hidden")) {
-    closeProfileModal();
-  } else if (event.key === "Escape" && !$("worklogCalendarModal").classList.contains("hidden")) {
-    closeWorklogCalendar();
+  if (event.key === "Escape" && closeTopModal()) {
+    event.preventDefault();
   }
 });
 
