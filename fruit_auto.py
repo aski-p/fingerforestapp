@@ -460,7 +460,2840 @@ def is_process_alive(pid):
     except OSError:
         return False
     try:
-        stat = S~���h��춻�q�^tor not state.get("worklogContent"):
+        stat = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8", errors="replace")
+        if ") Z " in stat:
+            return False
+    except OSError:
+        pass
+    return True
+
+
+def claim_daemon_pid():
+    if PID_PATH.exists():
+        try:
+            existing_pid = int(PID_PATH.read_text(encoding="utf-8").strip())
+        except ValueError:
+            existing_pid = None
+        if existing_pid and is_process_alive(existing_pid):
+            raise FruitAutoError(f"daemon already running: pid {existing_pid}")
+    PID_PATH.write_text(f"{os.getpid()}\n", encoding="utf-8")
+
+
+def release_daemon_pid():
+    try:
+        if PID_PATH.exists() and PID_PATH.read_text(encoding="utf-8").strip() == str(os.getpid()):
+            PID_PATH.unlink()
+    except OSError:
+        pass
+
+
+def read_openclaw_config():
+    config_path = Path(os.environ.get("OPENCLAW_CONFIG_PATH") or "/home/node/.openclaw/openclaw.json")
+    if not config_path.exists():
+        return {}
+    return json.loads(config_path.read_text(encoding="utf-8"))
+
+
+def get_telegram_config():
+    token = os.environ.get("FRUIT_AUTO_TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("FRUIT_AUTO_TELEGRAM_CHAT_ID")
+    if token and chat_id:
+        return token, chat_id
+
+    config = read_openclaw_config()
+    token = token or ((config.get("channels") or {}).get("telegram") or {}).get("botToken")
+    if not chat_id:
+        for value in config.get("commands", {}).get("ownerAllowFrom", []):
+            if isinstance(value, str) and value.startswith("telegram:"):
+                chat_id = value.split(":", 1)[1]
+                break
+    if not token or not chat_id:
+        return None, None
+    return token, chat_id
+
+
+def notify_telegram(message):
+    try:
+        if load_secrets().get("telegramEnabled") is False:
+            log_event({"action": "telegram_notify_skipped", "reason": "telegram_disabled"})
+            return False
+    except Exception:
+        pass
+
+    token, chat_id = get_telegram_config()
+    if not token or not chat_id:
+        log_event({"action": "telegram_notify_skipped", "reason": "missing_config"})
+        return False
+
+    payload = urllib.parse.urlencode({"chat_id": chat_id, "text": message}).encode("utf-8")
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    req = urllib.request.Request(url, data=payload, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            data = json.loads(response.read().decode("utf-8", "replace"))
+        if not data.get("ok"):
+            raise FruitAutoError(f"telegram send failed: {data}")
+        log_event({"action": "telegram_notified"})
+        return True
+    except Exception as exc:
+        log_event({"action": "telegram_notify_error", "error": str(exc)})
+        return False
+
+
+def sent_message_text(result):
+    sender = (
+        result.get("senderEmployeeName")
+        or known_employee_name(owner_key=result.get("ownerKey"))
+        or "알 수 없는 사용자"
+    )
+    target = result.get("target") or known_employee_name(result.get("targetEmployeeId")) or "대상"
+    berries = result.get("berries")
+    remaining = result.get("remaining")
+    return (
+        f"{sender}님이 {target}님에게 열매 {berries}개 보냈습니다.\n"
+        f"남은 열매는 {remaining}개입니다."
+    )
+
+
+def sent_notification_payload(result):
+    sender = (
+        result.get("senderEmployeeName")
+        or known_employee_name(owner_key=result.get("ownerKey"))
+        or "알 수 없는 사용자"
+    )
+    target = result.get("target") or known_employee_name(result.get("targetEmployeeId")) or "대상"
+    berries = result.get("berries")
+    remaining = result.get("remaining")
+    return {
+        "title": "열매 전송 완료",
+        "body": f"{sender}님이 {target}님에게 열매 {berries}개 보냈습니다.\n남은 열매는 {remaining}개입니다.",
+        "tag": f"fruit-transfer-{result.get('ownerKey')}-{result.get('slot') or int(time.time())}",
+        "url": "/",
+    }
+
+
+def received_notification_payload(result):
+    sender = (
+        result.get("senderEmployeeName")
+        or known_employee_name(owner_key=result.get("ownerKey"))
+        or "알 수 없는 사용자"
+    )
+    berries = result.get("berries")
+    return {
+        "title": "열매 받음",
+        "body": f"{sender}님에게 열매 {berries}개를 받았습니다.",
+        "tag": f"fruit-received-{result.get('ownerKey')}-{result.get('targetEmployeeId')}-{result.get('slot') or int(time.time())}",
+        "url": "/",
+    }
+
+
+def worklog_completed_display(result):
+    completed_at = parse_iso(result.get("scheduledFor") or result.get("completedAt") or result.get("at"))
+    if completed_at is None:
+        completed_at = dt.datetime.now(dt.timezone.utc)
+    local_completed = completed_at.astimezone(KST)
+    return local_completed.strftime("%Y-%m-%d %H:%M")
+
+
+def worklog_notification_payload(result):
+    completed_display = worklog_completed_display(result)
+    run_key = result.get("runKey") or result.get("scheduledFor") or result.get("stdDt") or int(time.time())
+    return {
+        "title": "업무일지 작성 완료",
+        "body": f"{completed_display}에 업무일지 작성을 완료하였습니다.",
+        "tag": f"worklog-sent-{result.get('ownerKey')}-{run_key}",
+        "url": "/",
+    }
+
+
+def ensure_web_push_keys():
+    secrets = load_secrets()
+    web_push = secrets.setdefault("webPush", {})
+    if web_push.get("publicKey") and web_push.get("privateKey"):
+        return web_push
+    script = "const webpush=require('web-push'); console.log(JSON.stringify(webpush.generateVAPIDKeys()))"
+    try:
+        proc = subprocess.run(
+            ["node", "-e", script],
+            cwd=str(BASE_DIR),
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        keys = json.loads(proc.stdout)
+    except Exception as exc:
+        raise FruitAutoError(f"web push key generation failed: {exc}") from exc
+    web_push["publicKey"] = keys["publicKey"]
+    web_push["privateKey"] = keys["privateKey"]
+    save_secrets(secrets)
+    return web_push
+
+
+def web_push_public_key():
+    return ensure_web_push_keys()["publicKey"]
+
+
+def save_web_push_subscription(owner_key, subscription):
+    owner_key = require_owner(owner_key)
+    if not isinstance(subscription, dict) or not subscription.get("endpoint"):
+        raise FruitAutoError("유효한 Push 구독 정보가 없습니다.")
+    saved_at = now_iso()
+    device_id = str(
+        subscription.get("deviceId")
+        or subscription.get("_fingerfruitDeviceId")
+        or ""
+    ).strip()
+    user_agent = str(subscription.get("userAgent") or "")[:240]
+    subscription["updatedAt"] = saved_at
+    if "createdAt" not in subscription:
+        subscription["createdAt"] = saved_at
+    if device_id:
+        subscription["deviceId"] = device_id
+    if user_agent:
+        subscription["userAgent"] = user_agent
+    secrets = load_secrets()
+    subscriptions = secrets.setdefault("webPushSubscriptions", {})
+    endpoint = subscription.get("endpoint")
+    for existing_owner_key, existing_subscriptions in subscriptions.items():
+        if existing_owner_key == owner_key:
+            continue
+        existing_subscriptions[:] = [
+            item for item in existing_subscriptions if item.get("endpoint") != endpoint
+        ]
+    owner_subscriptions = subscriptions.setdefault(owner_key, [])
+    owner_subscriptions[:] = [
+        item for item in owner_subscriptions
+        if item.get("endpoint") != endpoint
+        and not (device_id and item.get("deviceId") == device_id)
+    ]
+    owner_subscriptions.append(subscription)
+    owner_subscriptions[:] = owner_subscriptions[-3:]
+    save_secrets(secrets)
+    log_event({"action": "web_push_subscribed", "ownerKey": owner_key})
+    return {"subscribed": True, "count": len(owner_subscriptions)}
+
+
+def remove_web_push_subscription(owner_key, endpoint=None):
+    owner_key = require_owner(owner_key)
+    secrets = load_secrets()
+    owner_subscriptions = secrets.setdefault("webPushSubscriptions", {}).setdefault(owner_key, [])
+    before = len(owner_subscriptions)
+    if endpoint:
+        owner_subscriptions[:] = [
+            item for item in owner_subscriptions if item.get("endpoint") != endpoint
+        ]
+    else:
+        owner_subscriptions.clear()
+    save_secrets(secrets)
+    log_event({"action": "web_push_unsubscribed", "ownerKey": owner_key, "removed": before - len(owner_subscriptions)})
+    return {"subscribed": False, "count": len(owner_subscriptions)}
+
+
+def notify_web_push(payload, owner_keys):
+    if not owner_keys:
+        return False
+    try:
+        vapid = ensure_web_push_keys()
+    except Exception as exc:
+        log_event({"action": "web_push_key_error", "error": str(exc)})
+        return False
+
+    secrets = load_secrets()
+    subscriptions_by_owner = secrets.setdefault("webPushSubscriptions", {})
+    sent = 0
+    stale = []
+    for owner_key in owner_keys:
+        if not is_push_enabled(owner_key):
+            continue
+        for subscription in list(subscriptions_by_owner.get(owner_key, [])):
+            request = {
+                "subscription": subscription,
+                "payload": payload,
+                "vapid": vapid,
+            }
+            try:
+                proc = subprocess.run(
+                    ["node", str(WEB_PUSH_SCRIPT_PATH)],
+                    cwd=str(BASE_DIR),
+                    input=json.dumps(request, ensure_ascii=False),
+                    capture_output=True,
+                    text=True,
+                    timeout=20,
+                )
+                if proc.returncode == 0:
+                    sent += 1
+                    continue
+                status = None
+                try:
+                    status = json.loads(proc.stdout or "{}").get("statusCode")
+                except json.JSONDecodeError:
+                    pass
+                if status in (404, 410):
+                    stale.append((owner_key, subscription.get("endpoint")))
+                log_event({"action": "web_push_error", "ownerKey": owner_key, "statusCode": status, "error": (proc.stderr or proc.stdout)[-400:]})
+            except Exception as exc:
+                log_event({"action": "web_push_error", "ownerKey": owner_key, "error": str(exc)})
+
+    if stale:
+        for owner_key, endpoint in stale:
+            subscriptions_by_owner[owner_key] = [
+                item for item in subscriptions_by_owner.get(owner_key, [])
+                if item.get("endpoint") != endpoint
+            ]
+        save_secrets(secrets)
+    if sent:
+        log_event({"action": "web_push_notified", "count": sent})
+    return sent > 0
+
+
+def notify_result(result):
+    owner_key = result.get("ownerKey")
+    action = result.get("action")
+    if action == "sent":
+        target_owner_key = owner_key_for_employee_id(result.get("targetEmployeeId"))
+        push_owner_keys = [target_owner_key] if target_owner_key else []
+        if push_owner_keys and not is_push_enabled(target_owner_key):
+            log_event(
+                {
+                    "action": "push_notify_skipped",
+                    "reason": "push_disabled",
+                    "ownerKey": owner_key,
+                    "targetOwnerKey": target_owner_key,
+                }
+            )
+            return False
+        web_pushed = notify_web_push(received_notification_payload(result), push_owner_keys)
+        if web_pushed:
+            return True
+        log_event(
+            {
+                "action": "push_notify_skipped",
+                "reason": "no_receiver_subscription",
+                "ownerKey": owner_key,
+                "targetOwnerKey": target_owner_key,
+            }
+        )
+        return False
+    elif action == "worklog_sent":
+        if owner_key and not is_push_enabled(owner_key):
+            log_event({"action": "push_notify_skipped", "reason": "push_disabled", "ownerKey": owner_key})
+            return False
+        if owner_key:
+            push_key = result.get("runKey") or f"{result.get('stdDt')}T{result.get('scheduleTime') or ''}"
+            state = get_account_state(owner_key)
+            if push_key and state.get("worklogLastPushRunKey") == push_key:
+                log_event({"action": "push_notify_skipped", "reason": "worklog_push_already_sent", "ownerKey": owner_key, "runKey": push_key})
+                return False
+        web_pushed = notify_web_push(worklog_notification_payload(result), [owner_key] if owner_key else [])
+        if web_pushed:
+            if owner_key and push_key:
+                state["worklogLastPushRunKey"] = push_key
+                state["worklogLastPushAt"] = now_iso()
+                save_account_state(owner_key, state)
+            return True
+        log_event({"action": "push_notify_skipped", "reason": "no_owner_subscription", "ownerKey": owner_key})
+        return False
+    elif action in ("error", "failed"):
+        if owner_key and not is_push_enabled(owner_key):
+            log_event({"action": "telegram_notify_skipped", "reason": "push_disabled", "ownerKey": owner_key})
+            return False
+        error = str(result.get("error") or result.get("lastAttemptResult") or "unknown error")
+        return notify_telegram(f"열매 자동전송 오류: {error[:300]}")
+    return False
+
+
+def read_secret(name):
+    env_name = "FRUIT_AUTO_" + name.upper()
+    if os.environ.get(env_name):
+        return os.environ[env_name]
+    secrets = load_json(SECRETS_PATH, {})
+    value = secrets.get(name)
+    if not value:
+        raise FruitAutoError(f"missing secret: {name}")
+    return value
+
+
+class Client:
+    def __init__(self):
+        self.cookies = http.cookiejar.CookieJar()
+        self.opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(self.cookies)
+        )
+
+    def open(self, request, timeout=25):
+        try:
+            return self.opener.open(request, timeout=timeout)
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", "replace")
+            raise FruitAutoError(f"HTTP {exc.code}: {body[:500]}") from exc
+        except urllib.error.URLError as exc:
+            raise FruitAutoError(f"network error: {exc}") from exc
+
+    def get_text(self, url, headers=None):
+        req = urllib.request.Request(url, headers=headers or {})
+        return self.open(req).read().decode("utf-8", "replace")
+
+    def post_json(self, url, payload=None):
+        body = b"" if payload is None else json.dumps(payload, ensure_ascii=False).encode()
+        headers = {
+            "Content-Type": "application/json;charset=UTF-8",
+            "Origin": "https://forest2.fingerservice.co.kr",
+            "Referer": "https://forest2.fingerservice.co.kr/",
+        }
+        req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+        text = self.open(req).read().decode("utf-8", "replace")
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise FruitAutoError(f"invalid JSON from {url}: {text[:500]}") from exc
+        result = data.get("result") or {}
+        if str(result.get("code")) != "200":
+            raise FruitAutoError(f"{url} failed: {result}")
+        return result.get("content") or {}
+
+
+def pms_login(client, pms_id=None, pms_password=None):
+    pms_id = pms_id or read_secret("pms_id")
+    pms_password = pms_password or read_secret("pms_password")
+    client.get_text(PMS_LOGIN_PAGE)
+    query = urllib.parse.urlencode({"user_id": pms_id, "user_password": pms_password})
+    headers = {
+        "Apikey": "vDw17TUSP83JziBu",
+        "Lang": "ko",
+        "SvcToken": "",
+        "DataPage": "1",
+        "DataNumber": "10",
+    }
+    text = client.get_text(f"{PMS_LOGIN_API}?{query}", headers=headers)
+    data = json.loads(text)
+    if not data.get("success"):
+        raise FruitAutoError(f"PMS login failed: {data}")
+    dataset = data.get("dataset") or {}
+    token = data.get("token") or dataset.get("SESS_TOKENVALUE")
+    if not token:
+        raise FruitAutoError("PMS login did not return a token")
+    return token, dataset
+
+
+def save_credentials(pms_id, pms_password):
+    client = Client()
+    token, dataset = pms_login(client, pms_id, pms_password)
+    forest_login(client, token)
+    data = {"pms_id": pms_id, "pms_password": pms_password}
+    save_json(SECRETS_PATH, data)
+    try:
+        SECRETS_PATH.chmod(0o600)
+    except OSError:
+        pass
+    log_event({"action": "credentials_saved", "user": dataset.get("SESS_USERNAME")})
+    state = load_json(STATE_PATH, DEFAULT_STATE)
+    previous_login_id = state.get("loginUserId")
+    next_login_id = dataset.get("SESS_USERID")
+    same_login = not previous_login_id or not next_login_id or previous_login_id == next_login_id
+    state.update(
+        {
+            "enabled": bool(state.get("enabled")) if same_login else False,
+            "status": state.get("status", "off") if same_login else "off",
+            "loginSavedAt": now_iso(),
+            "loginUser": dataset.get("SESS_USERNAME"),
+            "loginUserId": next_login_id,
+            "loginEmployeeNo": dataset.get("SESS_EMPNO"),
+            "targetEmployeeName": state.get("targetEmployeeName") if same_login else None,
+            "targetEmployeeId": state.get("targetEmployeeId") if same_login else None,
+            "targetDutyId": state.get("targetDutyId") if same_login else None,
+            "targetDeptName": state.get("targetDeptName") if same_login else None,
+            "targetPositionName": state.get("targetPositionName") if same_login else None,
+            "updatedAt": now_iso(),
+        }
+    )
+    save_json(STATE_PATH, state)
+    return {
+        "success": True,
+        "user": dataset.get("SESS_USERNAME"),
+        "userId": dataset.get("SESS_USERID"),
+        "employeeNo": dataset.get("SESS_EMPNO"),
+    }
+
+
+def forest_login(client, pms_token):
+    content = client.post_json(f"{FOREST_API}/pmsForest", {"tokenNO": pms_token})
+    rows = content.get("resultMap") or []
+    if not rows:
+        raise FruitAutoError("Forest token exchange returned no employee")
+    emp_id = rows[0].get("emp_id")
+    if not emp_id:
+        raise FruitAutoError("Forest token exchange returned no emp_id")
+
+    content = client.post_json(f"{FOREST_API}/getPmsEmployee", {"empId": emp_id})
+    result_rows = content.get("resultMap") or []
+    auth_rows = content.get("forestAuth") or []
+    if not result_rows or not auth_rows:
+        raise FruitAutoError("Forest employee info is incomplete")
+    return content
+
+
+def current_seed_fruit(client, employee):
+    today = dt.datetime.now()
+    std_month = f"{today.year}{today.month:02d}"
+    payload = {
+        "empId": employee["emp_id"],
+        "stdMt": std_month,
+        "dutyId": employee["duty_id"],
+    }
+    content = client.post_json(f"{FOREST_API}/headerReset", payload)
+    berries = int((content.get("bryCnt") or [{"berryCnt": "0"}])[0].get("berryCnt") or 0)
+    seeds = int((content.get("seedCnt") or [{"seedCnt": "0"}])[0].get("seedCnt") or 0)
+    return seeds, berries
+
+
+def refresh_balance(force=False):
+    state = load_json(STATE_PATH, DEFAULT_STATE)
+    checked_at = state.get("balanceCheckedAt") or state.get("lastCheckedAt")
+    if not force and checked_at:
+        try:
+            checked = dt.datetime.fromisoformat(checked_at.replace("Z", "+00:00"))
+            if (dt.datetime.now(dt.timezone.utc) - checked).total_seconds() < 45:
+                return state
+        except ValueError:
+            pass
+
+    client = Client()
+    pms_token, login_dataset = pms_login(client)
+    employee_info = forest_login(client, pms_token)
+    employee = employee_info["resultMap"][0]
+    owner_key, sender_employee_id, sender_employee_name = employee_identity(
+        employee, login_dataset.get("SESS_USERID")
+    )
+    seeds, berries = current_seed_fruit(client, employee)
+    state.update(
+        {
+            "lastSeedCount": seeds,
+            "lastBerryCount": berries,
+            "balanceCheckedAt": now_iso(),
+            "lastCheckedAt": now_iso(),
+            "ownerKey": owner_key,
+            "senderEmployeeId": sender_employee_id,
+            "senderEmployeeName": sender_employee_name,
+            "loginUser": state.get("loginUser") or login_dataset.get("SESS_USERNAME"),
+            "loginUserId": state.get("loginUserId") or login_dataset.get("SESS_USERID"),
+            "loginEmployeeNo": state.get("loginEmployeeNo") or login_dataset.get("SESS_EMPNO"),
+        }
+    )
+    save_json(STATE_PATH, state)
+    log_event(
+        {
+            "action": "balance",
+            "seeds": seeds,
+            "berries": berries,
+            "ownerKey": owner_key,
+        }
+    )
+    return state
+
+
+def event_local_date(event, timezone_offset_minutes=0):
+    value = event.get("at")
+    if not value:
+        return ""
+    try:
+        parsed = dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    local_time = parsed.astimezone(dt.timezone.utc) - dt.timedelta(minutes=timezone_offset_minutes)
+    return local_time.date().isoformat()
+
+
+def selected_history_month(date=None, timezone_offset_minutes=0):
+    if date:
+        try:
+            parsed = dt.date.fromisoformat(str(date))
+            return parsed.strftime("%Y%m")
+        except ValueError:
+            pass
+    local_now = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=timezone_offset_minutes)
+    return local_now.strftime("%Y%m")
+
+
+def selected_history_day(date=None):
+    if not date:
+        return None
+    try:
+        return dt.date.fromisoformat(str(date)).day
+    except ValueError:
+        return None
+
+
+def parse_int(value, default=0):
+    try:
+        if value is None:
+            return default
+        text = str(value).replace(",", "").strip()
+        if text == "":
+            return default
+        return int(text)
+    except (TypeError, ValueError):
+        return default
+
+
+def normalize_history_message(value):
+    return str(value or "").replace("[열매선물]", "").strip()
+
+
+def history_date_from_month_day(month, day):
+    try:
+        if day is None:
+            return None
+        parsed = dt.datetime.strptime(f"{int(month):06d}{int(day):02d}", "%Y%m%d")
+        return parsed.date().isoformat()
+    except (TypeError, ValueError):
+        return None
+
+
+def official_history_fingerprint(row):
+    payload = {
+        "ownerKey": row.get("ownerKey"),
+        "employeeId": row.get("historyEmployeeId"),
+        "historyDate": row.get("historyDate"),
+        "action": row.get("action"),
+        "target": row.get("target"),
+        "targetEmployeeId": row.get("targetEmployeeId"),
+        "berries": row.get("berries"),
+        "remaining": row.get("remaining"),
+        "seeds": row.get("seeds"),
+        "content": normalize_history_message(row.get("content")),
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def official_seed_history_fingerprint(row):
+    payload = {
+        "ownerKey": row.get("ownerKey"),
+        "employeeId": row.get("historyEmployeeId"),
+        "historyDate": row.get("historyDate"),
+        "action": row.get("action"),
+        "target": row.get("target"),
+        "targetEmployeeId": row.get("targetEmployeeId"),
+        "seedDelta": abs(parse_int(row.get("delta"), 0)),
+        "remainingSeeds": row.get("seeds"),
+        "remainingBerries": row.get("remaining"),
+        "content": normalize_history_message(row.get("content")),
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def is_seed_history_message(value):
+    return "씨앗" in str(value or "")
+
+
+def parse_seed_berry_counts(value):
+    parts = str(value or "0/0").split("/")
+    berries = parse_int(parts[0] if len(parts) > 0 else 0)
+    seeds = parse_int(parts[1] if len(parts) > 1 else 0)
+    return seeds, berries
+
+
+def history_observation_db():
+    conn = sqlite3.connect(HISTORY_OBSERVATIONS_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS official_history_observations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_key TEXT NOT NULL,
+            employee_id TEXT NOT NULL,
+            history_date TEXT NOT NULL,
+            row_fingerprint TEXT NOT NULL,
+            ordinal INTEGER NOT NULL,
+            action TEXT NOT NULL,
+            counterpart_name TEXT,
+            counterpart_employee_id TEXT,
+            berries INTEGER,
+            remaining INTEGER,
+            seeds INTEGER,
+            content TEXT,
+            first_seen_at TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(owner_key, employee_id, history_date, row_fingerprint, ordinal)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_official_history_observations_scope "
+        "ON official_history_observations(owner_key, employee_id, history_date)"
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS official_history_observation_scopes (
+            owner_key TEXT NOT NULL,
+            employee_id TEXT NOT NULL,
+            history_date TEXT NOT NULL,
+            bootstrapped_at TEXT NOT NULL,
+            PRIMARY KEY(owner_key, employee_id, history_date)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS official_seed_history_observations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_key TEXT NOT NULL,
+            employee_id TEXT NOT NULL,
+            history_date TEXT NOT NULL,
+            row_fingerprint TEXT NOT NULL,
+            ordinal INTEGER NOT NULL,
+            action TEXT NOT NULL,
+            counterpart_name TEXT,
+            counterpart_employee_id TEXT,
+            seed_delta INTEGER,
+            remaining_seeds INTEGER,
+            remaining_berries INTEGER,
+            content TEXT,
+            first_seen_at TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(owner_key, employee_id, history_date, row_fingerprint, ordinal)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_official_seed_history_observations_scope "
+        "ON official_seed_history_observations(owner_key, employee_id, history_date)"
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS official_seed_history_observation_scopes (
+            owner_key TEXT NOT NULL,
+            employee_id TEXT NOT NULL,
+            history_date TEXT NOT NULL,
+            bootstrapped_at TEXT NOT NULL,
+            PRIMARY KEY(owner_key, employee_id, history_date)
+        )
+        """
+    )
+    return conn
+
+
+def sync_official_seed_history_observations(owner_key, employee_id, history_date, rows, observed_at=None):
+    owner_key = str(owner_key or "")
+    employee_id = str(employee_id or "")
+    history_date = str(history_date or "")
+    scoped_rows = [row for row in rows if row.get("historyDate") == history_date and row.get("_officialSeedFingerprint")]
+    if not owner_key or not employee_id or not history_date or not scoped_rows:
+        return {}
+
+    now = observed_at or now_iso()
+    with history_observation_db() as conn:
+        existing_by_fingerprint = {}
+        for row in conn.execute(
+            """
+            SELECT *
+            FROM official_seed_history_observations
+            WHERE owner_key = ? AND employee_id = ? AND history_date = ?
+            ORDER BY ordinal ASC
+            """,
+            (owner_key, employee_id, history_date),
+        ):
+            existing_by_fingerprint.setdefault(row["row_fingerprint"], []).append(row)
+
+        requested_by_fingerprint = {}
+        for row in scoped_rows:
+            requested_by_fingerprint.setdefault(row["_officialSeedFingerprint"], []).append(row)
+
+        for fingerprint, requested_rows in requested_by_fingerprint.items():
+            existing_rows = existing_by_fingerprint.get(fingerprint, [])
+            for ordinal in range(len(existing_rows) + 1, len(requested_rows) + 1):
+                sample = requested_rows[ordinal - 1]
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO official_seed_history_observations (
+                        owner_key, employee_id, history_date, row_fingerprint, ordinal,
+                        action, counterpart_name, counterpart_employee_id, seed_delta,
+                        remaining_seeds, remaining_berries, content, first_seen_at, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        owner_key,
+                        employee_id,
+                        history_date,
+                        fingerprint,
+                        ordinal,
+                        sample.get("action") or "",
+                        sample.get("target") or "",
+                        sample.get("targetEmployeeId") or "",
+                        abs(parse_int(sample.get("delta"), 0)),
+                        parse_int(sample.get("seeds"), 0),
+                        parse_int(sample.get("remaining"), 0),
+                        sample.get("content") or "",
+                        now,
+                        now,
+                    ),
+                )
+
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO official_seed_history_observation_scopes (
+                owner_key, employee_id, history_date, bootstrapped_at
+            ) VALUES (?, ?, ?, ?)
+            """,
+            (owner_key, employee_id, history_date, now),
+        )
+
+        lookup = {}
+        refreshed = {}
+        for row in conn.execute(
+            """
+            SELECT *
+            FROM official_seed_history_observations
+            WHERE owner_key = ? AND employee_id = ? AND history_date = ?
+            ORDER BY id ASC
+            """,
+            (owner_key, employee_id, history_date),
+        ):
+            refreshed.setdefault(row["row_fingerprint"], []).append(row)
+        for fingerprint, observed_rows in refreshed.items():
+            for index, row in enumerate(observed_rows, start=1):
+                lookup[(fingerprint, index)] = row["first_seen_at"]
+        return lookup
+
+
+def sync_official_history_observations(owner_key, employee_id, history_date, rows, bootstrap_first_seen_at=None):
+    owner_key = str(owner_key or "")
+    employee_id = str(employee_id or "")
+    history_date = str(history_date or "")
+    scoped_rows = [row for row in rows if row.get("historyDate") == history_date and row.get("_officialFingerprint")]
+    if not owner_key or not employee_id or not history_date or not scoped_rows:
+        return {}
+
+    now = now_iso()
+    with history_observation_db() as conn:
+        existing_scope = conn.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM official_history_observations
+            WHERE owner_key = ? AND employee_id = ? AND history_date = ?
+            """,
+            (owner_key, employee_id, history_date),
+        ).fetchone()
+        scope_bootstrapped = conn.execute(
+            """
+            SELECT 1
+            FROM official_history_observation_scopes
+            WHERE owner_key = ? AND employee_id = ? AND history_date = ?
+            """,
+            (owner_key, employee_id, history_date),
+        ).fetchone()
+        existing_by_fingerprint = {}
+        for row in conn.execute(
+            """
+            SELECT *
+            FROM official_history_observations
+            WHERE owner_key = ? AND employee_id = ? AND history_date = ?
+            ORDER BY ordinal ASC
+            """,
+            (owner_key, employee_id, history_date),
+        ):
+            existing_by_fingerprint.setdefault(row["row_fingerprint"], []).append(row)
+
+        requested_by_fingerprint = {}
+        for row in scoped_rows:
+            requested_by_fingerprint.setdefault(row["_officialFingerprint"], []).append(row)
+
+        bootstrap_existing_date = scope_bootstrapped is None
+        for fingerprint, requested_rows in requested_by_fingerprint.items():
+            existing_rows = existing_by_fingerprint.get(fingerprint, [])
+            for ordinal in range(len(existing_rows) + 1, len(requested_rows) + 1):
+                sample = requested_rows[ordinal - 1]
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO official_history_observations (
+                        owner_key, employee_id, history_date, row_fingerprint, ordinal,
+                        action, counterpart_name, counterpart_employee_id, berries,
+                        remaining, seeds, content, first_seen_at, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        owner_key,
+                        employee_id,
+                        history_date,
+                        fingerprint,
+                        ordinal,
+                        sample.get("action") or "",
+                        sample.get("target") or "",
+                        sample.get("targetEmployeeId") or "",
+                        parse_int(sample.get("berries"), 0),
+                        parse_int(sample.get("remaining"), 0),
+                        parse_int(sample.get("seeds"), 0),
+                        sample.get("content") or "",
+                        bootstrap_first_seen_at if bootstrap_existing_date else now,
+                        now,
+                    ),
+                )
+
+        if bootstrap_existing_date:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO official_history_observation_scopes (
+                    owner_key, employee_id, history_date, bootstrapped_at
+                ) VALUES (?, ?, ?, ?)
+                """,
+                (owner_key, employee_id, history_date, now),
+            )
+
+        lookup = {}
+        refreshed = {}
+        for row in conn.execute(
+            """
+            SELECT *
+            FROM official_history_observations
+            WHERE owner_key = ? AND employee_id = ? AND history_date = ?
+            ORDER BY
+                CASE WHEN first_seen_at IS NULL THEN 1 ELSE 0 END,
+                first_seen_at DESC,
+                id DESC
+            """,
+            (owner_key, employee_id, history_date),
+        ):
+            refreshed.setdefault(row["row_fingerprint"], []).append(row)
+        for fingerprint, observed_rows in refreshed.items():
+            for index, row in enumerate(observed_rows, start=1):
+                lookup[(fingerprint, index)] = row["first_seen_at"]
+        return lookup
+
+
+def local_transfer_history_for_official(owner_key, employee_id, date=None, timezone_offset_minutes=0, limit=5000):
+    events = []
+    for event in reversed(read_jsonl(HISTORY_PATH, limit)):
+        if not is_transfer_history_event(event) and not is_seed_transfer_history_event(event):
+            continue
+        if date and event_local_date(event, timezone_offset_minutes) != date:
+            continue
+        sent_by_me = event.get("ownerKey") == owner_key
+        received_by_me = employee_id and str(event.get("targetEmployeeId") or "") == str(employee_id)
+        if not sent_by_me and not received_by_me:
+            continue
+        events.append(event)
+    for event in reversed(read_jsonl(LOG_PATH, limit)):
+        if event.get("action") != "send_delay_wait":
+            continue
+        if str(event.get("ownerKey") or "") != str(owner_key or ""):
+            continue
+        received_at = event.get("receivedAt")
+        if not received_at:
+            continue
+        received_event = {
+            "type": "transfer",
+            "action": "received",
+            "at": received_at,
+            "timeSource": "balance_detected",
+            "berries": event.get("berries"),
+            "sender": event.get("target"),
+            "senderEmployeeName": event.get("target"),
+            "senderEmployeeId": event.get("targetEmployeeId") or "",
+            "targetEmployeeId": str(employee_id or ""),
+            "ownerKey": owner_key,
+            "message": event.get("message") or "",
+        }
+        if date and event_local_date(received_event, timezone_offset_minutes) != date:
+            continue
+        events.append(received_event)
+    events.sort(key=lambda item: parse_iso(item.get("at")) or dt.datetime.min.replace(tzinfo=dt.timezone.utc), reverse=True)
+    return events
+
+
+def transfer_history_fingerprint_exists(owner_key, fingerprint, action=None, occurrence=None, limit=20000):
+    if not fingerprint:
+        return False
+    for event in reversed(read_jsonl(HISTORY_PATH, limit)):
+        if not is_transfer_history_event(event):
+            continue
+        if str(event.get("ownerKey") or "") != str(owner_key or ""):
+            continue
+        if action and event.get("action") != action:
+            continue
+        if event.get("officialFingerprint") == fingerprint:
+            if occurrence is not None and parse_int(event.get("officialOccurrence"), None) != occurrence:
+                continue
+            return True
+    return False
+
+
+def official_received_history_rows(client, owner_key, employee_id, employee_name, employee_position, history_date):
+    try:
+        parsed_date = dt.date.fromisoformat(str(history_date))
+    except (TypeError, ValueError):
+        parsed_date = dt.datetime.now(KST).date()
+    month = parsed_date.strftime("%Y%m")
+    selected_day = parsed_date.day
+    content = client.post_json(f"{FOREST_API}/dwBerySeed", {"stdMt": month, "empId": employee_id})
+    if not isinstance(content, list):
+        return []
+    rows = []
+    for row in content:
+        day = parse_int(str(row.get("stdDt") or "").replace("일", ""), None)
+        if day != selected_day:
+            continue
+        delta = parse_int(row.get("stdDBerryPmCnt"))
+        if delta <= 0:
+            continue
+        seed_count, fruit_count = parse_seed_berry_counts(row.get("stdMBerryCnt"))
+        item = {
+            "at": None,
+            "displayTime": row.get("stdDt") or "",
+            "timeLabel": "받음",
+            "action": "received",
+            "ownerKey": owner_key,
+            "historyEmployeeId": str(employee_id or ""),
+            "historyDate": parsed_date.isoformat(),
+            "target": row.get("tgtEmpNm") or "",
+            "targetEmployeeId": "",
+            "targetPositionName": "",
+            "senderEmployeeId": employee_id,
+            "avatarEmployeeId": employee_id,
+            "displayName": display_employee(employee_name, employee_position),
+            "senderIsMe": False,
+            "seeds": seed_count,
+            "berries": abs(delta),
+            "remaining": fruit_count,
+            "delta": delta,
+            "content": row.get("tgtMsg") or "[열매선물]",
+            "source": "forest",
+        }
+        item["_officialFingerprint"] = official_history_fingerprint(item)
+        rows.append(item)
+    return rows
+
+
+def is_recent_observation(value, observed_at, window_seconds=120):
+    seen_at = parse_iso(value)
+    if not seen_at or not observed_at:
+        return False
+    return -30 <= (observed_at - seen_at).total_seconds() <= window_seconds
+
+
+def record_received_history_from_official(
+    client,
+    owner_key,
+    employee_id,
+    employee_name,
+    employee_position,
+    observed_at,
+    window_seconds=120,
+):
+    local_observed_at = observed_at.astimezone(KST)
+    history_date = local_observed_at.date().isoformat()
+    rows = official_received_history_rows(
+        client,
+        owner_key,
+        employee_id,
+        employee_name,
+        employee_position,
+        history_date,
+    )
+    if not rows:
+        return []
+    scope_was_bootstrapped = False
+    try:
+        with history_observation_db() as conn:
+            scope_was_bootstrapped = conn.execute(
+                """
+                SELECT 1
+                FROM official_history_observation_scopes
+                WHERE owner_key = ? AND employee_id = ? AND history_date = ?
+                """,
+                (str(owner_key or ""), str(employee_id or ""), str(history_date or "")),
+            ).fetchone() is not None
+    except Exception:
+        scope_was_bootstrapped = False
+    lookup = sync_official_history_observations(
+        owner_key,
+        employee_id,
+        history_date,
+        rows,
+        bootstrap_first_seen_at=observed_at.replace(microsecond=0).isoformat(),
+    )
+    if not scope_was_bootstrapped:
+        return []
+    recorded = []
+    occurrence_by_fingerprint = {}
+    for row in rows:
+        fingerprint = row.get("_officialFingerprint")
+        occurrence_by_fingerprint[fingerprint] = occurrence_by_fingerprint.get(fingerprint, 0) + 1
+        occurrence = occurrence_by_fingerprint[fingerprint]
+        first_seen_at = lookup.get((fingerprint, occurrence))
+        if not is_recent_observation(first_seen_at, observed_at, window_seconds):
+            continue
+        if transfer_history_fingerprint_exists(owner_key, fingerprint, action="received", occurrence=occurrence):
+            continue
+        event = {
+            "type": "transfer",
+            "action": "received",
+            "at": parse_iso(first_seen_at).replace(microsecond=0).isoformat(),
+            "timeSource": "official_observed",
+            "officialFingerprint": fingerprint,
+            "officialOccurrence": occurrence,
+            "berries": row.get("berries"),
+            "seeds": row.get("seeds"),
+            "remaining": row.get("remaining"),
+            "sender": row.get("target"),
+            "senderEmployeeName": row.get("target"),
+            "senderEmployeeId": row.get("targetEmployeeId") or "",
+            "senderPositionName": row.get("targetPositionName") or "",
+            "target": employee_name,
+            "targetEmployeeName": employee_name,
+            "targetEmployeeId": employee_id,
+            "targetPositionName": employee_position,
+            "ownerKey": owner_key,
+            "message": row.get("content"),
+        }
+        record_transfer_history(event)
+        recorded.append(event)
+    return recorded
+
+
+def employee_hint_from_event(event, action):
+    if action == "sent":
+        return {
+            "employeeId": str(event.get("targetEmployeeId") or ""),
+            "positionName": event.get("targetPositionName") or "",
+        }
+    return {
+        "employeeId": str(event.get("senderEmployeeId") or ""),
+        "positionName": event.get("senderPositionName") or "",
+    }
+
+
+def reliable_history_event_time(event):
+    if not event or not event.get("at"):
+        return None
+    if event.get("timeSource") in {"official_observed"}:
+        return None
+    return event.get("at")
+
+
+def local_history_hints_by_name(local_events):
+    hints = {}
+    for event in local_events:
+        target_name = event.get("target") or event.get("targetEmployeeName")
+        if target_name and event.get("targetEmployeeId"):
+            hints[str(target_name)] = {
+                "employeeId": str(event.get("targetEmployeeId") or ""),
+                "positionName": event.get("targetPositionName") or "",
+            }
+        sender_name = event.get("senderEmployeeName") or event.get("sender")
+        if sender_name and event.get("senderEmployeeId"):
+            hints[str(sender_name)] = {
+                "employeeId": str(event.get("senderEmployeeId") or ""),
+                "positionName": event.get("senderPositionName") or "",
+            }
+    return hints
+
+
+def match_official_history_event(local_events, used_indexes, action, counterpart, berries, message, remaining=None):
+    normalized_message = normalize_history_message(message)
+    for index, event in enumerate(local_events):
+        if event.get("timeSource") == "official_observed":
+            continue
+        sent_by_me = action == "sent"
+        if sent_by_me:
+            used_key = (index, "sent")
+            if used_key in used_indexes:
+                continue
+            event_counterpart = event.get("target") or event.get("targetEmployeeName")
+            if str(event.get("ownerKey") or "") != str(event.get("_historyOwnerKey") or ""):
+                continue
+            if remaining is not None and parse_int(event.get("remaining"), None) != remaining:
+                continue
+        else:
+            used_key = (index, "received")
+            if used_key in used_indexes:
+                continue
+            event_counterpart = event.get("senderEmployeeName") or event.get("sender")
+            if str(event.get("targetEmployeeId") or "") != str(event.get("_historyEmployeeId") or ""):
+                continue
+        if str(event_counterpart or "") != str(counterpart or ""):
+            continue
+        if parse_int(event.get("berries"), None) != berries:
+            continue
+        event_message = normalize_history_message(event.get("message"))
+        if normalized_message and event_message and normalized_message != event_message:
+            if not (action == "sent" and event_message == "자동 전달" and normalized_message in {"열매선물", "열매 선물"}):
+                continue
+        used_indexes.add(used_key)
+        return event
+    return None
+
+
+def row_counterpart_key(row):
+    return (
+        str(row.get("targetEmployeeId") or row.get("target") or ""),
+        parse_int(row.get("berries"), 0),
+    )
+
+
+def pair_official_history_transfer_times(rows):
+    paired_received_indexes = set()
+    for sent_index, sent in enumerate(rows):
+        if sent.get("action") != "sent" or sent.get("timeSource") != "local_log":
+            continue
+        sent_at = parse_iso(sent.get("at"))
+        if not sent_at:
+            continue
+        best_index = None
+        best_rank = None
+        for received_index, received in enumerate(rows):
+            if received_index in paired_received_indexes:
+                continue
+            if received.get("action") != "received" or received.get("timeSource") != "received_log":
+                continue
+            if str(sent.get("target") or "") != str(received.get("target") or ""):
+                continue
+            received_at = parse_iso(received.get("at"))
+            if not received_at:
+                continue
+            delta_seconds = (sent_at - received_at).total_seconds()
+            if delta_seconds < 0 or delta_seconds > get_run_interval_seconds() + 180:
+                continue
+            rank = (abs(sent_index - received_index), delta_seconds)
+            if best_rank is None or rank < best_rank:
+                best_index = received_index
+                best_rank = rank
+        if best_index is not None:
+            paired_received_indexes.add(best_index)
+    for received_index, received in enumerate(rows):
+        if received.get("action") == "received" and received.get("historyKind") != "seed":
+            if received_index in paired_received_indexes:
+                continue
+            received["_dropUnpairedReceived"] = True
+    return rows
+
+
+def infer_official_history_times(rows):
+    return rows
+
+
+def remove_future_observed_history_times(rows):
+    latest_allowed = None
+    for row in rows:
+        row_time = parse_iso(row.get("at"))
+        if row_time and latest_allowed and row_time > latest_allowed and row.get("timeSource") == "observed_db":
+            row["at"] = None
+            row["timeSource"] = "missing"
+            row_time = None
+        if row_time:
+            latest_allowed = row_time if latest_allowed is None else min(latest_allowed, row_time)
+    return rows
+
+
+def sort_history_rows(rows):
+    def sort_key(index_row):
+        index, row = index_row
+        row_time = parse_iso(row.get("at"))
+        if row_time:
+            return (0, -row_time.timestamp(), index)
+        return (1, index, 0)
+
+    return [row for _index, row in sorted(enumerate(rows), key=sort_key)]
+
+
+def official_history(limit=40, owner_key=None, date=None, timezone_offset_minutes=0):
+    owner_key = require_owner(owner_key)
+    client, _employee_info, _login_dataset, _employee, sender_employee_id, sender_employee_name = account_login(owner_key)
+    state = get_account_state(owner_key)
+    sender_position_name = state.get("senderPositionName") or ""
+    month = selected_history_month(date, timezone_offset_minutes)
+    selected_day = selected_history_day(date)
+    content = client.post_json(f"{FOREST_API}/dwBerySeed", {"stdMt": month, "empId": sender_employee_id})
+    if not isinstance(content, list):
+        raise FruitAutoError("FOREST history did not return a list")
+
+    local_events = local_transfer_history_for_official(owner_key, sender_employee_id, date, timezone_offset_minutes)
+    for event in local_events:
+        event["_historyOwnerKey"] = owner_key
+        event["_historyEmployeeId"] = str(sender_employee_id or "")
+    used_local_indexes = set()
+    employee_hints = local_history_hints_by_name(local_events)
+    rows = []
+    for row in content:
+        day = parse_int(str(row.get("stdDt") or "").replace("일", ""), None)
+        if selected_day is not None and day != selected_day:
+            continue
+        seed_count, fruit_count = parse_seed_berry_counts(row.get("stdMBerryCnt"))
+        delta = parse_int(row.get("stdDBerryPmCnt"))
+        action = "received" if delta > 0 else "sent"
+        counterpart = row.get("tgtEmpNm") or ""
+        content_message = row.get("tgtMsg") or "[열매선물]"
+        is_seed_history = is_seed_history_message(content_message)
+        matched_event = match_official_history_event(
+            local_events,
+            used_local_indexes,
+            action,
+            counterpart,
+            abs(delta),
+            content_message,
+            fruit_count if action == "sent" else None,
+        )
+        employee_hint = employee_hint_from_event(matched_event, action) if matched_event else employee_hints.get(str(counterpart), {})
+        counterpart_position_name = employee_hint.get("positionName") or ""
+        counterpart_employee_id = employee_hint.get("employeeId") or ""
+        sender_is_me = action == "sent"
+        avatar_employee_id = (counterpart_employee_id or sender_employee_id) if sender_is_me else sender_employee_id
+        display_name = display_employee(counterpart, counterpart_position_name)
+        history_date = history_date_from_month_day(month, day)
+        item = {
+                "at": reliable_history_event_time(matched_event),
+                "_matchedTimeSource": matched_event.get("timeSource") if matched_event else None,
+                "displayTime": row.get("stdDt") or "",
+                "timeLabel": "받음" if action == "received" else "보냄",
+                "action": action,
+                "ownerKey": owner_key,
+                "historyEmployeeId": str(sender_employee_id or ""),
+                "historyDate": history_date,
+                "target": counterpart,
+                "targetEmployeeId": counterpart_employee_id,
+                "targetPositionName": counterpart_position_name,
+                "senderEmployeeId": sender_employee_id if sender_is_me else (counterpart_employee_id or sender_employee_id),
+                "avatarEmployeeId": avatar_employee_id,
+                "displayName": display_name,
+                "senderIsMe": sender_is_me,
+                "seeds": seed_count,
+                "berries": 0 if is_seed_history else abs(delta),
+                "remaining": fruit_count,
+                "delta": delta,
+                "content": content_message,
+                "source": "forest_seed" if is_seed_history else "forest",
+                "historyKind": "seed" if is_seed_history else "berry",
+        }
+        if is_seed_history:
+            item["_officialSeedFingerprint"] = official_seed_history_fingerprint(item)
+        else:
+            item["_officialFingerprint"] = official_history_fingerprint(item)
+        rows.append(item)
+    seed_rows_by_date = {}
+    for row in rows:
+        if row.get("historyKind") == "seed" and row.get("historyDate"):
+            seed_rows_by_date.setdefault(row.get("historyDate"), []).append(row)
+    for history_date, seed_rows in seed_rows_by_date.items():
+        lookup = sync_official_seed_history_observations(
+            owner_key,
+            sender_employee_id,
+            history_date,
+            seed_rows,
+        )
+        occurrence_by_fingerprint = {}
+        for row in seed_rows:
+            fingerprint = row.get("_officialSeedFingerprint")
+            occurrence_by_fingerprint[fingerprint] = occurrence_by_fingerprint.get(fingerprint, 0) + 1
+            first_seen_at = lookup.get((fingerprint, occurrence_by_fingerprint[fingerprint]))
+            if first_seen_at and not row.get("at"):
+                row["at"] = first_seen_at
+                row["_matchedTimeSource"] = "seed_observed"
+    berry_rows_by_date = {}
+    for row in rows:
+        if row.get("historyKind") != "seed" and row.get("historyDate"):
+            berry_rows_by_date.setdefault(row.get("historyDate"), []).append(row)
+    for history_date, berry_rows in berry_rows_by_date.items():
+        lookup = sync_official_history_observations(
+            owner_key,
+            sender_employee_id,
+            history_date,
+            berry_rows,
+        )
+        occurrence_by_fingerprint = {}
+        for row in berry_rows:
+            fingerprint = row.get("_officialFingerprint")
+            occurrence_by_fingerprint[fingerprint] = occurrence_by_fingerprint.get(fingerprint, 0) + 1
+            first_seen_at = lookup.get((fingerprint, occurrence_by_fingerprint[fingerprint]))
+            if first_seen_at and not row.get("at"):
+                row["at"] = first_seen_at
+                row["_matchedTimeSource"] = "observed_db"
+    for row in rows:
+        if not row.get("at"):
+            row["timeSource"] = "missing"
+        elif row.get("_matchedTimeSource") == "seed_observed":
+            row["timeSource"] = "seed_observed"
+        elif row.get("_matchedTimeSource") == "observed_db":
+            row["timeSource"] = "observed_db"
+        elif row.get("action") == "received" and row.get("_matchedTimeSource") == "balance_detected":
+            row["timeSource"] = "received_log"
+        else:
+            row["timeSource"] = "local_log"
+    rows = pair_official_history_transfer_times(rows)
+    rows = [row for row in rows if not row.get("_dropUnpairedReceived")]
+    rows = infer_official_history_times(remove_future_observed_history_times(sort_history_rows(rows))[:limit])
+    for row in rows:
+        row.pop("_officialFingerprint", None)
+        row.pop("_officialSeedFingerprint", None)
+        row.pop("_matchedTimeSource", None)
+        row.pop("_dropUnpairedReceived", None)
+        row.pop("ownerKey", None)
+        row.pop("historyEmployeeId", None)
+    return rows
+
+
+def history(limit=40, owner_key=None, date=None, timezone_offset_minutes=0):
+    try:
+        rows = official_history(
+            limit=limit,
+            owner_key=owner_key,
+            date=date,
+            timezone_offset_minutes=timezone_offset_minutes,
+        )
+        if rows:
+            return rows
+    except Exception as exc:
+        log_event({"action": "official_history_fallback", "ownerKey": owner_key, "error": str(exc)})
+
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    my_employee_id = str(
+        state.get("senderEmployeeId")
+        or state.get("loginUserId")
+        or employee_id_from_owner_key(owner_key)
+        or ""
+    )
+    rows = []
+    scan_limit = 5000 if date else limit * 5
+    for event in reversed(read_jsonl(HISTORY_PATH, scan_limit)):
+        if not is_transfer_history_event(event):
+            continue
+        if date and event_local_date(event, timezone_offset_minutes) != date:
+            continue
+        sent_by_me = event.get("ownerKey") == owner_key
+        received_by_me = my_employee_id and str(event.get("targetEmployeeId") or "") == my_employee_id
+        if not sent_by_me and not received_by_me:
+            continue
+        berries = int(event.get("berries") or 0)
+        if sent_by_me:
+            action = "sent"
+            counterpart = display_employee(
+                event.get("target") or event.get("targetEmployeeName"),
+                event.get("targetPositionName") or state.get("targetPositionName"),
+            )
+            sender_employee_id = my_employee_id or event.get("senderEmployeeId")
+            avatar_employee_id = sender_employee_id
+            sender_name = display_employee(
+                state.get("senderEmployeeName")
+                or state.get("loginUser")
+                or event.get("senderEmployeeName"),
+                event.get("senderPositionName") or state.get("senderPositionName"),
+                "나",
+            )
+            delta = -berries
+        else:
+            action = "received"
+            counterpart_name = (
+                event.get("senderEmployeeName")
+                or event.get("sender")
+                or known_employee_name(owner_key=event.get("ownerKey"))
+            )
+            counterpart = display_employee(counterpart_name, event.get("senderPositionName"))
+            sender_employee_id = str(event.get("senderEmployeeId") or employee_id_from_owner_key(event.get("ownerKey")) or "")
+            avatar_employee_id = sender_employee_id
+            sender_name = counterpart or "보낸사람"
+            delta = berries
+        if action == "received":
+            display_seeds = state.get("lastSeedCount")
+            display_remaining = event.get("receiverRemaining")
+            if display_remaining is None:
+                display_remaining = berries
+        else:
+            display_seeds = event.get("seeds")
+            display_remaining = event.get("remaining")
+        item = {
+            "at": event.get("at"),
+            "action": action,
+            "target": counterpart,
+            "targetPositionName": event.get("targetPositionName"),
+            "senderEmployeeId": sender_employee_id,
+            "avatarEmployeeId": avatar_employee_id,
+            "senderName": sender_name,
+            "senderPositionName": event.get("senderPositionName"),
+            "displayName": counterpart,
+            "senderIsMe": sent_by_me,
+            "seeds": display_seeds,
+            "berries": event.get("berries"),
+            "remaining": display_remaining,
+            "delta": delta,
+            "content": "[열매선물]" + (event.get("message") or "자동 전달"),
+        }
+        rows.append(item)
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def notification_items(limit=20, owner_key=None):
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    my_employee_id = str(
+        state.get("senderEmployeeId")
+        or state.get("loginUserId")
+        or employee_id_from_owner_key(owner_key)
+        or ""
+    )
+    rows = []
+    for event in reversed(read_jsonl(HISTORY_PATH, limit * 5)):
+        if event.get("action") == "worklog_sent" and event.get("ownerKey") == owner_key:
+            rows.append(
+                {
+                    "id": f"{event.get('at')}:{event.get('ownerKey')}:worklog:{event.get('stdDt')}",
+                    "at": event.get("at"),
+                    "direction": "worklog",
+                    **worklog_notification_payload(event),
+                }
+            )
+            if len(rows) >= limit:
+                break
+            continue
+        if not is_transfer_history_event(event):
+            continue
+        received_by_me = my_employee_id and str(event.get("targetEmployeeId") or "") == my_employee_id
+        if not received_by_me:
+            continue
+        rows.append(
+            {
+                "id": f"{event.get('at')}:{event.get('ownerKey')}:{event.get('targetEmployeeId')}:{event.get('berries')}",
+                "at": event.get("at"),
+                "direction": "received",
+                **received_notification_payload(event),
+            }
+        )
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def list_employees(client):
+    content = client.post_json(f"{FOREST_API}/getEmployee", {})
+    return [row for row in (content.get("resultMap") or []) if row.get("emp_id")]
+
+
+def find_target_employee(client, name, emp_id=None):
+    employees = list_employees(client)
+    if emp_id:
+        matches = [row for row in employees if row.get("emp_id") == emp_id]
+    else:
+        matches = [row for row in employees if row.get("emp_nm") == name]
+    if not matches:
+        raise FruitAutoError(f"target employee not found: {name or emp_id}")
+    if len(matches) > 1:
+        ids = ", ".join(f"{m.get('emp_nm')}({m.get('emp_id')})" for m in matches)
+        raise FruitAutoError(f"target employee is ambiguous: {ids}")
+    return matches[0]
+
+
+def search_employees(query):
+    query = (query or "").strip()
+    if not query:
+        return []
+    client = Client()
+    pms_token, _ = pms_login(client)
+    forest_login(client, pms_token)
+    employees = list_employees(client)
+    results = []
+    for row in employees:
+        haystack = " ".join(
+            str(row.get(key) or "")
+            for key in ("emp_nm", "emp_id", "dept_nm", "pos_nm", "duty_nm")
+        )
+        if query in haystack:
+            results.append(
+                {
+                    "emp_id": row.get("emp_id"),
+                    "emp_nm": row.get("emp_nm"),
+                    "dept_nm": row.get("dept_nm"),
+                    "pos_nm": row.get("pos_nm"),
+                    "duty_id": row.get("duty_id"),
+                    "duty_nm": row.get("duty_nm"),
+                }
+            )
+    return results[:30]
+
+
+def give_all_berries(client, employee_info, target, berry_count, message):
+    employee = employee_info["resultMap"][0]
+    auth = employee_info["forestAuth"][0]
+    payload = {
+        "berrySeedGit": [
+            {
+                "empId": employee["emp_id"],
+                "empNm": employee["emp_nm"],
+                "tgtEmpId": target["emp_id"],
+                "tgtEmpNm": target["emp_nm"],
+                "dutyCd": target["duty_id"],
+                "dutyCds": employee["duty_id"],
+                "seedCnt": auth.get("seedCnt"),
+                "pfmBerryCnt": str(berry_count),
+                "tgtMsg": message,
+            }
+        ]
+    }
+    return client.post_json(f"{FOREST_API}/insBryGit", payload)
+
+
+def check_once(dry_run=False, force=False):
+    state = load_json(STATE_PATH, DEFAULT_STATE)
+    interval_seconds = get_run_interval_seconds(state)
+    enabled = bool(state.get("enabled"))
+    if not enabled and not force:
+        state.update({"status": "off", "lastCheckedAt": now_iso()})
+        save_json(STATE_PATH, state)
+        return {"action": "skipped", "reason": "disabled", "enabled": enabled}
+
+    last_attempt_age = seconds_since(state.get("lastAttemptAt"))
+    if not force and last_attempt_age is not None and last_attempt_age < interval_seconds:
+        return {
+            "action": "skipped",
+            "reason": "already_attempted_this_interval",
+            "intervalSeconds": interval_seconds,
+            "remainingSeconds": max(0, int(interval_seconds - last_attempt_age)),
+            "lastAttemptResult": state.get("lastAttemptResult"),
+        }
+
+    slot = int(time.time() // interval_seconds)
+    state.update(
+        {
+            "lastAttemptAt": now_iso(),
+            "lastAttemptSlot": slot,
+            "lastAttemptIntervalSeconds": interval_seconds,
+            "lastAttemptResult": "running",
+        }
+    )
+    save_json(STATE_PATH, state)
+
+    client = Client()
+    try:
+        pms_token, login_dataset = pms_login(client)
+        employee_info = forest_login(client, pms_token)
+        employee = employee_info["resultMap"][0]
+        owner_key, sender_employee_id, sender_employee_name = employee_identity(
+            employee, login_dataset.get("SESS_USERID")
+        )
+    except Exception as exc:
+        state.update(
+            {
+                "lastCheckedAt": now_iso(),
+                "lastResult": "failed",
+                "lastAttemptResult": f"failed: {exc}",
+            }
+        )
+        save_json(STATE_PATH, state)
+        raise
+
+    try:
+        target_name = state.get("targetEmployeeName")
+        target_id = state.get("targetEmployeeId")
+        if not target_name and not target_id:
+            state.update(
+                {
+                    "enabled": False,
+                    "status": "needs_target",
+                    "lastCheckedAt": now_iso(),
+                    "lastResult": "needs_target",
+                    "lastAttemptResult": "needs_target",
+                    "ownerKey": owner_key,
+                    "senderEmployeeId": sender_employee_id,
+                    "senderEmployeeName": sender_employee_name,
+                }
+            )
+            save_json(STATE_PATH, state)
+            return {"action": "skipped", "reason": "needs_target", "enabled": False}
+        target = find_target_employee(client, target_name, target_id)
+        if target.get("emp_id") == employee.get("emp_id"):
+            raise FruitAutoError("cannot send berries to yourself")
+        target_name = target.get("emp_nm") or target_name
+        seeds, berries = current_seed_fruit(client, employee)
+
+        state.update(
+            {
+                "enabled": enabled,
+                "status": "on" if enabled else "forced",
+                "targetEmployeeName": target_name,
+                "targetEmployeeId": target.get("emp_id"),
+                "ownerKey": owner_key,
+                "senderEmployeeId": sender_employee_id,
+                "senderEmployeeName": sender_employee_name,
+                "senderPositionName": employee_position(employee),
+                "lastCheckedAt": now_iso(),
+                "lastSeedCount": seeds,
+                "lastBerryCount": berries,
+                "balanceCheckedAt": now_iso(),
+            }
+        )
+
+        if berries <= 0:
+            state["lastResult"] = "no_berries"
+            state["lastAttemptResult"] = "no_berries"
+            save_json(STATE_PATH, state)
+            log_event(
+                {
+                    "action": "check",
+                    "seeds": seeds,
+                    "berries": berries,
+                    "target": target_name,
+                    "ownerKey": owner_key,
+                    "slot": slot,
+                }
+            )
+            return {"action": "none", "berries": berries, "target": target_name}
+
+        message = state.get("giftMessage") or "자동 전달"
+        if dry_run:
+            state["lastResult"] = f"dry_run_would_send_{berries}"
+            state["lastAttemptResult"] = state["lastResult"]
+            save_json(STATE_PATH, state)
+            return {
+                "action": "dry_run",
+                "berries": berries,
+                "target": target_name,
+                "targetEmployeeId": target.get("emp_id"),
+            }
+
+        give_all_berries(client, employee_info, target, berries, message)
+        remaining_seeds, remaining = current_seed_fruit(client, employee)
+        state.update(
+            {
+                "lastSentAt": now_iso(),
+                "lastSeedCount": remaining_seeds,
+                "lastBerryCount": remaining,
+                "balanceCheckedAt": now_iso(),
+                "lastResult": f"sent_{berries}_remaining_{remaining}",
+                "lastAttemptResult": f"sent_{berries}_remaining_{remaining}",
+            }
+        )
+        save_json(STATE_PATH, state)
+        sent_event = {
+            "action": "sent",
+            "berries": berries,
+            "seeds": remaining_seeds,
+            "remaining": remaining,
+            "senderEmployeeId": sender_employee_id,
+            "senderEmployeeName": sender_employee_name,
+            "senderPositionName": employee_position(employee),
+            "target": target_name,
+            "targetEmployeeId": target.get("emp_id"),
+            "targetPositionName": employee_position(target),
+            "ownerKey": owner_key,
+            "slot": slot,
+            "message": message,
+        }
+        log_event(sent_event)
+        record_transfer_history(sent_event)
+        return {
+            "action": "sent",
+            "berries": berries,
+            "remaining": remaining,
+            "senderEmployeeId": sender_employee_id,
+            "senderEmployeeName": sender_employee_name,
+            "senderPositionName": employee_position(employee),
+            "target": target_name,
+            "targetEmployeeId": target.get("emp_id"),
+            "targetPositionName": employee_position(target),
+        }
+    except Exception as exc:
+        state.update(
+            {
+                "lastCheckedAt": now_iso(),
+                "lastResult": "failed",
+                "lastAttemptResult": f"failed: {exc}",
+                "ownerKey": owner_key,
+                "senderEmployeeId": sender_employee_id,
+                "senderEmployeeName": sender_employee_name,
+            }
+        )
+        save_json(STATE_PATH, state)
+        raise
+
+
+def set_enabled(enabled):
+    state = load_json(STATE_PATH, DEFAULT_STATE)
+    if enabled and not (state.get("targetEmployeeId") and state.get("targetEmployeeName")):
+        raise FruitAutoError("대상 직원을 먼저 검색해서 선택하세요.")
+    if not enabled:
+        state.update(
+            {
+                "targetEmployeeName": None,
+                "targetEmployeeId": None,
+                "targetDutyId": None,
+                "targetDeptName": None,
+                "targetPositionName": None,
+            }
+        )
+    state.update(
+        {
+            "enabled": enabled,
+            "status": "on" if enabled else "off",
+            "updatedAt": now_iso(),
+        }
+    )
+    save_json(STATE_PATH, state)
+    log_event({"action": "enabled" if enabled else "disabled"})
+    return state
+
+
+def set_target_by_name(query):
+    query = (query or "").strip()
+    if not query:
+        raise FruitAutoError("missing target name")
+
+    client = Client()
+    pms_token, _ = pms_login(client)
+    forest_login(client, pms_token)
+    employees = list_employees(client)
+    exact_matches = [row for row in employees if row.get("emp_nm") == query]
+    matches = exact_matches or [
+        row for row in employees
+        if query in " ".join(
+            str(row.get(key) or "")
+            for key in ("emp_nm", "emp_id", "dept_nm", "pos_nm", "duty_nm")
+        )
+    ]
+    if not matches:
+        raise FruitAutoError(f"target employee not found: {query}")
+    if len(matches) > 1:
+        ids = ", ".join(f"{m.get('emp_nm')}({m.get('emp_id')})" for m in matches[:10])
+        raise FruitAutoError(f"target employee is ambiguous: {ids}")
+
+    target = matches[0]
+    return set_target(
+        target.get("emp_id"),
+        target.get("emp_nm"),
+        target.get("duty_id"),
+        target.get("dept_nm"),
+        target.get("pos_nm"),
+    )
+
+
+def set_target(emp_id, name=None, duty_id=None, dept_nm=None, pos_nm=None):
+    state = load_json(STATE_PATH, DEFAULT_STATE)
+    state.update(
+        {
+            "targetEmployeeId": emp_id,
+            "targetEmployeeName": name or state.get("targetEmployeeName"),
+            "targetDutyId": duty_id,
+            "targetDeptName": dept_nm,
+            "targetPositionName": pos_nm,
+            "updatedAt": now_iso(),
+        }
+    )
+    save_json(STATE_PATH, state)
+    log_event({"action": "target_set", "targetEmployeeId": emp_id, "targetEmployeeName": name})
+    return state
+
+
+def set_message(message):
+    state = load_json(STATE_PATH, DEFAULT_STATE)
+    state["giftMessage"] = message or DEFAULT_STATE["giftMessage"]
+    state["updatedAt"] = now_iso()
+    save_json(STATE_PATH, state)
+    return state
+
+
+def logout():
+    if SECRETS_PATH.exists():
+        SECRETS_PATH.unlink()
+    state = load_json(STATE_PATH, DEFAULT_STATE)
+    state.update(
+        {
+            "enabled": False,
+            "status": "off",
+            "targetEmployeeName": None,
+            "targetEmployeeId": None,
+            "targetDutyId": None,
+            "targetDeptName": None,
+            "targetPositionName": None,
+            "loginSavedAt": None,
+            "loginUser": None,
+            "loginUserId": None,
+            "loginEmployeeNo": None,
+            "senderEmployeeId": None,
+            "senderEmployeeName": None,
+            "lastResult": "logged_out",
+            "lastAttemptResult": "logged_out",
+            "nextRunAt": None,
+            "updatedAt": now_iso(),
+        }
+    )
+    save_json(STATE_PATH, state)
+    log_event({"action": "logged_out"})
+    return state
+
+
+def set_run_interval(minutes):
+    try:
+        next_minutes = int(minutes)
+    except (TypeError, ValueError):
+        raise FruitAutoError("전송 간격은 숫자로 입력하세요.")
+    next_minutes = max(MIN_RUN_INTERVAL_MINUTES, min(MAX_RUN_INTERVAL_MINUTES, next_minutes))
+    state = load_json(STATE_PATH, DEFAULT_STATE)
+    state["runIntervalMinutes"] = next_minutes
+    state["updatedAt"] = now_iso()
+    save_json(STATE_PATH, state)
+    log_event({"action": "interval_set", "runIntervalMinutes": next_minutes})
+    return state
+
+
+def failed_slot_result(exc):
+    state = load_json(STATE_PATH, DEFAULT_STATE)
+    return {
+        "action": "failed",
+        "error": str(exc),
+        "nextRetry": "next_interval",
+        "intervalSeconds": get_run_interval_seconds(state),
+        "lastAttemptSlot": state.get("lastAttemptSlot"),
+        "lastAttemptResult": state.get("lastAttemptResult"),
+    }
+
+
+def run_daemon():
+    claim_daemon_pid()
+
+    def handle_stop(_signum, _frame):
+        log_event({"action": "daemon_stopped"})
+        release_daemon_pid()
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, handle_stop)
+    signal.signal(signal.SIGINT, handle_stop)
+
+    try:
+        log_event({"action": "daemon_started", "intervalSeconds": get_run_interval_seconds()})
+        while True:
+            started = time.time()
+            try:
+                result = check_once()
+                if result.get("reason") != "already_attempted_this_interval":
+                    log_event({"action": "daemon_tick", "result": result})
+                notify_result(result)
+            except Exception as exc:
+                log_event({"action": "daemon_error", "error": str(exc)})
+                notify_result({"action": "failed", "error": str(exc)})
+
+            state = load_json(STATE_PATH, DEFAULT_STATE)
+            interval_seconds = get_run_interval_seconds(state)
+            last_attempt_age = seconds_since(state.get("lastAttemptAt"))
+            if not state.get("enabled"):
+                sleep_seconds = 15
+            elif last_attempt_age is None:
+                sleep_seconds = 15
+            else:
+                sleep_seconds = min(15, max(1, interval_seconds - last_attempt_age))
+            time.sleep(sleep_seconds)
+    finally:
+        release_daemon_pid()
+
+
+# Multi-user account layer. The original state shape is kept for compatibility,
+# while active app sessions and daemon work use per-account entries.
+ACCOUNT_DEFAULT = {
+    key: value
+    for key, value in DEFAULT_STATE.items()
+    if key not in ("accounts", "sessions")
+}
+
+
+def load_secrets():
+    secrets = load_json(SECRETS_PATH, {})
+    if "accounts" not in secrets:
+        accounts = {}
+        if secrets.get("pms_id") and secrets.get("pms_password"):
+            legacy_key = load_json(STATE_PATH, DEFAULT_STATE).get("ownerKey") or "legacy"
+            accounts[legacy_key] = {
+                "pms_id": secrets.get("pms_id"),
+                "pms_password": secrets.get("pms_password"),
+            }
+        secrets = {"accounts": accounts, "sessions": secrets.get("sessions") or {}}
+    secrets.setdefault("accounts", {})
+    secrets.setdefault("sessions", {})
+    return secrets
+
+
+def save_secrets(secrets):
+    save_json(SECRETS_PATH, secrets)
+    try:
+        SECRETS_PATH.chmod(0o600)
+    except OSError:
+        pass
+
+
+def load_all_state():
+    state = load_json(STATE_PATH, DEFAULT_STATE)
+    state.setdefault("accounts", {})
+    if not state["accounts"] and state.get("ownerKey"):
+        state["accounts"][state["ownerKey"]] = {
+            key: state.get(key)
+            for key in ACCOUNT_DEFAULT
+            if key in state
+        }
+    return state
+
+
+def get_account_state(owner_key):
+    state = load_all_state()
+    account = dict(ACCOUNT_DEFAULT)
+    account.update(state.get("accounts", {}).get(owner_key, {}))
+    account["ownerKey"] = owner_key
+    return infer_target_for_account(owner_key, account)
+
+
+def save_account_state(owner_key, account):
+    state = load_all_state()
+    accounts = state.setdefault("accounts", {})
+    account = dict(account)
+    account["ownerKey"] = owner_key
+    accounts[owner_key] = account
+    state["activeOwnerKey"] = owner_key
+    # Keep top-level mirrors for older CLI/status callers.
+    state.update({key: account.get(key) for key in ACCOUNT_DEFAULT})
+    state["accounts"] = accounts
+    save_json(STATE_PATH, state)
+    return account
+
+
+def save_single_account_state(owner_key, account):
+    state = load_all_state()
+    account = dict(account)
+    account["ownerKey"] = owner_key
+    state["accounts"] = {owner_key: account}
+    state["activeOwnerKey"] = owner_key
+    state.update({key: account.get(key) for key in ACCOUNT_DEFAULT})
+    save_json(STATE_PATH, state)
+    return account
+
+
+def remove_account_state(owner_key):
+    state = load_all_state()
+    state["accounts"] = {}
+    if state.get("activeOwnerKey") == owner_key:
+        state["activeOwnerKey"] = None
+    logged_out = dict(ACCOUNT_DEFAULT)
+    logged_out.update(
+        {
+            "enabled": False,
+            "status": "off",
+            "lastResult": "logged_out",
+            "lastAttemptResult": "logged_out",
+            "updatedAt": now_iso(),
+        }
+    )
+    state.update({key: logged_out.get(key) for key in ACCOUNT_DEFAULT})
+    save_json(STATE_PATH, state)
+    return logged_out
+
+
+def revoke_sessions_for_owner(secrets, owner_key):
+    sessions = secrets.setdefault("sessions", {})
+    for token, session in list(sessions.items()):
+        if session_owner_key(session) == owner_key:
+            sessions.pop(token, None)
+    return secrets
+
+
+def session_owner_key(session):
+    if isinstance(session, dict) and session.get("version") in (2, SESSION_SCHEMA_VERSION):
+        return session.get("ownerKey")
+    return None
+
+
+def session_expires_at():
+    return iso_after(SESSION_TTL_SECONDS)
+
+
+def session_expired(session):
+    if not isinstance(session, dict):
+        return True
+    expires_at = session.get("expiresAt")
+    if not expires_at:
+        return False
+    age = seconds_since(expires_at)
+    return age is not None and age > 0
+
+
+def new_session_record(owner_key):
+    return {
+        "version": SESSION_SCHEMA_VERSION,
+        "ownerKey": owner_key,
+        "createdAt": now_iso(),
+        "expiresAt": session_expires_at(),
+    }
+
+
+def owner_from_session(session_token, device_id=None):
+    if not session_token:
+        return None
+    secrets = load_secrets()
+    sessions = secrets.setdefault("sessions", {})
+    session = sessions.get(session_token)
+    if session_expired(session):
+        sessions.pop(session_token, None)
+        save_secrets(secrets)
+        return None
+    owner_key = session_owner_key(session)
+    if owner_key and owner_key in secrets.get("accounts", {}):
+        session["expiresAt"] = session_expires_at()
+        save_secrets(secrets)
+        return owner_key
+    return None
+
+
+def issue_session(owner_key=None, device_id=None):
+    owner_key = require_owner(owner_key)
+    secrets = load_secrets()
+    sessions = secrets.setdefault("sessions", {})
+    changed = False
+    for session_token, session_owner in list(sessions.items()):
+        if session_expired(session_owner):
+            sessions.pop(session_token, None)
+            changed = True
+            continue
+        if session_owner_key(session_owner) == owner_key:
+            session_owner["expiresAt"] = session_expires_at()
+            save_secrets(secrets)
+            return {"sessionToken": session_token, "ownerKey": owner_key}
+    session_token = uuid.uuid4().hex
+    sessions[session_token] = new_session_record(owner_key)
+    save_secrets(secrets)
+    return {"sessionToken": session_token, "ownerKey": owner_key}
+
+
+def require_owner(owner_key):
+    if not owner_key:
+        raise FruitAutoError("로그인이 필요합니다.")
+    if owner_key not in load_secrets().get("accounts", {}):
+        raise FruitAutoError("저장된 로그인 세션이 없습니다. 다시 로그인하세요.")
+    return owner_key
+
+
+def is_push_enabled(owner_key):
+    if not owner_key:
+        return True
+    state = load_all_state()
+    account = state.get("accounts", {}).get(owner_key, {})
+    return account.get("pushEnabled", DEFAULT_STATE["pushEnabled"]) is not False
+
+
+def account_credentials(owner_key):
+    owner_key = require_owner(owner_key)
+    account = load_secrets().get("accounts", {}).get(owner_key) or {}
+    if not account.get("pms_id") or not account.get("pms_password"):
+        raise FruitAutoError("저장된 PMS 로그인 정보가 없습니다.")
+    return account["pms_id"], account["pms_password"]
+
+
+def account_login(owner_key):
+    pms_id, pms_password = account_credentials(owner_key)
+    client = Client()
+    pms_token, login_dataset = pms_login(client, pms_id, pms_password)
+    employee_info = forest_login(client, pms_token)
+    employee = employee_info["resultMap"][0]
+    actual_owner_key, sender_employee_id, sender_employee_name = employee_identity(
+        employee, login_dataset.get("SESS_USERID")
+    )
+    if actual_owner_key != owner_key:
+        raise FruitAutoError("저장된 계정 정보가 현재 세션과 일치하지 않습니다. 다시 로그인하세요.")
+    return client, employee_info, login_dataset, employee, sender_employee_id, sender_employee_name
+
+
+def save_credentials(pms_id, pms_password, device_id=None):
+    client = Client()
+    token, dataset = pms_login(client, pms_id, pms_password)
+    employee_info = forest_login(client, token)
+    employee = employee_info["resultMap"][0]
+    owner_key, sender_employee_id, sender_employee_name = employee_identity(
+        employee, dataset.get("SESS_USERID")
+    )
+    if not owner_key:
+        raise FruitAutoError("Forest employee id를 확인하지 못했습니다.")
+
+    account = get_account_state(owner_key)
+    secrets = load_secrets()
+    secrets.setdefault("accounts", {})
+    existing_secret = secrets["accounts"].get(owner_key) or {}
+    secrets["accounts"][owner_key] = {
+        **existing_secret,
+        "pms_id": pms_id,
+        "pms_password": pms_password,
+    }
+    secrets["sessions"] = {
+        token: session
+        for token, session in secrets.get("sessions", {}).items()
+        if session_owner_key(session) != owner_key
+    }
+    session_token = uuid.uuid4().hex
+    secrets["sessions"][session_token] = new_session_record(owner_key)
+    save_secrets(secrets)
+
+    account.update(
+        {
+            "loginSavedAt": now_iso(),
+            "loginUser": dataset.get("SESS_USERNAME"),
+            "loginUserId": dataset.get("SESS_USERID"),
+            "loginEmployeeNo": dataset.get("SESS_EMPNO"),
+            "senderEmployeeId": sender_employee_id,
+            "senderEmployeeName": sender_employee_name,
+            "ownerKey": owner_key,
+            "updatedAt": now_iso(),
+        }
+    )
+    save_account_state(owner_key, account)
+    log_event({"action": "credentials_saved", "ownerKey": owner_key, "user": dataset.get("SESS_USERNAME")})
+    return {
+        "success": True,
+        "sessionToken": session_token,
+        "ownerKey": owner_key,
+        "user": dataset.get("SESS_USERNAME"),
+        "userId": dataset.get("SESS_USERID"),
+        "employeeNo": dataset.get("SESS_EMPNO"),
+        **account,
+    }
+
+
+def refresh_balance(force=False, owner_key=None):
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    checked_at = state.get("balanceCheckedAt") or state.get("lastCheckedAt")
+    if not force and checked_at:
+        age = seconds_since(checked_at)
+        if age is not None and age < 45:
+            return state
+
+    client, employee_info, login_dataset, employee, sender_employee_id, sender_employee_name = account_login(owner_key)
+    seeds, berries = current_seed_fruit(client, employee)
+    state.update(
+        {
+            "lastSeedCount": seeds,
+            "lastBerryCount": berries,
+            "balanceCheckedAt": now_iso(),
+            "lastCheckedAt": now_iso(),
+            "senderEmployeeId": sender_employee_id,
+            "senderEmployeeName": sender_employee_name,
+            "loginUser": state.get("loginUser") or login_dataset.get("SESS_USERNAME"),
+            "loginUserId": state.get("loginUserId") or login_dataset.get("SESS_USERID"),
+            "loginEmployeeNo": state.get("loginEmployeeNo") or login_dataset.get("SESS_EMPNO"),
+        }
+    )
+    save_account_state(owner_key, state)
+    log_event({"action": "balance", "seeds": seeds, "berries": berries, "ownerKey": owner_key})
+    return state
+
+
+def search_employees(query, owner_key=None):
+    owner_key = require_owner(owner_key)
+    query = (query or "").strip()
+    if not query:
+        return []
+    client, _employee_info, _login_dataset, _employee, _sender_id, _sender_name = account_login(owner_key)
+    employees = list_employees(client)
+    results = []
+    for row in employees:
+        haystack = " ".join(
+            str(row.get(key) or "")
+            for key in ("emp_nm", "emp_id", "dept_nm", "pos_nm", "duty_nm")
+        )
+        if query in haystack:
+            results.append(
+                {
+                    "emp_id": row.get("emp_id"),
+                    "emp_nm": row.get("emp_nm"),
+                    "dept_nm": row.get("dept_nm"),
+                    "pos_nm": row.get("pos_nm"),
+                    "duty_id": row.get("duty_id"),
+                    "duty_nm": row.get("duty_nm"),
+                }
+            )
+    return results[:30]
+
+
+def set_target(emp_id, name=None, duty_id=None, dept_nm=None, pos_nm=None, owner_key=None):
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    state.update(
+        {
+            "targetEmployeeId": emp_id,
+            "targetEmployeeName": name or state.get("targetEmployeeName"),
+            "targetDutyId": duty_id,
+            "targetDeptName": dept_nm,
+            "targetPositionName": pos_nm,
+            "targetLocked": True,
+            "targetSelectedAt": now_iso(),
+            "updatedAt": now_iso(),
+        }
+    )
+    save_account_state(owner_key, state)
+    log_event({"action": "target_set", "ownerKey": owner_key, "targetEmployeeId": emp_id, "targetEmployeeName": name})
+    return state
+
+
+def set_message(message, owner_key=None):
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    state["giftMessage"] = message or DEFAULT_STATE["giftMessage"]
+    state["updatedAt"] = now_iso()
+    save_account_state(owner_key, state)
+    return state
+
+
+def set_send_berry_count(count, send_all=False, owner_key=None):
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    state["sendBerryCount"] = get_send_berry_count({"sendBerryCount": count})
+    state["sendAllBerries"] = bool(send_all)
+    state["updatedAt"] = now_iso()
+    save_account_state(owner_key, state)
+    return state
+
+
+def set_push_enabled(enabled, owner_key=None):
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    state["pushEnabled"] = bool(enabled)
+    state["updatedAt"] = now_iso()
+    save_account_state(owner_key, state)
+    log_event({"action": "push_enabled" if enabled else "push_disabled", "ownerKey": owner_key})
+    return state
+
+
+def set_run_interval(minutes, owner_key=None):
+    owner_key = require_owner(owner_key)
+    try:
+        next_minutes = int(minutes)
+    except (TypeError, ValueError):
+        raise FruitAutoError("전송 간격은 숫자로 입력하세요.")
+    next_minutes = max(MIN_RUN_INTERVAL_MINUTES, min(MAX_RUN_INTERVAL_MINUTES, next_minutes))
+    state = get_account_state(owner_key)
+    state["runIntervalMinutes"] = next_minutes
+    if state.get("enabled"):
+        last_attempt = parse_iso(state.get("lastAttemptAt"))
+        base = last_attempt or dt.datetime.now(dt.timezone.utc)
+        state["nextRunAt"] = iso_after(next_minutes * 60, base)
+    state["updatedAt"] = now_iso()
+    save_account_state(owner_key, state)
+    log_event({"action": "interval_set", "ownerKey": owner_key, "runIntervalMinutes": next_minutes})
+    return state
+
+
+def set_enabled(enabled, owner_key=None):
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    if enabled and not state.get("targetEmployeeId"):
+        raise FruitAutoError("대상 직원을 먼저 검색해서 선택하세요.")
+    interval_seconds = get_run_interval_seconds(state)
+    state.update(
+        {
+            "enabled": enabled,
+            "status": "on" if enabled else "off",
+            "nextRunAt": iso_after(interval_seconds) if enabled else None,
+            "updatedAt": now_iso(),
+        }
+    )
+    save_account_state(owner_key, state)
+    log_event({"action": "enabled" if enabled else "disabled", "ownerKey": owner_key})
+    return state
+
+
+def logout(owner_key=None, session_token=None):
+    owner_key = require_owner(owner_key)
+    secrets = load_secrets()
+    if session_token:
+        secrets.setdefault("sessions", {}).pop(session_token, None)
+    else:
+        revoke_sessions_for_owner(secrets, owner_key)
+        secrets.setdefault("accounts", {}).pop(owner_key, None)
+    save_secrets(secrets)
+    if owner_key in secrets.get("accounts", {}):
+        state = get_account_state(owner_key)
+        state.update(
+            {
+                "enabled": False,
+                "status": "off",
+                "lastResult": "logged_out",
+                "lastAttemptResult": "logged_out",
+                "updatedAt": now_iso(),
+            }
+        )
+        save_account_state(owner_key, state)
+    else:
+        state = remove_account_state(owner_key)
+    log_event({"action": "logged_out", "ownerKey": owner_key})
+    return state
+
+
+def check_once(dry_run=False, force=False, owner_key=None):
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    interval_seconds = get_run_interval_seconds(state)
+    enabled = bool(state.get("enabled"))
+    if not enabled and not force:
+        state.update({"status": "off", "lastCheckedAt": now_iso(), "nextRunAt": None})
+        save_account_state(owner_key, state)
+        return {"action": "skipped", "reason": "disabled", "enabled": enabled, "ownerKey": owner_key}
+
+    last_attempt_age = seconds_since(state.get("lastAttemptAt"))
+    if not force and last_attempt_age is not None and last_attempt_age < interval_seconds:
+        state["nextRunAt"] = iso_after(interval_seconds - last_attempt_age)
+        save_account_state(owner_key, state)
+        return {
+            "action": "skipped",
+            "reason": "already_attempted_this_interval",
+            "ownerKey": owner_key,
+            "intervalSeconds": interval_seconds,
+            "remainingSeconds": max(0, int(interval_seconds - last_attempt_age)),
+            "lastAttemptResult": state.get("lastAttemptResult"),
+            "nextRunAt": state.get("nextRunAt"),
+        }
+
+    slot = int(time.time() // interval_seconds)
+    attempt_at = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+    state.update(
+        {
+            "lastAttemptAt": attempt_at.isoformat(),
+            "lastAttemptSlot": slot,
+            "lastAttemptIntervalSeconds": interval_seconds,
+            "lastAttemptResult": "running",
+            "nextRunAt": iso_after(interval_seconds, attempt_at),
+        }
+    )
+    save_account_state(owner_key, state)
+
+    try:
+        client, employee_info, login_dataset, employee, sender_employee_id, sender_employee_name = account_login(owner_key)
+        target_name = state.get("targetEmployeeName")
+        target_id = state.get("targetEmployeeId")
+        if not target_name and not target_id:
+            state.update(
+                {
+                    "enabled": False,
+                    "status": "needs_target",
+                    "lastCheckedAt": now_iso(),
+                    "lastResult": "needs_target",
+                    "lastAttemptResult": "needs_target",
+                    "senderEmployeeId": sender_employee_id,
+                    "senderEmployeeName": sender_employee_name,
+                    "senderPositionName": employee_position(employee),
+                }
+            )
+            save_account_state(owner_key, state)
+            return {"action": "skipped", "reason": "needs_target", "enabled": False, "ownerKey": owner_key}
+
+        target = find_target_employee(client, target_name, target_id)
+        if target.get("emp_id") == employee.get("emp_id"):
+            raise FruitAutoError("cannot send berries to yourself")
+        target_name = target.get("emp_nm") or target_name
+        seeds, berries = current_seed_fruit(client, employee)
+        state.update(
+            {
+                "enabled": enabled,
+                "status": "on" if enabled else "forced",
+                "targetEmployeeName": target.get("emp_nm") or target_name,
+                "targetEmployeeId": target.get("emp_id"),
+                "targetPositionName": employee_position(target),
+                "senderEmployeeId": sender_employee_id,
+                "senderEmployeeName": sender_employee_name,
+                "senderPositionName": employee_position(employee),
+                "lastCheckedAt": now_iso(),
+                "lastSeedCount": seeds,
+                "lastBerryCount": berries,
+                "balanceCheckedAt": now_iso(),
+            }
+        )
+        if berries <= 0:
+            checked_at = now_iso()
+            last_no_berries_log_age = seconds_since(state.get("lastNoBerriesLogAt"))
+            state["lastResult"] = "no_berries"
+            state["lastAttemptResult"] = "no_berries"
+            state["lastNoBerriesAt"] = checked_at
+            state["pendingReceivedAt"] = None
+            state["pendingBerryCount"] = None
+            state["pendingTargetEmployeeId"] = None
+            should_log_no_berries = (
+                last_no_berries_log_age is None or last_no_berries_log_age >= 3600
+            )
+            if should_log_no_berries:
+                state["lastNoBerriesLogAt"] = checked_at
+            save_account_state(owner_key, state)
+            if should_log_no_berries:
+                log_event(
+                    {
+                        "action": "no_berries",
+                        "seeds": seeds,
+                        "berries": berries,
+                        "target": target_name,
+                        "ownerKey": owner_key,
+                        "slot": slot,
+                        "nextRunAt": state.get("nextRunAt"),
+                    }
+                )
+            return {"action": "none", "berries": berries, "target": target_name, "ownerKey": owner_key}
+
+        message = state.get("giftMessage") or "자동 전달"
+        requested_berries = get_send_berry_count(state)
+        send_all_berries = get_send_all_berries(state)
+        send_berries = berries if send_all_berries else min(berries, requested_berries)
+        pending_received_at = parse_iso(state.get("pendingReceivedAt"))
+        pending_target_id = str(state.get("pendingTargetEmployeeId") or "")
+        current_target_id = str(target.get("emp_id") or "")
+        pending_berry_count = parse_int(state.get("pendingBerryCount"), 0)
+        if pending_received_at is None or pending_target_id != current_target_id or berries > pending_berry_count:
+            pending_received_at = attempt_at
+            state["pendingReceivedAt"] = pending_received_at.isoformat()
+            state["pendingTargetEmployeeId"] = target.get("emp_id")
+        state["pendingBerryCount"] = berries
+        received_events = record_received_history_from_official(
+            client,
+            owner_key,
+            sender_employee_id,
+            sender_employee_name,
+            employee_position(employee),
+            pending_received_at,
+            window_seconds=interval_seconds + 120,
+        )
+        if received_events:
+            state["lastReceivedHistoryAt"] = received_events[0].get("at")
+            state["lastReceivedHistoryCount"] = len(received_events)
+            for received_event in received_events:
+                notify_web_push(received_notification_payload(received_event), [owner_key])
+        eligible_at = pending_received_at + dt.timedelta(seconds=interval_seconds)
+        if attempt_at < eligible_at:
+            remaining_seconds = max(0, int((eligible_at - attempt_at).total_seconds()))
+            state["nextRunAt"] = eligible_at.replace(microsecond=0).isoformat()
+            state["lastResult"] = f"waiting_send_delay_{remaining_seconds}s"
+            state["lastAttemptResult"] = state["lastResult"]
+            save_account_state(owner_key, state)
+            log_event(
+                {
+                    "action": "send_delay_wait",
+                    "berries": berries,
+                    "target": target_name,
+                    "targetEmployeeId": target.get("emp_id"),
+                    "ownerKey": owner_key,
+                    "receivedAt": state.get("pendingReceivedAt"),
+                    "eligibleAt": state.get("nextRunAt"),
+                    "remainingSeconds": remaining_seconds,
+                    "slot": slot,
+                }
+            )
+            return {
+                "action": "waiting",
+                "reason": "send_delay",
+                "berries": berries,
+                "target": target_name,
+                "targetEmployeeId": target.get("emp_id"),
+                "ownerKey": owner_key,
+                "receivedAt": state.get("pendingReceivedAt"),
+                "eligibleAt": state.get("nextRunAt"),
+                "remainingSeconds": remaining_seconds,
+            }
+        if dry_run:
+            state["lastResult"] = f"dry_run_would_send_{send_berries}"
+            state["lastAttemptResult"] = state["lastResult"]
+            save_account_state(owner_key, state)
+            return {"action": "dry_run", "berries": send_berries, "requestedBerries": requested_berries, "sendAllBerries": send_all_berries, "availableBerries": berries, "target": target_name, "targetEmployeeId": target.get("emp_id"), "ownerKey": owner_key}
+
+        give_all_berries(client, employee_info, target, send_berries, message)
+        remaining_seeds, remaining = current_seed_fruit(client, employee)
+        state.update(
+            {
+                "lastSentAt": now_iso(),
+                "lastSeedCount": remaining_seeds,
+                "lastBerryCount": remaining,
+                "balanceCheckedAt": now_iso(),
+                "lastResult": f"sent_{send_berries}_remaining_{remaining}",
+                "lastAttemptResult": f"sent_{send_berries}_remaining_{remaining}",
+                "pendingReceivedAt": None,
+                "pendingBerryCount": None,
+                "pendingTargetEmployeeId": None,
+            }
+        )
+        save_account_state(owner_key, state)
+        sent_event = {
+            "action": "sent",
+            "berries": send_berries,
+            "requestedBerries": requested_berries,
+            "sendAllBerries": send_all_berries,
+            "availableBerries": berries,
+            "seeds": remaining_seeds,
+            "remaining": remaining,
+            "senderEmployeeId": sender_employee_id,
+            "senderEmployeeName": sender_employee_name,
+            "senderPositionName": employee_position(employee),
+            "target": target_name,
+            "targetEmployeeId": target.get("emp_id"),
+            "targetPositionName": employee_position(target),
+            "ownerKey": owner_key,
+            "slot": slot,
+            "message": message,
+        }
+        log_event(sent_event)
+        record_transfer_history(sent_event)
+        return {
+            "action": "sent",
+            "berries": send_berries,
+            "requestedBerries": requested_berries,
+            "availableBerries": berries,
+            "remaining": remaining,
+            "senderEmployeeId": sender_employee_id,
+            "senderEmployeeName": sender_employee_name,
+            "senderPositionName": employee_position(employee),
+            "target": target_name,
+            "targetEmployeeId": target.get("emp_id"),
+            "targetPositionName": employee_position(target),
+            "ownerKey": owner_key,
+        }
+    except Exception as exc:
+        state.update({"lastCheckedAt": now_iso(), "lastResult": "failed", "lastAttemptResult": f"failed: {exc}"})
+        save_account_state(owner_key, state)
+        raise
+
+
+def list_worklog_projects(owner_key=None):
+    owner_key = require_owner(owner_key)
+    _client, employee_info, _login_dataset, _employee, _sender_id, _sender_name = account_login(owner_key)
+    projects = []
+    seen = set()
+    for key in ("projEmp", "projInner"):
+        for row in employee_info.get(key) or []:
+            project_id = row.get("proj_id")
+            project_name = row.get("proj_nm")
+            if not project_id or not project_name or project_id in seen:
+                continue
+            seen.add(project_id)
+            projects.append({"id": project_id, "name": project_name, "source": key})
+    return projects
+
+
+def set_worklog_target(emp_id, name=None, duty_id=None, dept_nm=None, pos_nm=None, owner_key=None):
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    state.update(
+        {
+            "worklogTargetEmployeeId": emp_id,
+            "worklogTargetEmployeeName": name or state.get("worklogTargetEmployeeName"),
+            "worklogTargetDutyId": duty_id,
+            "worklogTargetDeptName": dept_nm,
+            "worklogTargetPositionName": pos_nm,
+            "updatedAt": now_iso(),
+        }
+    )
+    save_account_state(owner_key, state)
+    log_event({"action": "worklog_target_set", "ownerKey": owner_key, "targetEmployeeId": emp_id, "targetEmployeeName": name})
+    return state
+
+
+def normalize_schedule_days(days):
+    result = []
+    for item in days or []:
+        try:
+            value = int(item)
+        except (TypeError, ValueError):
+            continue
+        if 0 <= value <= 4 and value not in result:
+            result.append(value)
+    return result
+
+
+def worklog_blocked_date_reason(day):
+    if day.weekday() >= 5:
+        return "주말"
+    return KOREAN_PUBLIC_HOLIDAYS.get(day.isoformat(), "")
+
+
+def is_worklog_allowed_date(day):
+    return not worklog_blocked_date_reason(day)
+
+
+def normalize_schedule_dates(dates, reject_blocked=True):
+    result = []
+    for item in dates or []:
+        text = str(item or "").strip()
+        try:
+            day = dt.date.fromisoformat(text)
+        except ValueError:
+            continue
+        blocked_reason = worklog_blocked_date_reason(day)
+        if blocked_reason and reject_blocked:
+            raise FruitAutoError(f"{text}은(는) {blocked_reason}이라 업무일지를 예약할 수 없습니다.")
+        if blocked_reason:
+            continue
+        if text not in result:
+            result.append(text)
+    return result
+
+
+def normalize_schedule_time(value):
+    text = str(value or DEFAULT_STATE["worklogScheduleTime"]).strip()
+    try:
+        hour, minute = [int(part) for part in text.split(":", 1)]
+    except (TypeError, ValueError):
+        raise FruitAutoError("예약 시간은 HH:MM 형식이어야 합니다.")
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        raise FruitAutoError("예약 시간이 올바르지 않습니다.")
+    return f"{hour:02d}:{minute:02d}"
+
+
+def set_worklog_settings(payload, owner_key=None):
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    seed_count = payload.get("seedCount", state.get("worklogSeedCount") or 0)
+    try:
+        seed_count = int(seed_count or 0)
+    except (TypeError, ValueError):
+        raise FruitAutoError("씨앗 개수는 숫자로 입력하세요.")
+    if seed_count < 0 or seed_count > 3:
+        raise FruitAutoError("씨앗 선물은 최대 3개까지 가능합니다.")
+    project_id = payload.get("projectId", state.get("worklogProjectId"))
+    project_name = payload.get("projectName", state.get("worklogProjectName"))
+    content = str(payload.get("content", state.get("worklogContent") or "") or "").strip()
+    enabled = bool(payload.get("enabled", state.get("worklogEnabled")))
+    if enabled:
+        if not project_id or not project_name:
+            raise FruitAutoError("업무일지 프로젝트를 선택하세요.")
+        if not content:
+            raise FruitAutoError("업무일지 내용을 입력하세요.")
+    target_employee_id = payload.get("targetEmployeeId", state.get("worklogTargetEmployeeId"))
+    target_employee_name = payload.get("targetEmployeeName", state.get("worklogTargetEmployeeName"))
+    target_dept_name = payload.get("targetDeptName", state.get("worklogTargetDeptName"))
+    target_position_name = payload.get("targetPositionName", state.get("worklogTargetPositionName"))
+    target_duty_id = payload.get("targetDutyId", state.get("worklogTargetDutyId"))
+    saved_at = now_iso()
+    next_values = {
+        "worklogEnabled": enabled,
+        "worklogScheduleDays": normalize_schedule_days(payload.get("scheduleDays", state.get("worklogScheduleDays"))),
+        "worklogScheduleDates": normalize_schedule_dates(payload.get("scheduleDates", state.get("worklogScheduleDates"))),
+        "worklogScheduleTime": normalize_schedule_time(payload.get("scheduleTime", state.get("worklogScheduleTime"))),
+        "worklogSeedCount": seed_count,
+        "worklogSeedMessage": str(payload.get("seedMessage", state.get("worklogSeedMessage") or "") or ""),
+        "worklogTargetEmployeeId": target_employee_id,
+        "worklogTargetEmployeeName": target_employee_name,
+        "worklogTargetDeptName": target_dept_name,
+        "worklogTargetPositionName": target_position_name,
+        "worklogTargetDutyId": target_duty_id,
+        "worklogProjectId": project_id,
+        "worklogProjectName": project_name,
+        "worklogContent": content,
+        "worklogScheduleUpdatedAt": saved_at,
+        "updatedAt": saved_at,
+    }
+    next_values["worklogNextRunAt"] = next_worklog_run_at({**state, **next_values})
+    state.update(next_values)
+    save_account_state(owner_key, state)
+    log_event({"action": "worklog_settings_saved", "ownerKey": owner_key, "enabled": enabled})
+    return state
+
+
+def worklog_schedule_matches(account, local_now):
+    schedule_time = normalize_schedule_time(account.get("worklogScheduleTime"))
+    hour, minute = [int(part) for part in schedule_time.split(":")]
+    scheduled = local_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if local_now < scheduled:
+        return False, scheduled
+    today = local_now.date().isoformat()
+    if not is_worklog_allowed_date(local_now.date()):
+        return False, scheduled
+    weekdays = normalize_schedule_days(account.get("worklogScheduleDays"))
+    dates = normalize_schedule_dates(account.get("worklogScheduleDates"), reject_blocked=False)
+    if weekdays and local_now.weekday() in weekdays:
+        return True, scheduled
+    if dates and today in dates:
+        return True, scheduled
+    return False, scheduled
+
+
+def worklog_completed_local_date(account):
+    run_key = str(account.get("worklogLastRunKey") or "").strip()
+    if run_key:
+        try:
+            return dt.date.fromisoformat(run_key.split("T", 1)[0])
+        except ValueError:
+            pass
+    last_run_at = parse_iso(account.get("worklogLastRunAt"))
+    if last_run_at:
+        return last_run_at.astimezone(KST).date()
+    return None
+
+
+def worklog_already_completed_for_day(account, day):
+    completed_day = worklog_completed_local_date(account)
+    return completed_day == day
+
+
+def next_worklog_run_at(account, now=None):
+    if not account.get("worklogEnabled"):
+        return None
+    now = now or dt.datetime.now(dt.timezone.utc)
+    local_now = now.astimezone(KST)
+    schedule_time = normalize_schedule_time(account.get("worklogScheduleTime"))
+    hour, minute = [int(part) for part in schedule_time.split(":")]
+    weekdays = normalize_schedule_days(account.get("worklogScheduleDays"))
+    dates = normalize_schedule_dates(account.get("worklogScheduleDates"), reject_blocked=False)
+    candidates = []
+    for offset in range(0, 370):
+        day = (local_now + dt.timedelta(days=offset)).date()
+        if not is_worklog_allowed_date(day):
+            continue
+        if worklog_already_completed_for_day(account, day):
+            continue
+        if weekdays and day.weekday() in weekdays:
+            candidates.append(day)
+        if dates and day.isoformat() in dates:
+            candidates.append(day)
+    for day in sorted(set(candidates)):
+        candidate = dt.datetime.combine(day, dt.time(hour, minute), tzinfo=KST)
+        if candidate > local_now:
+            return candidate.astimezone(dt.timezone.utc).replace(microsecond=0).isoformat()
+    return None
+
+
+def worklog_next_run_delay(account, now=None):
+    now = now or dt.datetime.now(dt.timezone.utc)
+    next_run = parse_iso(account.get("worklogNextRunAt")) or parse_iso(next_worklog_run_at(account, now))
+    if next_run is None:
+        return None
+    return max(0, int((next_run - now).total_seconds()))
+
+
+def worklog_due(account, now=None):
+    if not account.get("worklogEnabled"):
+        return False
+    now = now or dt.datetime.now(dt.timezone.utc)
+    next_run = parse_iso(account.get("worklogNextRunAt"))
+    if next_run is None or now < next_run:
+        return False
+    run_key = next_run.astimezone(KST).strftime("%Y-%m-%dT%H:%M")
+    run_day = next_run.astimezone(KST).date()
+    return not worklog_already_completed_for_day(account, run_day)
+
+
+def worklog_run_key_for_next_run(account):
+    next_run = parse_iso(account.get("worklogNextRunAt"))
+    if next_run is None:
+        return None
+    return next_run.astimezone(KST).strftime("%Y-%m-%dT%H:%M")
+
+
+def save_worklog_once(owner_key=None, run_date=None, force=False):
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    if not force and not worklog_due(state):
+        state["worklogNextRunAt"] = next_worklog_run_at(state)
+        save_account_state(owner_key, state)
+        return {"action": "skipped", "reason": "worklog_not_due", "ownerKey": owner_key, "nextRunAt": state.get("worklogNextRunAt")}
+    if not force:
+        due_run_key = worklog_run_key_for_next_run(state)
+        if due_run_key:
+            running_at = parse_iso(state.get("worklogRunningAt"))
+            running_fresh = running_at and (dt.datetime.now(dt.timezone.utc) - running_at).total_seconds() < 15 * 60
+            if state.get("worklogRunningRunKey") == due_run_key and running_fresh:
+                return {"action": "skipped", "reason": "worklog_already_running", "ownerKey": owner_key, "runKey": due_run_key}
+            state["worklogRunningRunKey"] = due_run_key
+            state["worklogRunningAt"] = now_iso()
+            save_account_state(owner_key, state)
+
+    try:
+        if not state.get("worklogProjectId") or not state.get("worklogContent"):
             raise FruitAutoError("업무일지 프로젝트와 내용을 먼저 저장하세요.")
         seed_count = int(state.get("worklogSeedCount") or 0)
         if seed_count < 0 or seed_count > 3:

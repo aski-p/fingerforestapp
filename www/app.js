@@ -419,7 +419,1508 @@ async function fetchLatestAppInfo() {
     const aNotes = Array.isArray(a.info.releaseNotes) ? a.info.releaseNotes.length : 0;
     return bNotes - aNotes;
   });
-  storeSet(c_5׋h��춻�q�^uTopModal() {
+  storeSet(activeApiBaseKey, candidates[0].baseUrl);
+  return candidates[0].info;
+}
+
+async function checkAppVersion() {
+  try {
+    const info = await fetchLatestAppInfo();
+    latestAppInfo = info;
+    if (info.publicHolidays && typeof info.publicHolidays === "object") {
+      koreanPublicHolidays = { ...koreanPublicHolidays, ...info.publicHolidays };
+      renderWorklogDates();
+    }
+  } catch (_err) {
+    return false;
+  }
+  return false;
+}
+
+function openSupportLink(event) {
+  event.preventDefault();
+  try {
+    if (window.FruitAndroid?.openSupport) {
+      window.FruitAndroid.openSupport(supportUrl);
+      return;
+    }
+  } catch (_err) {
+    // Fall through to the web link if the native bridge is unavailable.
+  }
+  window.open(supportUrl, "_blank", "noopener");
+}
+
+function getProfilePhoto() {
+  return storeGet(profilePhotoKey) || "";
+}
+
+function storedSenderProfilePhoto(state = currentState) {
+  return state?.senderProfilePhotoUrl || state?.profilePhotoUrl || getProfilePhoto() || "";
+}
+
+function profilePhotoCache() {
+  try {
+    const cache = JSON.parse(storeGet(profilePhotoCacheKey) || "{}");
+    return cache && typeof cache === "object" ? cache : {};
+  } catch (_err) {
+    storeRemove(profilePhotoCacheKey);
+    return {};
+  }
+}
+
+function getCachedProfilePhoto(employeeId) {
+  const key = String(employeeId || "");
+  if (!key) return "";
+  return profilePhotoCache()[key] || "";
+}
+
+function currentSenderEmployeeId(state = currentState) {
+  return state?.senderEmployeeId || state?.loginUserId || "";
+}
+
+function currentSenderPhoto() {
+  const senderId = currentSenderEmployeeId();
+  return storedSenderProfilePhoto(currentState) || getCachedProfilePhoto(senderId) || appliedAvatarPhoto($("heroProfileBtn").querySelector(".profile-avatar")) || "";
+}
+
+function appliedAvatarPhoto(button) {
+  if (!button) return "";
+  const value = button.style.getPropertyValue("--profile-photo") || "";
+  const match = value.match(/^url\(["']?(.*?)["']?\)$/);
+  return match ? match[1] : "";
+}
+
+function rememberProfilePhoto(employeeId, photoUrl) {
+  const key = String(employeeId || "");
+  const photo = String(photoUrl || "");
+  if (!key || !photo) return;
+  const cache = profilePhotoCache();
+  cache[key] = photo;
+  storeSet(profilePhotoCacheKey, JSON.stringify(cache));
+}
+
+function setSenderProfilePhoto(photoUrl) {
+  const photo = String(photoUrl || "");
+  const senderId = currentSenderEmployeeId();
+  if (photo) {
+    storeSet(profilePhotoKey, photo);
+    currentState.senderProfilePhotoUrl = photo;
+    currentState.profilePhotoUrl = photo;
+    rememberProfilePhoto(senderId, photo);
+    return;
+  }
+  storeRemove(profilePhotoKey);
+  currentState.senderProfilePhotoUrl = "";
+  currentState.profilePhotoUrl = "";
+  forgetProfilePhoto(senderId);
+}
+
+function forgetProfilePhoto(employeeId) {
+  const key = String(employeeId || "");
+  if (!key) return;
+  const cache = profilePhotoCache();
+  delete cache[key];
+  storeSet(profilePhotoCacheKey, JSON.stringify(cache));
+}
+
+function getInitial(label) {
+  const clean = String(label || "").trim();
+  return (clean[0] || "F").toUpperCase();
+}
+
+function applyAvatar(button, initialEl, label, photoUrl = getProfilePhoto()) {
+  const photo = String(photoUrl || "").trim();
+  button.classList.toggle("has-photo", !!photo);
+  button.classList.toggle("hidden", !label && !photo);
+  button.style.setProperty("--profile-photo", photo ? `url("${photo}")` : "none");
+  initialEl.textContent = getInitial(label);
+}
+
+function updateProfileUi(label, unlocked = isUnlocked(), photoUrl = getProfilePhoto()) {
+  const displayLabel = unlocked ? label || "사용자" : "fingerfruit";
+  const displayPhoto = unlocked ? photoUrl : "";
+  document.body.classList.toggle("logged-out", !unlocked);
+  $("heroTitleText").textContent = displayLabel;
+  $("profileUserName").textContent = displayLabel;
+  applyAvatar($("heroProfileBtn").querySelector(".profile-avatar"), $("heroAvatarInitial"), displayLabel, displayPhoto);
+  applyAvatar($("profilePreview"), $("profilePreviewInitial"), displayLabel, displayPhoto);
+}
+
+function readImageAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("이미지를 읽지 못했습니다."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function resizeProfilePhoto(file) {
+  const dataUrl = await readImageAsDataUrl(file);
+  const image = new Image();
+  await new Promise((resolve, reject) => {
+    image.onload = resolve;
+    image.onerror = () => reject(new Error("지원하지 않는 이미지입니다."));
+    image.src = dataUrl;
+  });
+  const size = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  const sourceSize = Math.min(image.naturalWidth || image.width, image.naturalHeight || image.height);
+  const sx = ((image.naturalWidth || image.width) - sourceSize) / 2;
+  const sy = ((image.naturalHeight || image.height) - sourceSize) / 2;
+  ctx.drawImage(image, sx, sy, sourceSize, sourceSize, 0, 0, size, size);
+  return canvas.toDataURL("image/jpeg", 0.86);
+}
+
+function applyAppearance() {
+  const { theme, font } = appearanceSettings();
+  previewAppearance({ theme, font });
+}
+
+function initializeAppearanceSettings() {
+  setAppearanceSettings({
+    theme: storeGet(themeKey) || "default",
+    font: storeGet(fontKey) || "pretendard",
+  });
+}
+
+function previewAppearance(settings = appearanceSettings()) {
+  const theme = themes.some((item) => item.id === settings.theme) ? settings.theme : "default";
+  const font = fonts.some((item) => item.id === settings.font) ? settings.font : "pretendard";
+  document.body.classList.remove(...themes.map((item) => `theme-${item.id}`));
+  document.body.classList.remove(...fonts.map((item) => `font-${item.id}`));
+  if (theme !== "default") document.body.classList.add(`theme-${theme}`);
+  document.body.classList.add(`font-${font}`);
+  updateAppearanceSelection({ theme, font });
+}
+
+function updateAppearanceSelection(settings = appearanceSettings()) {
+  document.querySelectorAll("[data-theme-option]").forEach((button) => {
+    const selected = button.dataset.themeOption === settings.theme;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
+  document.querySelectorAll("[data-font-option]").forEach((button) => {
+    const selected = button.dataset.fontOption === settings.font;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
+}
+
+function scrollSelectedAppearanceIntoView() {
+  const selectedTheme = document.querySelector("[data-theme-option].selected");
+  const selectedFont = document.querySelector("[data-font-option].selected");
+  requestAnimationFrame(() => {
+    selectedTheme?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    selectedFont?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  });
+}
+
+function appearanceSettings() {
+  const theme = activeAppearanceSettings.theme || "default";
+  const font = activeAppearanceSettings.font || "pretendard";
+  return {
+    theme: themes.some((item) => item.id === theme) ? theme : "default",
+    font: fonts.some((item) => item.id === font) ? font : "pretendard",
+  };
+}
+
+function setAppearanceSettings(settings = {}) {
+  const theme = themes.some((item) => item.id === settings.theme) ? settings.theme : "default";
+  const font = fonts.some((item) => item.id === settings.font) ? settings.font : "pretendard";
+  activeAppearanceSettings = { theme, font };
+  storeSet(themeKey, theme);
+  storeSet(fontKey, font);
+  applyAppearance();
+}
+
+async function loadProfileSettings({ silent = true } = {}) {
+  if (!isUnlocked()) return;
+  try {
+    const settings = await api("/api/profile-settings");
+    setAppearanceSettings(settings);
+  } catch (err) {
+    if (!silent) toast(`설정 불러오기 실패: ${err.message}`);
+  }
+}
+
+async function saveProfileSettings() {
+  if (!isUnlocked()) {
+    toast("먼저 로그인하세요.");
+    return;
+  }
+  try {
+    setBusy(true);
+    const settings = await api("/api/profile-settings", pendingAppearanceSettings || appearanceSettings());
+    setAppearanceSettings(settings);
+    toast(settings.synced ? "설정을 프로필에 저장했습니다." : "설정을 기기에 저장했습니다. DB 동기화는 나중에 다시 시도됩니다.");
+    closeSettingsModal();
+  } catch (err) {
+    toast(`설정 저장 실패: ${err.message}`);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function renderAppearanceOptions() {
+  const themeBox = $("themeOptions");
+  const fontBox = $("fontOptions");
+  themeBox.innerHTML = "";
+  fontBox.innerHTML = "";
+  themes.forEach((theme) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "option-button";
+    button.dataset.themeOption = theme.id;
+    button.innerHTML = `
+      <span class="option-swatch" style="--swatch-a:${theme.swatch[0]};--swatch-b:${theme.swatch[1]};--swatch-c:${theme.swatch[2]}"></span>
+      <span class="option-title">${escapeHtml(theme.label)}</span>
+      ${theme.category === "special" ? '<span class="option-meta">스페셜 스킨</span>' : ""}
+    `;
+    button.addEventListener("click", () => {
+      pendingAppearanceSettings = { ...(pendingAppearanceSettings || appearanceSettings()), theme: theme.id };
+      previewAppearance(pendingAppearanceSettings);
+    });
+    themeBox.appendChild(button);
+  });
+  fonts.forEach((font) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `option-button font-${font.id}-sample`;
+    button.dataset.fontOption = font.id;
+    button.innerHTML = `<span class="option-title">${escapeHtml(font.label)}</span>`;
+    button.addEventListener("click", () => {
+      pendingAppearanceSettings = { ...(pendingAppearanceSettings || appearanceSettings()), font: font.id };
+      previewAppearance(pendingAppearanceSettings);
+    });
+    fontBox.appendChild(button);
+  });
+  applyAppearance();
+}
+
+function setBusy(nextBusy) {
+  busy = nextBusy;
+  document.body.classList.toggle("busy", busy);
+}
+
+function loadRememberedLogin() {
+  const rememberedId = storeGet(rememberedLoginIdKey);
+  const rememberedPw = storeGet(rememberedLoginPwKey);
+  $("rememberLogin").checked = storeGet(rememberLoginKey) === "1" && (!!rememberedId || !!rememberedPw);
+  $("loginId").value = rememberedId || "";
+  $("loginPw").value = rememberedPw || "";
+}
+
+async function restoreSavedLoginIfNeeded() {
+  loadRememberedLogin();
+  if (!isUnlocked() || $("loginId").value) return;
+  try {
+    const data = await api("/api/saved-login");
+    if (!data.saved || !data.id) return;
+  } catch (_err) {
+    // Saved-login restore is best-effort. Manual login remains available.
+  }
+}
+
+function saveRememberedLogin(id, password) {
+  if (!$("rememberLogin").checked || !id || !password) {
+    clearRememberedLogin();
+    return;
+  }
+  storeSet(rememberLoginKey, "1");
+  storeSet(rememberedLoginIdKey, id);
+  storeSet(rememberedLoginPwKey, password);
+}
+
+function clearRememberedLogin() {
+  storeRemove(rememberLoginKey);
+  storeRemove(rememberedLoginIdKey);
+  storeRemove(rememberedLoginPwKey);
+}
+
+function saveFruitSession(sessionToken) {
+  fruitSession = sessionToken || "";
+  if (fruitSession) {
+    authValidated = true;
+    storeRemove(loggedOutKey);
+    try {
+      if (window.FruitAndroid?.saveSession) window.FruitAndroid.saveSession("");
+    } catch (_err) {
+      // Native session clearing is best-effort. Login sessions are not persisted.
+    }
+  }
+}
+
+async function recoverSession() {
+  if (storeGet(loggedOutKey) === "1") return "";
+  if (!recoveringSession) {
+    recoveringSession = (async () => {
+      const res = await resilientFetch("/api/session", {
+        headers: {
+          "Content-Type": "application/json",
+          "X-Fruit-Token": token,
+          "X-Fruit-Session": fruitSession,
+          "X-Fruit-Owner": expectedOwnerKey(),
+          "X-Fruit-Device": deviceId(),
+        },
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "세션 복구 실패");
+      saveFruitSession((data.result || {}).sessionToken || "");
+      return fruitSession;
+    })().finally(() => {
+      recoveringSession = null;
+    });
+  }
+  return recoveringSession;
+}
+
+function isAuthError(data, response) {
+  const error = String(data?.error || "");
+  return response?.status === 401 || error.includes("로그인") || error.includes("세션") || error.includes("기기 CID");
+}
+
+function clearAuthenticatedUi() {
+  clearSessionStorage();
+  sessionStorage.removeItem(sessionKey);
+  toast("");
+  $("results").innerHTML = "";
+  $("worklogResults").innerHTML = "";
+  $("searchInput").value = "";
+  $("worklogSearchInput").value = "";
+  closeHistoryModal();
+  closeSettingsModal();
+  closeProfileModal();
+  renderState({});
+}
+
+async function api(path, payload, retrying = false) {
+  const options = {
+    headers: {
+      "Content-Type": "application/json",
+      "X-Fruit-Token": token,
+      "X-Fruit-Session": fruitSession,
+      "X-Fruit-Owner": expectedOwnerKey(),
+      "X-Fruit-Device": deviceId(),
+    },
+  };
+  if (payload !== undefined) {
+    options.method = "POST";
+    options.body = JSON.stringify(payload);
+  }
+  const res = await resilientFetch(path, options);
+  const data = await res.json();
+  if (
+    !data.ok &&
+    !retrying &&
+    path !== "/api/login" &&
+    path !== "/api/session" &&
+    isAuthError(data, res)
+  ) {
+    try {
+      await recoverSession();
+      if (fruitSession) return api(path, payload, true);
+    } catch (_err) {
+      clearAuthenticatedUi();
+      throw new Error("로그인이 만료되었습니다. 다시 로그인하세요.");
+    }
+  }
+  if (!data.ok && path !== "/api/login" && isAuthError(data, res)) {
+    clearAuthenticatedUi();
+  }
+  if (!data.ok) throw new Error(data.error || "요청 실패");
+  if (path !== "/api/login" && path !== "/api/app-info") {
+    authValidated = true;
+  }
+  return data.result || data.state || data;
+}
+
+function urlBase64ToUint8Array(value) {
+  const padding = "=".repeat((4 - (value.length % 4)) % 4);
+  const base64 = (value + padding).replaceAll("-", "+").replaceAll("_", "/");
+  const raw = atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i += 1) output[i] = raw.charCodeAt(i);
+  return output;
+}
+
+function supportsWebPush() {
+  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+function supportsNativePush() {
+  return !!window.FruitAndroid;
+}
+
+function isIosLike() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function isStandaloneWebApp() {
+  return window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+}
+
+function webPushUnsupportedMessage() {
+  if (isIosLike() && !isStandaloneWebApp()) {
+    return "iPhone Push는 Safari에서 홈 화면에 추가한 앱으로 열어야 사용할 수 있습니다.";
+  }
+  return "이 기기는 웹 Push 알림을 지원하지 않습니다.";
+}
+
+function shouldShowPushEnabled(state = currentState) {
+  if (!isUnlocked() || state.pushEnabled === false) return false;
+  if (supportsNativePush()) return true;
+  if (!supportsWebPush()) return false;
+  return Notification.permission === "granted";
+}
+
+async function ensureWebPushSubscription() {
+  if (!supportsWebPush()) {
+    throw new Error(webPushUnsupportedMessage());
+  }
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    throw new Error("기기 알림 권한이 허용되지 않았습니다.");
+  }
+  const registration = await navigator.serviceWorker.register("/sw.js");
+  const keyData = await api("/api/push/public-key");
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(keyData.publicKey),
+    });
+  }
+  const payload = subscription.toJSON();
+  payload.deviceId = deviceId();
+  payload.userAgent = navigator.userAgent || "";
+  await api("/api/push/subscribe", { subscription: payload });
+  return subscription;
+}
+
+async function showDeviceNotification(item) {
+  if (!item || !item.id) return false;
+  const title = item.title || "fingerfruit";
+  const body = item.body || "새 열매 수신 내역이 있습니다.";
+  try {
+    if (window.FruitAndroid?.showNotification) {
+      window.FruitAndroid.showNotification(title, body);
+      return true;
+    }
+  } catch (_err) {
+    // Android native notification bridge is best-effort.
+  }
+  if (!("Notification" in window) || Notification.permission !== "granted") return false;
+  try {
+    const registration = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration("/sw.js") : null;
+    if (registration?.showNotification) {
+      await registration.showNotification(title, {
+        body,
+        tag: item.tag || item.id,
+        icon: "/icons/apple-icon-192.png",
+        badge: "/icons/apple-icon-192.png",
+        data: { url: item.url || "/" },
+      });
+      return true;
+    }
+    new Notification(title, { body, tag: item.tag || item.id });
+    return true;
+  } catch (_err) {
+    return false;
+  }
+}
+
+async function syncPushSubscriptionIfPossible(state = currentState) {
+  if (!isUnlocked() || state.pushEnabled === false || pushSyncing) return;
+  if (supportsNativePush()) return;
+  if (!supportsWebPush() || Notification.permission !== "granted") return;
+  pushSyncing = true;
+  try {
+    await ensureWebPushSubscription();
+  } catch (_err) {
+    // The toggle path reports subscription errors. Background sync stays quiet.
+  } finally {
+    pushSyncing = false;
+  }
+}
+
+async function checkReceivedNotifications({ silent = true } = {}) {
+  if (!isUnlocked() || currentState.pushEnabled === false) return;
+  try {
+    const data = await api("/api/notifications");
+    const latest = (data.items || [])[0];
+    if (!latest?.id) return;
+    const lastShownId = storeGet(lastReceivedNotificationKey) || "";
+    if (!lastShownId) {
+      storeSet(lastReceivedNotificationKey, latest.id);
+      return;
+    }
+    if (latest.id === lastShownId) return;
+    storeSet(lastReceivedNotificationKey, latest.id);
+    const sentAt = latest.at ? new Date(latest.at).getTime() : 0;
+    if (!sentAt || Date.now() - sentAt > recentNotificationWindowMs) return;
+    const shown = await showDeviceNotification(latest);
+    if (!shown && !silent) toast("열매 수신 내역이 있습니다. 알림 권한을 확인하세요.");
+  } catch (err) {
+    if (!silent) toast(`수신 알림 확인 실패: ${err.message}`);
+  }
+}
+
+async function disableWebPushSubscription() {
+  if (!supportsWebPush()) return;
+  const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+  const subscription = registration ? await registration.pushManager.getSubscription() : null;
+  if (subscription) {
+    await api("/api/push/unsubscribe", { endpoint: subscription.endpoint });
+    await subscription.unsubscribe();
+  }
+}
+
+function fmtDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("ko-KR", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function fmtDay(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return `${date.getDate()}일`;
+}
+
+function fmtHistoryDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  });
+}
+
+function localDateValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseLocalDateValue(value) {
+  const [year, month, day] = String(value || "").split("-").map((part) => Number(part));
+  const date = new Date(year, (month || 1) - 1, day || 1);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== (month || 1) - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+}
+
+function worklogBlockedDateReason(value) {
+  const date = parseLocalDateValue(value);
+  if (!date) return "날짜 오류";
+  const day = date.getDay();
+  if (day === 0) return "주말";
+  if (day === 6) return "주말";
+  return koreanPublicHolidays[value] || "";
+}
+
+function isWorklogAllowedDate(value) {
+  return !worklogBlockedDateReason(value);
+}
+
+function fmtHistorySelectedDate(value) {
+  if (!value) return "날짜 선택";
+  const [year, month, day] = String(value).split("-").map((part) => Number(part));
+  const date = new Date(year, (month || 1) - 1, day || 1);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  });
+}
+
+function syncHistoryDateControls() {
+  $("historyDateInput").value = selectedHistoryDate;
+  $("historySelectedDate").textContent = fmtHistorySelectedDate(selectedHistoryDate);
+}
+
+function fmtTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
+function fmtHistoryTime(item) {
+  const label = item.timeLabel || (item.action === "received" ? "받음" : "보냄");
+  if (!item.at) return "데이터없음";
+  const time = fmtTime(item.at);
+  return `${label} ${time}`;
+}
+
+function historyTimeMarkup(item) {
+  const label = item.timeLabel || (item.action === "received" ? "받음" : "보냄");
+  if (!item.at) return escapeHtml("데이터없음");
+  return `<span class="history-time-label">${escapeHtml(label)}</span><span class="history-time-clock">${escapeHtml(fmtTime(item.at))}</span>`;
+}
+
+function fmtNumber(value) {
+  if (value === null || value === undefined || value === "") return "-";
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString("ko-KR") : String(value);
+}
+
+function fmtDelta(value) {
+  if (value === null || value === undefined) return "-";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return String(value);
+  return number > 0 ? `+${number}` : String(number);
+}
+
+function avatarStyle(url) {
+  return url ? ` style="--history-photo:url('${String(url).replaceAll("'", "%27")}')"` : "";
+}
+
+function setLockedState(unlocked) {
+  $("workspace").classList.toggle("locked", !unlocked);
+  document.body.classList.toggle("authenticated", unlocked);
+  $("loginBadge").textContent = unlocked ? "현재 사용자" : "필요";
+  $("loginBadge").className = `badge ${unlocked ? "ok" : "warn"}`;
+  $("logoutBtn").classList.toggle("hidden", !unlocked);
+  $("loginProfile").classList.toggle("hidden", !unlocked);
+  $("loginForm").classList.toggle("hidden", unlocked);
+  $("savedLogin").classList.add("hidden");
+  const controls = [
+    "searchInput",
+    "searchBtn",
+    "giftMessage",
+    "sendBerryCount",
+    "sendAllBerries",
+    "messageBtn",
+    "autoToggle",
+    "pushToggle",
+    "runBtn",
+    "historyOpenBtn",
+    "refreshBalanceBtn",
+    "intervalAddBtn",
+    "intervalResetBtn",
+    "worklogSearchInput",
+    "worklogSearchBtn",
+    "worklogSeedCount",
+    "worklogSeedMessage",
+    "worklogProjectSelect",
+    "worklogContent",
+    "worklogCalendarBtn",
+    "worklogDateInput",
+    "worklogTimeInput",
+    "worklogEnabled",
+    "worklogSaveBtn",
+    "worklogRunBtn",
+  ];
+  controls.forEach((id) => {
+    $(id).disabled = !unlocked;
+  });
+  $("autoToggle").disabled = !unlocked || !(currentState.targetEmployeeId && currentState.targetEmployeeName);
+  $("pushToggle").disabled = !unlocked;
+  $("runBtn").disabled = !unlocked || !(currentState.targetEmployeeId && currentState.targetEmployeeName);
+  $("pushControl").classList.toggle("hidden", !unlocked);
+}
+
+function employeeLabel(name, employeeNo) {
+  const safeName = String(name || "").trim();
+  const safeNo = String(employeeNo || "").trim();
+  if (safeName && safeNo) return `${safeName} ${safeNo}`;
+  return safeName || safeNo || "로그인 필요";
+}
+
+function employeeDetail(deptName, positionName) {
+  return [deptName, positionName]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function personNameLabel(name, fallback) {
+  const safeName = String(name || "").trim();
+  const safeFallback = String(fallback || "").trim();
+  return safeName || safeFallback || "로그인 필요";
+}
+
+function personWithPosition(name, position, fallback) {
+  const safeName = personNameLabel(name, fallback);
+  const safePosition = String(position || "").trim();
+  return safePosition && safeName !== "로그인 필요" ? `${safeName} ${safePosition}` : safeName;
+}
+
+function mergeStatePhotos(nextState) {
+  const merged = { ...(nextState || {}) };
+  const previous = currentState || {};
+  const cached = cachedStateValue();
+  const senderId = merged.senderEmployeeId || merged.loginUserId;
+  const targetId = merged.targetEmployeeId;
+  const sameSender =
+    String(previous.senderEmployeeId || previous.loginUserId || "") ===
+    String(senderId || "");
+  const sameTarget =
+    String(previous.targetEmployeeId || "") === String(targetId || "");
+  if (!merged.senderProfilePhotoUrl && sameSender) {
+    merged.senderProfilePhotoUrl = previous.senderProfilePhotoUrl || previous.profilePhotoUrl || "";
+  }
+  if (!merged.targetProfilePhotoUrl && sameTarget) {
+    merged.targetProfilePhotoUrl = previous.targetProfilePhotoUrl || "";
+  }
+  if (!merged.senderProfilePhotoUrl) {
+    merged.senderProfilePhotoUrl = merged.profilePhotoUrl || getCachedProfilePhoto(senderId) || getProfilePhoto();
+  }
+  if (!merged.targetProfilePhotoUrl) {
+    merged.targetProfilePhotoUrl = getCachedProfilePhoto(targetId);
+  }
+  rememberProfilePhoto(senderId, merged.senderProfilePhotoUrl);
+  rememberProfilePhoto(targetId, merged.targetProfilePhotoUrl);
+  if (merged.credentialsSaved !== false) {
+    preserveStateValue(merged, previous, cached, "lastSeedCount");
+    preserveStateValue(merged, previous, cached, "lastBerryCount");
+    preserveStateValue(merged, previous, cached, "balanceCheckedAt");
+    preserveStateValue(merged, previous, cached, "lastCheckedAt");
+  }
+  return merged;
+}
+
+function cachedStateValue() {
+  try {
+    const cached = JSON.parse(storeGet(cachedStateKey) || "null");
+    return cached && cached.sessionToken === fruitSession && cached.state ? cached.state : {};
+  } catch (_err) {
+    return {};
+  }
+}
+
+function preserveStateValue(merged, previous, cached, key) {
+  if (merged[key] !== null && merged[key] !== undefined) return;
+  if (previous[key] !== null && previous[key] !== undefined) {
+    merged[key] = previous[key];
+    return;
+  }
+  if (cached[key] !== null && cached[key] !== undefined) {
+    merged[key] = cached[key];
+  }
+}
+
+function renderWorklogDates() {
+  const allowedDates = selectedWorklogDates.filter(isWorklogAllowedDate);
+  if (allowedDates.length !== selectedWorklogDates.length) {
+    selectedWorklogDates = allowedDates;
+  }
+  const box = $("worklogDateChips");
+  box.innerHTML = "";
+  const opener = $("worklogDateInput");
+  opener.textContent = selectedWorklogDates.length
+    ? `${selectedWorklogDates.length}개 날짜 선택됨`
+    : "날짜 선택";
+  if (!selectedWorklogDates.length) {
+    box.innerHTML = '<span class="empty">선택 날짜 없음</span>';
+    return;
+  }
+  selectedWorklogDates.forEach((date) => {
+    const chip = document.createElement("span");
+    chip.className = "date-chip";
+    chip.innerHTML = `${escapeHtml(date)} <button type="button" aria-label="${escapeHtml(date)} 삭제">×</button>`;
+    chip.querySelector("button").addEventListener("click", () => {
+      selectedWorklogDates = selectedWorklogDates.filter((item) => item !== date);
+      markWorklogDraftDirty();
+      renderWorklogDates();
+    });
+    box.appendChild(chip);
+  });
+}
+
+function markWorklogDraftDirty() {
+  worklogDraftDirty = true;
+}
+
+function hasWorklogDraft() {
+  return worklogDraftDirty && isUnlocked();
+}
+
+function renderWorklogCalendar() {
+  const grid = $("worklogCalendarGrid");
+  const monthLabel = $("worklogCalendarMonth");
+  const year = worklogCalendarMonth.getFullYear();
+  const month = worklogCalendarMonth.getMonth();
+  const todayValue = localDateValue(new Date());
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const firstVisibleOffset = (firstWeekday + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  monthLabel.textContent = `${year}년 ${month + 1}월`;
+  grid.innerHTML = "";
+  for (let i = 0; i < firstVisibleOffset; i += 1) {
+    const blank = document.createElement("span");
+    blank.className = "calendar-day blank";
+    grid.appendChild(blank);
+  }
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = localDateValue(new Date(year, month, day));
+    const parsedDate = parseLocalDateValue(date);
+    const isWeekend = parsedDate ? parsedDate.getDay() === 0 || parsedDate.getDay() === 6 : false;
+    const holidayName = koreanPublicHolidays[date] || "";
+    const blockedReason = worklogBlockedDateReason(date);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = [
+      "calendar-day",
+      calendarDraftDates.includes(date) ? "selected" : "",
+      date === todayValue ? "today" : "",
+      blockedReason ? "blocked" : "",
+      isWeekend ? "weekend" : "",
+      holidayName ? "holiday" : "",
+    ].filter(Boolean).join(" ");
+    const label = holidayName || (isWeekend ? "휴무" : "");
+    button.innerHTML = `
+      <span class="calendar-day-number">${day}</span>
+      ${label ? `<small>${escapeHtml(label)}</small>` : ""}
+    `;
+    button.setAttribute("aria-pressed", calendarDraftDates.includes(date) ? "true" : "false");
+    if (blockedReason) {
+      button.disabled = true;
+      button.title = blockedReason;
+      button.setAttribute("aria-label", `${date} ${blockedReason} 업무일지 작성 불가`);
+    }
+    button.addEventListener("click", () => {
+      if (blockedReason) {
+        toast(`${date}은(는) ${blockedReason}이라 업무일지를 예약할 수 없습니다.`);
+        return;
+      }
+      calendarDraftDates = calendarDraftDates.includes(date)
+        ? calendarDraftDates.filter((item) => item !== date)
+        : [...calendarDraftDates, date].sort();
+      renderWorklogCalendar();
+    });
+    grid.appendChild(button);
+  }
+}
+
+function openWorklogCalendar() {
+  calendarDraftDates = selectedWorklogDates.filter(isWorklogAllowedDate);
+  const anchor = selectedWorklogDates[0] || localDateValue(new Date());
+  const [year, month] = anchor.split("-").map(Number);
+  worklogCalendarMonth = new Date(year || new Date().getFullYear(), (month || new Date().getMonth() + 1) - 1, 1);
+  renderWorklogCalendar();
+  $("worklogCalendarModal").classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+
+function closeWorklogCalendar() {
+  $("worklogCalendarModal").classList.add("hidden");
+  syncModalOpenState();
+}
+
+function setWorklogProjects(projects, selectedId = "") {
+  worklogProjects = projects || worklogProjects || [];
+  const select = $("worklogProjectSelect");
+  const current = selectedId || select.value || "";
+  select.innerHTML = '<option value="">프로젝트 선택</option>';
+  worklogProjects.forEach((project) => {
+    const option = document.createElement("option");
+    option.value = project.id;
+    option.textContent = project.name;
+    select.appendChild(option);
+  });
+  select.value = current;
+}
+
+async function loadWorklogProjects() {
+  if (!isUnlocked()) return;
+  try {
+    const data = await api("/api/worklog-projects");
+    const selectedId = hasWorklogDraft() ? $("worklogProjectSelect").value : currentState.worklogProjectId || "";
+    setWorklogProjects(data.projects || [], selectedId);
+  } catch (err) {
+    toast(`프로젝트 조회 실패: ${err.message}`);
+  }
+}
+
+function renderWorklogState(state) {
+  const unlocked = isUnlocked();
+  const worklogTarget = pendingWorklogTarget || {
+    emp_id: state.worklogTargetEmployeeId,
+    emp_nm: state.worklogTargetEmployeeName,
+    dept_nm: state.worklogTargetDeptName,
+    pos_nm: state.worklogTargetPositionName,
+    duty_id: state.worklogTargetDutyId,
+  };
+  if (!hasWorklogDraft()) {
+    selectedWorklogDays = [];
+    selectedWorklogDates = Array.isArray(state.worklogScheduleDates) ? [...state.worklogScheduleDates] : [];
+    $("worklogSeedCount").value = state.worklogSeedCount ?? 0;
+    $("worklogSeedMessage").value = state.worklogSeedMessage || "";
+    $("worklogContent").value = state.worklogContent || "";
+    $("worklogTimeInput").value = state.worklogScheduleTime || "09:05";
+    $("worklogEnabled").checked = !!state.worklogEnabled;
+  }
+  if (worklogTarget.emp_id) {
+    const detail = employeeDetail(worklogTarget.dept_nm, worklogTarget.pos_nm);
+    $("worklogTarget").innerHTML = `
+      <strong>${escapeHtml(employeeLabel(worklogTarget.emp_nm, worklogTarget.emp_id))}</strong>
+      ${detail ? `<small>${escapeHtml(detail)}</small>` : ""}
+    `;
+  } else {
+    $("worklogTarget").textContent = "선택된 직원 없음";
+  }
+  setWorklogProjects(worklogProjects, state.worklogProjectId || "");
+  const badgeOk = unlocked && state.worklogEnabled;
+  $("worklogBadge").textContent = badgeOk ? `예약됨 ${fmtDate(state.worklogNextRunAt)}` : "대기";
+  $("worklogBadge").className = `badge ${badgeOk ? "ok" : "neutral"}`;
+  renderWorklogDates();
+}
+
+function renderState(state) {
+  state = mergeStatePhotos(state);
+  if (isUnlocked() && expectedOwnerKey() && state.ownerKey && expectedOwnerKey() !== state.ownerKey) {
+    clearAuthenticatedUi();
+    toast("기기 로그인 정보와 서버 계정이 달라서 세션을 초기화했습니다. 다시 로그인하세요.");
+    return;
+  }
+  currentState = state;
+  const unlocked = isUnlocked();
+  if (unlocked && currentState.credentialsSaved !== false) {
+    try {
+      storeSet(cachedStateKey, JSON.stringify({
+        sessionToken: fruitSession,
+        savedAt: Date.now(),
+        state: currentState,
+      }));
+    } catch (_err) {
+      // UI cache is best-effort.
+    }
+  } else {
+    storeRemove(cachedStateKey);
+  }
+  const enabled = unlocked && !!state.enabled;
+  const hasTarget = unlocked && (state.hasTarget === true || !!state.targetEmployeeId);
+  const senderLabel = unlocked
+    ? personNameLabel(state.loginUser || state.senderEmployeeName, state.senderEmployeeId)
+    : "로그인 필요";
+  const senderPhoto = unlocked ? storedSenderProfilePhoto(state) || "" : "";
+  const targetLabel = hasTarget ? employeeLabel(state.targetEmployeeName, state.targetEmployeeId) : "검색 후 선택";
+  const targetPhoto = hasTarget ? state.targetProfilePhotoUrl || "" : "";
+
+  setLockedState(unlocked);
+  $("loginUserDisplay").textContent = senderLabel;
+  updateProfileUi(senderLabel, unlocked, senderPhoto);
+  applyAvatar($("loginUserAvatar"), $("loginUserInitial"), senderLabel, senderPhoto);
+  applyAvatar($("targetAvatar"), $("targetInitial"), hasTarget ? targetLabel : "", targetPhoto);
+  $("autoState").textContent = unlocked ? (enabled ? "켜짐" : "꺼짐") : "잠김";
+  $("targetName").textContent = targetLabel;
+  $("seedCount").textContent =
+    unlocked && state.lastSeedCount !== null && state.lastSeedCount !== undefined
+      ? `${state.lastSeedCount}개`
+      : "-";
+  $("berryCount").textContent =
+    unlocked && state.lastBerryCount !== null && state.lastBerryCount !== undefined
+      ? `${state.lastBerryCount}개`
+      : "-";
+  $("intervalDisplay").textContent = `${intervalMinutes(state)}분`;
+  $("balanceStatus").textContent = unlocked
+    ? state.balanceError
+      ? "조회 오류"
+      : `최근 조회 ${fmtDate(state.balanceCheckedAt || state.lastCheckedAt)}`
+    : "로그인 필요";
+  $("targetBadge").textContent = hasTarget ? "선택됨" : "미선택";
+  $("targetBadge").className = `badge ${hasTarget ? "ok" : "neutral"}`;
+  $("autoToggle").checked = enabled;
+  $("pushToggle").checked = shouldShowPushEnabled(state);
+  $("giftMessage").value = state.giftMessage || "자동 전달";
+  const sendAllBerries = state.sendAllBerries === true;
+  const sendCount = Math.max(1, Number(state.sendBerryCount || 1));
+  $("sendBerryCount").value = sendCount;
+  $("sendBerryCount").disabled = !unlocked || sendAllBerries;
+  $("sendAllBerries").checked = sendAllBerries;
+  $("sendAllBerries").disabled = !unlocked;
+  const sendModeText = sendAllBerries ? "보유 열매 전부" : `${sendCount}개`;
+  const daemonText = state.daemonRunning ? "데몬 실행 중" : "데몬 확인 필요";
+  $("controlHint").textContent = enabled
+    ? `켜짐 상태입니다. ${daemonText}. 다음 확인 ${fmtDate(state.nextRunAt)}. 전송 수 ${sendModeText}`
+    : hasTarget
+      ? `켜면 ${intervalMinutes(state)}분마다 한 번씩 보유 열매를 확인하고 ${sendModeText} 보냅니다.`
+      : "대상 직원을 먼저 검색해서 선택하세요.";
+  renderWorklogState(state);
+  try {
+    if (unlocked && state.credentialsSaved !== false && window.FruitAndroid?.saveSettings) {
+      window.FruitAndroid.saveSettings(enabled, state.pushEnabled !== false, intervalMinutes(state));
+    }
+  } catch (_err) {
+    // Native setting mirroring is best-effort.
+  }
+  syncPushSubscriptionIfPossible(state);
+  if (unlocked) window.setTimeout(showReleaseNotesIfNeeded, 0);
+}
+
+function renderCachedState() {
+  if (!isUnlocked()) return;
+  try {
+    const cached = JSON.parse(storeGet(cachedStateKey) || "null");
+    if (!cached || typeof cached !== "object") return;
+    if (cached.sessionToken !== fruitSession) {
+      storeRemove(cachedStateKey);
+      return;
+    }
+    // Do not paint stale authenticated screens on startup. A real API status
+    // response must validate the session before user/target controls appear.
+  } catch (_err) {
+    storeRemove(cachedStateKey);
+  }
+}
+
+function historyPairKey(item) {
+  return `${item.targetEmployeeId || item.avatarEmployeeId || item.target || item.displayName || ""}|${Number(item.berries || Math.abs(Number(item.delta) || 0)) || 0}`;
+}
+
+function filterPairedHistoryItems(items) {
+  const sorted = Array.isArray(items) ? items : [];
+  const usedSentIndexes = new Set();
+  const keepReceivedIndexes = new Set();
+  sorted.forEach((item, index) => {
+    if (item.historyKind === "seed") return;
+    if (item.action !== "received") return;
+    const receivedAt = Date.parse(item.at || "");
+    if (!Number.isFinite(receivedAt)) return;
+    const key = historyPairKey(item);
+    let bestIndex = -1;
+    let bestDelta = Infinity;
+    sorted.forEach((candidate, candidateIndex) => {
+      if (candidate.action !== "sent" || usedSentIndexes.has(candidateIndex)) return;
+      if (historyPairKey(candidate) !== key) return;
+      const sentAt = Date.parse(candidate.at || "");
+      if (!Number.isFinite(sentAt)) return;
+      const delta = sentAt - receivedAt;
+      if (delta < 0 || delta > 12 * 60 * 1000) return;
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        bestIndex = candidateIndex;
+      }
+    });
+    if (bestIndex >= 0) {
+      usedSentIndexes.add(bestIndex);
+      keepReceivedIndexes.add(index);
+    }
+  });
+  return sorted.filter((item, index) => item.historyKind === "seed" || item.action !== "received" || keepReceivedIndexes.has(index));
+}
+
+function renderHistory(items) {
+  const body = $("historyBody");
+  items = filterPairedHistoryItems(items);
+  body.innerHTML = "";
+  if (!items.length) {
+    body.innerHTML = `<div class="history-empty">${escapeHtml(fmtHistorySelectedDate(selectedHistoryDate))} 내역이 없습니다.</div>`;
+    return;
+  }
+  let lastDate = "";
+  items.forEach((item) => {
+    const itemDate = fmtHistoryDate(item.at);
+    if (!selectedHistoryDate && itemDate !== lastDate) {
+      const dateHeader = document.createElement("div");
+      dateHeader.className = "history-date";
+      dateHeader.textContent = itemDate;
+      body.appendChild(dateHeader);
+      lastDate = itemDate;
+    }
+    const row = document.createElement("div");
+    row.className = `history-row ${item.action === "received" ? "received" : "sent"}`;
+    const berryText = item.remaining !== null && item.remaining !== undefined
+      ? `${fmtNumber(item.seeds)}/${fmtNumber(item.remaining)}`
+      : item.berries !== null && item.berries !== undefined
+        ? `${fmtNumber(item.seeds)}/${fmtNumber(item.berries)}`
+        : "-";
+    const senderName = item.displayName || personWithPosition(
+      item.target || item.senderName,
+      item.targetPositionName || item.senderPositionName,
+      "-"
+    );
+    const counterpartPhoto = item.avatarProfilePhotoUrl
+      || item.senderProfilePhotoUrl
+      || getCachedProfilePhoto(item.avatarEmployeeId || item.senderEmployeeId || item.targetEmployeeId);
+    const senderPhoto = counterpartPhoto || "";
+    const avatarClass = senderPhoto ? "history-avatar has-photo" : "history-avatar";
+    row.innerHTML = `
+      <time>${historyTimeMarkup(item)}</time>
+      <div class="history-main">
+        <strong>${escapeHtml(item.content || "-")}</strong>
+        <span>${escapeHtml(senderName)} · ${escapeHtml(item.action === "received" ? "받음" : "보냄")}</span>
+        <small>씨앗/열매 ${escapeHtml(berryText)}</small>
+      </div>
+      <span class="${Number(item.delta) < 0 ? "history-delta minus" : Number(item.delta) > 0 ? "history-delta plus" : "history-delta"}">${escapeHtml(fmtDelta(item.delta))}</span>
+      <span class="${avatarClass}"${avatarStyle(senderPhoto)}>${senderPhoto ? "" : escapeHtml(getInitial(senderName))}</span>
+    `;
+    body.appendChild(row);
+  });
+}
+
+async function refreshHistory({ silent = false } = {}) {
+  const body = $("historyBody");
+  try {
+    syncHistoryDateControls();
+    body.innerHTML = '<div class="history-empty">선택한 날짜 내역을 불러오는 중입니다...</div>';
+    const query = new URLSearchParams({
+      date: selectedHistoryDate,
+      tz: String(new Date().getTimezoneOffset()),
+    });
+    const data = await api(`/api/history?${query.toString()}`);
+    renderHistory(data.items || []);
+  } catch (err) {
+    body.innerHTML = `<div class="history-empty">내역 조회 실패: ${escapeHtml(err.message)}</div>`;
+    if (!silent) toast(`내역 조회 실패: ${err.message}`);
+  }
+}
+
+async function refresh({ silent = false, forceBalance = false } = {}) {
+  try {
+    const state = forceBalance && isUnlocked()
+      ? await api("/api/refresh", {})
+      : await api("/api/status");
+    renderState(state);
+    await loadWorklogProjects();
+  } catch (err) {
+    if (String(err.message || "").includes("로그인") || String(err.message || "").includes("세션")) {
+      clearAuthenticatedUi();
+      return;
+    }
+    if (!silent) toast(`상태 조회 실패: ${err.message}`);
+  }
+}
+
+async function refreshBalance() {
+  if (!isUnlocked()) {
+    toast("먼저 로그인하세요.");
+    return;
+  }
+  try {
+    setBusy(true);
+    toast("FOREST API를 다시 조회 중입니다...");
+    const state = await api("/api/refresh", {});
+    renderState(state);
+    toast(`조회 완료: 씨앗 ${fmtNumber(state.lastSeedCount)}개 / 열매 ${fmtNumber(state.lastBerryCount)}개`);
+    if (!$("historyModal").classList.contains("hidden")) {
+      await refreshHistory({ silent: true });
+    }
+  } catch (err) {
+    toast(`새로고침 실패: ${err.message}`);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function setIntervalMinutes(minutes) {
+  if (!isUnlocked()) {
+    toast("먼저 로그인하세요.");
+    return;
+  }
+  try {
+    setBusy(true);
+    const state = await api("/api/interval", { minutes });
+    renderState(state);
+    toast(`전송 시간을 ${intervalMinutes(state)}분으로 설정했습니다.`);
+  } catch (err) {
+    toast(`전송 시간 변경 실패: ${err.message}`);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function renderResults(results) {
+  const box = $("results");
+  box.innerHTML = "";
+  if (!results.length) {
+    box.innerHTML = '<div class="empty">검색 결과가 없습니다.</div>';
+    return;
+  }
+  results.forEach((person) => {
+    const item = document.createElement("div");
+    item.className = "person";
+    item.innerHTML = `
+      <div>
+        <strong>${escapeHtml(employeeLabel(person.emp_nm, person.emp_id))}</strong>
+        <small>${escapeHtml(person.dept_nm || "-")} · ${escapeHtml(person.pos_nm || "-")}</small>
+      </div>
+      <div class="person-actions">
+        <button type="button" data-action="select">선택</button>
+        <button type="button" data-action="select-on">선택하고 켜기</button>
+      </div>
+    `;
+    item.querySelector('[data-action="select"]').addEventListener("click", async () => {
+      try {
+        setBusy(true);
+        const state = await api("/api/target", person);
+        renderState(state);
+        $("results").innerHTML = "";
+        $("searchInput").value = "";
+        toast(`${person.emp_nm} 직원으로 설정했습니다.`);
+      } catch (err) {
+        toast(`대상 설정 실패: ${err.message}`);
+      } finally {
+        setBusy(false);
+      }
+    });
+    item.querySelector('[data-action="select-on"]').addEventListener("click", async () => {
+      try {
+        setBusy(true);
+        await api("/api/target", person);
+        const state = await api("/api/on", {});
+        renderState(state);
+        $("results").innerHTML = "";
+        $("searchInput").value = "";
+        toast(`${person.emp_nm} 직원으로 설정하고 자동전송을 켰습니다.`);
+      } catch (err) {
+        toast(`자동전송 시작 실패: ${err.message}`);
+      } finally {
+        setBusy(false);
+      }
+    });
+    box.appendChild(item);
+  });
+}
+
+function renderWorklogResults(results) {
+  const box = $("worklogResults");
+  box.innerHTML = "";
+  if (!results.length) {
+    box.innerHTML = '<div class="empty">검색 결과가 없습니다.</div>';
+    return;
+  }
+  results.forEach((person) => {
+    const item = document.createElement("div");
+    item.className = "person";
+    item.innerHTML = `
+      <div>
+        <strong>${escapeHtml(employeeLabel(person.emp_nm, person.emp_id))}</strong>
+        <small>${escapeHtml(person.dept_nm || "-")} · ${escapeHtml(person.pos_nm || "-")}</small>
+      </div>
+      <div class="person-actions">
+        <button type="button" data-action="select">선택</button>
+      </div>
+    `;
+    const selectWorklogPerson = async () => {
+      try {
+        setBusy(true);
+        pendingWorklogTarget = {
+          emp_id: person.emp_id,
+          emp_nm: person.emp_nm,
+          dept_nm: person.dept_nm,
+          pos_nm: person.pos_nm,
+          duty_id: person.duty_id,
+        };
+        renderWorklogState(currentState);
+        $("worklogResults").innerHTML = "";
+        $("worklogSearchInput").value = "";
+        const state = await api("/api/worklog-target", person);
+        pendingWorklogTarget = null;
+        renderState(state);
+        toast(`${person.emp_nm} 직원으로 설정했습니다.`);
+      } catch (err) {
+        toast(`업무일지 직원 설정 실패: ${err.message}`);
+      } finally {
+        setBusy(false);
+      }
+    };
+    item.querySelector('[data-action="select"]').addEventListener("click", selectWorklogPerson);
+    item.addEventListener("dblclick", selectWorklogPerson);
+    box.appendChild(item);
+  });
+}
+
+$("loginBtn").addEventListener("click", async () => {
+  const id = $("loginId").value.trim();
+  const password = $("loginPw").value;
+  if (!id || !password) {
+    toast("아이디와 비밀번호를 입력하세요.");
+    return;
+  }
+  try {
+    setBusy(true);
+    const result = await api("/api/login", { id, password });
+    saveRememberedLogin(id, password);
+    currentOwnerKey = result.ownerKey || "";
+    saveFruitSession(result.sessionToken || "");
+    sessionStorage.setItem(sessionKey, "1");
+    if (!$("rememberLogin").checked) $("loginPw").value = "";
+    toast(`${result.user || "사용자"} 로그인 완료`);
+    await loadProfileSettings({ silent: true });
+    await refresh({ silent: true });
+  } catch (err) {
+    sessionStorage.removeItem(sessionKey);
+    renderState(currentState);
+    toast(`로그인 실패: ${err.message}`);
+  } finally {
+    setBusy(false);
+  }
+});
+
+$("resumeBtn").addEventListener("click", async () => {
+  sessionStorage.setItem(sessionKey, "1");
+  storeRemove(loggedOutKey);
+  renderState(currentState);
+  await loadProfileSettings({ silent: true });
+  toast("앱을 열었습니다.");
+});
+
+$("logoutBtn").addEventListener("click", async () => {
+  try {
+    setBusy(true);
+    const state = await api("/api/logout", {});
+    clearSessionStorage();
+    sessionStorage.removeItem(sessionKey);
+    renderState(state);
+    $("results").innerHTML = "";
+    $("searchInput").value = "";
+    loadRememberedLogin();
+    closeHistoryModal();
+    toast("로그아웃했습니다. 이 계정의 모든 기기 세션을 종료했습니다.");
+  } catch (err) {
+    if (String(err.message || "").includes("로그인") || String(err.message || "").includes("세션")) {
+      clearAuthenticatedUi();
+      toast("이미 로그아웃된 세션입니다.");
+    } else {
+      toast(`로그아웃 실패: ${err.message}`);
+    }
+  } finally {
+    setBusy(false);
+  }
+});
+
+function openHistoryModal() {
+  if (!selectedHistoryDate) selectedHistoryDate = localDateValue(new Date());
+  syncHistoryDateControls();
+  $("historyModal").classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  refreshHistory();
+}
+
+async function openSettingsModal() {
+  $("settingsModal").classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  await loadProfileSettings({ silent: true });
+  pendingAppearanceSettings = appearanceSettings();
+  updateAppearanceSelection(pendingAppearanceSettings);
+  scrollSelectedAppearanceIntoView();
+}
+
+async function openProfileModal() {
+  const senderLabel = isUnlocked()
+    ? personNameLabel(currentState.loginUser || currentState.senderEmployeeName, currentSenderEmployeeId())
+    : $("heroTitleText").textContent;
+  const openedPhoto = currentSenderPhoto();
+  updateProfileUi(senderLabel, isUnlocked(), openedPhoto);
+  $("profileModal").classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  if (!isUnlocked()) return;
+  try {
+    const latestState = await api("/api/status");
+    renderState(latestState);
+    if (!$("profileModal").classList.contains("hidden")) {
+      const latestLabel = personNameLabel(currentState.loginUser || currentState.senderEmployeeName, currentSenderEmployeeId());
+      updateProfileUi(latestLabel, true, currentSenderPhoto() || openedPhoto);
+    }
+  } catch (_err) {
+    if (!$("profileModal").classList.contains("hidden")) {
+      updateProfileUi(senderLabel, true, currentSenderPhoto() || openedPhoto);
+    }
+  }
+}
+
+function closeSettingsModal() {
+  $("settingsModal").classList.add("hidden");
+  pendingAppearanceSettings = null;
+  applyAppearance();
+  syncModalOpenState();
+}
+
+function closeProfileModal() {
+  $("profileModal").classList.add("hidden");
+  if (isUnlocked()) {
+    renderState(currentState);
+  } else {
+    updateProfileUi("fingerfruit", false, "");
+  }
+  syncModalOpenState();
+}
+
+function closeHistoryModal() {
+  $("historyModal").classList.add("hidden");
+  syncModalOpenState();
+}
+
+function releaseNotesSnoozed(info = latestAppInfo) {
+  if (!info?.latestVersion) return true;
+  try {
+    const snooze = JSON.parse(storeGet(releaseNotesSnoozeKey) || "null");
+    return snooze?.version === info.latestVersion && Number(snooze.until || 0) > Date.now();
+  } catch (_err) {
+    storeRemove(releaseNotesSnoozeKey);
+    return false;
+  }
+}
+
+function showReleaseNotesIfNeeded() {
+  const info = latestAppInfo;
+  if (releaseNotesShownThisSession || !isUnlocked() || !info?.latestVersion) return;
+  const installed = installedAppVersion();
+  if (compareVersions(info.latestVersion, installed) !== 0) return;
+  if (info.releaseNotesVersion && info.releaseNotesVersion !== info.latestVersion) return;
+  const notes = Array.isArray(info.releaseNotes) ? info.releaseNotes.filter(Boolean) : [];
+  if (!notes.length || releaseNotesSnoozed(info)) return;
+  releaseNotesShownThisSession = true;
+  $("releaseNotesTitle").textContent = `v${info.latestVersion} 수정사항`;
+  $("releaseNotesVersion").textContent = `v${info.latestVersion} 업데이트 내용`;
+  $("releaseNotesList").innerHTML = notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("");
+  $("releaseNotesSnooze").checked = false;
+  $("releaseNotesModal").classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+
+function closeReleaseNotesModal() {
+  if ($("releaseNotesSnooze").checked && latestAppInfo?.latestVersion) {
+    storeSet(releaseNotesSnoozeKey, JSON.stringify({
+      version: latestAppInfo.latestVersion,
+      until: Date.now() + 7 * 24 * 60 * 60 * 1000,
+    }));
+  }
+  $("releaseNotesModal").classList.add("hidden");
+  syncModalOpenState();
+}
+
+function closeTopModal() {
   if (isModalVisible("worklogCalendarModal")) {
     closeWorklogCalendar();
     return true;
