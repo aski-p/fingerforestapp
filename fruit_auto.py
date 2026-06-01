@@ -1052,6 +1052,25 @@ def history_date_from_month_day(month, day):
         return None
 
 
+def observed_time_matches_history_date(value, history_date):
+    observed = parse_iso(value)
+    if not observed or not history_date:
+        return False
+    return observed.astimezone(KST).date().isoformat() == str(history_date)
+
+
+def api_order_history_time(history_date, ordinal, spacing_minutes=5):
+    try:
+        day = dt.date.fromisoformat(str(history_date))
+        offset = max(0, int(ordinal or 0)) * spacing_minutes
+    except (TypeError, ValueError):
+        return None
+    return (
+        dt.datetime.combine(day, dt.time(9, 0), tzinfo=KST)
+        + dt.timedelta(minutes=offset)
+    ).astimezone(dt.timezone.utc).replace(microsecond=0).isoformat()
+
+
 def official_history_fingerprint(row):
     payload = {
         "ownerKey": row.get("ownerKey"),
@@ -1689,14 +1708,7 @@ def remove_future_observed_history_times(rows):
 
 
 def sort_history_rows(rows):
-    def sort_key(index_row):
-        index, row = index_row
-        row_time = parse_iso(row.get("at"))
-        if row_time:
-            return (0, -row_time.timestamp(), index)
-        return (1, index, 0)
-
-    return [row for _index, row in sorted(enumerate(rows), key=sort_key)]
+    return list(rows)
 
 
 def official_history(limit=40, owner_key=None, date=None, timezone_offset_minutes=0):
@@ -1717,6 +1729,7 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
     used_local_indexes = set()
     employee_hints = local_history_hints_by_name(local_events)
     rows = []
+    seed_api_ordinal_by_date = {}
     for row in content:
         day = parse_int(str(row.get("stdDt") or "").replace("일", ""), None)
         if selected_day is not None and day != selected_day:
@@ -1768,6 +1781,9 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
                 "historyKind": "seed" if is_seed_history else "berry",
         }
         if is_seed_history:
+            seed_api_ordinal = seed_api_ordinal_by_date.get(history_date, 0)
+            seed_api_ordinal_by_date[history_date] = seed_api_ordinal + 1
+            item["_apiOrderTime"] = api_order_history_time(history_date, seed_api_ordinal)
             item["_officialSeedFingerprint"] = official_seed_history_fingerprint(item)
         else:
             item["_officialFingerprint"] = official_history_fingerprint(item)
@@ -1788,9 +1804,12 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
             fingerprint = row.get("_officialSeedFingerprint")
             occurrence_by_fingerprint[fingerprint] = occurrence_by_fingerprint.get(fingerprint, 0) + 1
             first_seen_at = lookup.get((fingerprint, occurrence_by_fingerprint[fingerprint]))
-            if first_seen_at and not row.get("at"):
+            if first_seen_at and observed_time_matches_history_date(first_seen_at, row.get("historyDate")) and not row.get("at"):
                 row["at"] = first_seen_at
                 row["_matchedTimeSource"] = "seed_observed"
+            elif row.get("_apiOrderTime") and not row.get("at"):
+                row["at"] = row.get("_apiOrderTime")
+                row["_matchedTimeSource"] = "api_order"
     berry_rows_by_date = {}
     for row in rows:
         if row.get("historyKind") != "seed" and row.get("historyDate"):
@@ -1813,6 +1832,8 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
     for row in rows:
         if not row.get("at"):
             row["timeSource"] = "missing"
+        elif row.get("_matchedTimeSource") == "api_order":
+            row["timeSource"] = "api_order"
         elif row.get("_matchedTimeSource") == "seed_observed":
             row["timeSource"] = "seed_observed"
         elif row.get("_matchedTimeSource") == "observed_db":
@@ -1827,6 +1848,7 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
     for row in rows:
         row.pop("_officialFingerprint", None)
         row.pop("_officialSeedFingerprint", None)
+        row.pop("_apiOrderTime", None)
         row.pop("_matchedTimeSource", None)
         row.pop("_dropUnpairedReceived", None)
         row.pop("ownerKey", None)
@@ -3123,6 +3145,27 @@ def normalize_schedule_dates(dates, reject_blocked=True):
     return result
 
 
+def prune_expired_schedule_dates(dates, schedule_time, account=None, now=None):
+    result = []
+    now = now or dt.datetime.now(dt.timezone.utc)
+    local_now = now.astimezone(KST)
+    hour, minute = [int(part) for part in normalize_schedule_time(schedule_time).split(":")]
+    account = account or {}
+    for text in normalize_schedule_dates(dates, reject_blocked=False):
+        try:
+            day = dt.date.fromisoformat(text)
+        except ValueError:
+            continue
+        scheduled = dt.datetime.combine(day, dt.time(hour, minute), tzinfo=KST)
+        if scheduled <= local_now:
+            continue
+        if worklog_already_completed_for_day(account, day):
+            continue
+        if text not in result:
+            result.append(text)
+    return result
+
+
 def normalize_schedule_time(value):
     text = str(value or DEFAULT_STATE["worklogScheduleTime"]).strip()
     try:
@@ -3159,11 +3202,17 @@ def set_worklog_settings(payload, owner_key=None):
     target_position_name = payload.get("targetPositionName", state.get("worklogTargetPositionName"))
     target_duty_id = payload.get("targetDutyId", state.get("worklogTargetDutyId"))
     saved_at = now_iso()
+    schedule_time = normalize_schedule_time(payload.get("scheduleTime", state.get("worklogScheduleTime")))
+    schedule_dates = prune_expired_schedule_dates(
+        payload.get("scheduleDates", state.get("worklogScheduleDates")),
+        schedule_time,
+        state,
+    )
     next_values = {
         "worklogEnabled": enabled,
         "worklogScheduleDays": normalize_schedule_days(payload.get("scheduleDays", state.get("worklogScheduleDays"))),
-        "worklogScheduleDates": normalize_schedule_dates(payload.get("scheduleDates", state.get("worklogScheduleDates"))),
-        "worklogScheduleTime": normalize_schedule_time(payload.get("scheduleTime", state.get("worklogScheduleTime"))),
+        "worklogScheduleDates": schedule_dates,
+        "worklogScheduleTime": schedule_time,
         "worklogSeedCount": seed_count,
         "worklogSeedMessage": str(payload.get("seedMessage", state.get("worklogSeedMessage") or "") or ""),
         "worklogTargetEmployeeId": target_employee_id,

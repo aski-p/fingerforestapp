@@ -15,7 +15,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV85";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "2.7.0";
+const appVersion = "2.9.0";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1035,6 +1035,20 @@ function parseLocalDateValue(value) {
 function worklogBlockedDateReason(value) {
   const date = parseLocalDateValue(value);
   if (!date) return "날짜 오류";
+  const scheduleTime = $("worklogTimeInput")?.value || currentState.worklogScheduleTime || "09:05";
+  const [hour, minute] = String(scheduleTime).split(":").map((part) => Number(part));
+  const scheduled = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    Number.isFinite(hour) ? hour : 9,
+    Number.isFinite(minute) ? minute : 5,
+    0,
+    0
+  );
+  if (scheduled <= new Date()) return "지난 예약";
+  const completedDate = String(currentState.worklogLastRunKey || "").split("T", 1)[0];
+  if (completedDate && completedDate === value) return "이미 전송 완료";
   const day = date.getDay();
   if (day === 0) return "주말";
   if (day === 6) return "주말";
@@ -1325,7 +1339,9 @@ function renderWorklogCalendar() {
 
 function openWorklogCalendar() {
   calendarDraftDates = selectedWorklogDates.filter(isWorklogAllowedDate);
-  const anchor = selectedWorklogDates[0] || localDateValue(new Date());
+  selectedWorklogDates = calendarDraftDates;
+  renderWorklogDates();
+  const anchor = calendarDraftDates[0] || localDateValue(new Date());
   const [year, month] = anchor.split("-").map(Number);
   worklogCalendarMonth = new Date(year || new Date().getFullYear(), (month || new Date().getMonth() + 1) - 1, 1);
   renderWorklogCalendar();
