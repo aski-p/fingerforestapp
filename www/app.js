@@ -14,7 +14,7 @@ const profilePhotoKey = "fruitProfilePhoto";
 const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV85";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "1.1.9";
+const appVersion = "1.2.0";
 const primaryApiBaseUrl = "https://jobs-maple-readily-apart.trycloudflare.com";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBase";
@@ -676,6 +676,7 @@ function isAuthError(data, response) {
 function clearAuthenticatedUi() {
   clearSessionStorage();
   sessionStorage.removeItem(sessionKey);
+  toast("");
   $("results").innerHTML = "";
   $("worklogResults").innerHTML = "";
   $("searchInput").value = "";
@@ -1958,7 +1959,12 @@ $("worklogRunBtn").addEventListener("click", async () => {
     renderState(result.state || currentState);
     toast(`업무일지를 작성했습니다. ${result.projectName || ""}`);
   } catch (err) {
-    toast(`업무일지 즉시 작성 실패: ${err.message}`);
+    if (isAuthError({ error: err.message }, { status: 401 }) || !isUnlocked()) {
+      clearAuthenticatedUi();
+      toast("");
+    } else {
+      toast(`업무일지 즉시 작성 실패: ${err.message}`);
+    }
   } finally {
     setBusy(false);
   }
