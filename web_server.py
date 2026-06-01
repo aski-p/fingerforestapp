@@ -21,9 +21,10 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "2.5.0"
+APP_VERSION = "2.6.0"
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "앱 아이콘을 더 깔끔한 새 디자인으로 교체했습니다.",
     "앱과 설치 링크의 기본 접속 기준을 Railway 배포 주소로 고정했습니다.",
     "내역조회에서 공식 내역 시간 매칭이 없을 때도 관측 시간을 표시하도록 보강했습니다.",
     "업무일지 달력을 월화수목금토일 순서로 표시하도록 조정했습니다.",

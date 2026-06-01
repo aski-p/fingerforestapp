@@ -1,30 +1,35 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="bg" x1="170" y1="80" x2="870" y2="940" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#fff1f2"/>
-      <stop offset=".42" stop-color="#ef4444"/>
-      <stop offset="1" stop-color="#991b1b"/>
-    </linearGradient>
-    <linearGradient id="fruit" x1="300" y1="250" x2="735" y2="805" gradientUnits="userSpaceOnUse">
+    <linearGradient id="bg" x1="184" y1="96" x2="840" y2="920" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#fff7ed"/>
-      <stop offset=".52" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#ffe4e6"/>
+      <stop offset=".48" stop-color="#fef3c7"/>
+      <stop offset="1" stop-color="#dbeafe"/>
     </linearGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
-      <feDropShadow dx="0" dy="34" stdDeviation="32" flood-color="#7f1d1d" flood-opacity=".38"/>
+    <linearGradient id="fruit" x1="326" y1="265" x2="693" y2="740" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fb7185"/>
+      <stop offset=".58" stop-color="#f43f5e"/>
+      <stop offset="1" stop-color="#be123c"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="515" y1="180" x2="766" y2="381" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#34d399"/>
+      <stop offset="1" stop-color="#047857"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="28" stdDeviation="28" flood-color="#7f1d1d" flood-opacity=".22"/>
     </filter>
   </defs>
-  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
-  <circle cx="210" cy="198" r="118" fill="#ffffff" opacity=".24"/>
-  <circle cx="840" cy="810" r="172" fill="#450a0a" opacity=".18"/>
-  <path d="M558 266c31-88 112-137 213-129-3 104-76 184-198 195-22 2-32-37-15-66z" fill="#7f1d1d"/>
-  <path d="M500 320c-34-55-84-80-157-74 18 71 71 115 148 115 20 0 23-27 9-41z" fill="#fb7185" opacity=".96"/>
+  <rect width="1024" height="1024" rx="244" fill="url(#bg)"/>
+  <circle cx="224" cy="212" r="88" fill="#ffffff" opacity=".46"/>
+  <circle cx="820" cy="790" r="150" fill="#60a5fa" opacity=".16"/>
+  <path d="M542 295c44-96 133-145 256-129-13 119-104 190-245 198-24 1-27-43-11-69z" fill="url(#leaf)"/>
+  <path d="M501 333c-40-64-95-96-173-88 13 82 78 134 165 135 25 0 25-31 8-47z" fill="#10b981"/>
   <path
-    d="M519 346c60-61 179-65 240 8 55 66 58 183 22 280-45 120-131 226-221 226-36 0-58-21-101-21-43 0-67 21-102 21-88 0-175-106-220-226-38-100-30-215 29-282 64-72 174-65 239-8 38 34 75 34 114 2z"
+    d="M518 364c66-65 181-65 244 6 66 75 67 205 23 318-51 132-146 220-232 220-42 0-70-24-113-24-42 0-71 24-112 24-86 0-181-88-232-220-44-113-43-243 23-318 63-71 179-71 244-6 49 49 106 49 155 0z"
     fill="url(#fruit)"
-    filter="url(#shadow)"
+    filter="url(#softShadow)"
   />
-  <circle cx="742" cy="444" r="76" fill="#ef4444"/>
-  <path d="M365 660h292" stroke="#dc2626" stroke-width="60" stroke-linecap="round"/>
-  <path d="M660 552l108 108-108 108" fill="none" stroke="#dc2626" stroke-width="60" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M353 560c40-56 105-92 178-92 47 0 91 15 126 40" fill="none" stroke="#fff7ed" stroke-width="44" stroke-linecap="round"/>
+  <path d="M326 670c48-76 124-119 205-119 62 0 119 25 161 67" fill="none" stroke="#fff7ed" stroke-width="44" stroke-linecap="round"/>
+  <path d="M414 765c34-40 73-59 119-59 39 0 73 14 103 43" fill="none" stroke="#fff7ed" stroke-width="44" stroke-linecap="round"/>
+  <circle cx="708" cy="458" r="52" fill="#fef3c7" opacity=".92"/>
 </svg>
