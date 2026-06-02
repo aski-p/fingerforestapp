@@ -1112,18 +1112,17 @@ function fmtTime(value) {
 
 function fmtHistoryTime(item) {
   const label = item.timeLabel || (item.action === "received" ? "받음" : "보냄");
-  if (!item.at) return item.displayTime ? `${item.displayTime} ${label}` : label;
-  const time = fmtTime(item.at);
+  const timeValue = item.at || item.observedAt;
+  if (!timeValue) return label;
+  const time = fmtTime(timeValue);
   return `${label} ${time}`;
 }
 
 function historyTimeMarkup(item) {
   const label = item.timeLabel || (item.action === "received" ? "받음" : "보냄");
-  if (!item.at) {
-    const day = item.displayTime ? `${item.displayTime} ` : "";
-    return `<span class="history-time-label">${escapeHtml(day + label)}</span>`;
-  }
-  return `<span class="history-time-label">${escapeHtml(label)}</span><span class="history-time-clock">${escapeHtml(fmtTime(item.at))}</span>`;
+  const timeValue = item.at || item.observedAt;
+  if (!timeValue) return `<span class="history-time-label">${escapeHtml(label)}</span>`;
+  return `<span class="history-time-label">${escapeHtml(label)}</span><span class="history-time-clock">${escapeHtml(fmtTime(timeValue))}</span>`;
 }
 
 function fmtNumber(value) {
