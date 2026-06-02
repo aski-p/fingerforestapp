@@ -1385,6 +1385,7 @@ def sync_official_history_observations(owner_key, employee_id, history_date, row
 
 def local_transfer_history_for_official(owner_key, employee_id, date=None, timezone_offset_minutes=0, limit=5000):
     events = []
+    received_keys = set()
     for event in reversed(read_jsonl(HISTORY_PATH, limit)):
         if not is_transfer_history_event(event) and not is_seed_transfer_history_event(event):
             continue
@@ -1395,6 +1396,15 @@ def local_transfer_history_for_official(owner_key, employee_id, date=None, timez
         if not sent_by_me and not received_by_me:
             continue
         events.append(event)
+        if event.get("action") == "received":
+            received_keys.add(
+                (
+                    str(event.get("ownerKey") or ""),
+                    str(event.get("targetEmployeeId") or ""),
+                    str(event.get("at") or ""),
+                    parse_int(event.get("berries"), 0),
+                )
+            )
     for event in reversed(read_jsonl(LOG_PATH, limit)):
         if event.get("action") != "send_delay_wait":
             continue
@@ -1416,6 +1426,14 @@ def local_transfer_history_for_official(owner_key, employee_id, date=None, timez
             "ownerKey": owner_key,
             "message": event.get("message") or "",
         }
+        received_key = (
+            str(received_event.get("ownerKey") or ""),
+            str(received_event.get("targetEmployeeId") or ""),
+            str(received_event.get("at") or ""),
+            parse_int(received_event.get("berries"), 0),
+        )
+        if received_key in received_keys:
+            continue
         if date and event_local_date(received_event, timezone_offset_minutes) != date:
             continue
         events.append(received_event)
@@ -1438,6 +1456,69 @@ def transfer_history_fingerprint_exists(owner_key, fingerprint, action=None, occ
                 continue
             return True
     return False
+
+
+def transfer_history_event_exists(owner_key, action, at, target_employee_id, berries, limit=20000):
+    if not at or not target_employee_id:
+        return False
+    for event in reversed(read_jsonl(HISTORY_PATH, limit)):
+        if not is_transfer_history_event(event):
+            continue
+        if str(event.get("ownerKey") or "") != str(owner_key or ""):
+            continue
+        if event.get("action") != action:
+            continue
+        if str(event.get("at") or "") != str(at or ""):
+            continue
+        if str(event.get("targetEmployeeId") or "") != str(target_employee_id or ""):
+            continue
+        if parse_int(event.get("berries"), None) != parse_int(berries, None):
+            continue
+        return True
+    return False
+
+
+def record_balance_detected_received_history(
+    owner_key,
+    receiver_employee_id,
+    receiver_name,
+    receiver_position,
+    sender_employee_id,
+    sender_name,
+    sender_position,
+    berries,
+    received_at,
+    seeds=None,
+    remaining=None,
+):
+    received_at = parse_iso(received_at)
+    if not received_at:
+        return None
+    at = received_at.replace(microsecond=0).isoformat()
+    if transfer_history_event_exists(owner_key, "received", at, receiver_employee_id, berries):
+        return None
+    event = {
+        "type": "transfer",
+        "action": "received",
+        "at": at,
+        "timeSource": "balance_detected",
+        "berries": berries,
+        "seeds": seeds,
+        "remaining": remaining,
+        "receiverRemaining": remaining if remaining is not None else berries,
+        "sender": sender_name,
+        "senderEmployeeName": sender_name,
+        "senderEmployeeId": sender_employee_id,
+        "senderPositionName": sender_position,
+        "target": receiver_name,
+        "targetEmployeeName": receiver_name,
+        "targetEmployeeId": receiver_employee_id,
+        "targetPositionName": receiver_position,
+        "ownerKey": owner_key,
+        "message": "열매 선물",
+    }
+    record_transfer_history(event)
+    return event
 
 
 def official_received_history_rows(client, owner_key, employee_id, employee_name, employee_position, history_date):
@@ -1682,11 +1763,6 @@ def pair_official_history_transfer_times(rows):
                 best_rank = rank
         if best_index is not None:
             paired_received_indexes.add(best_index)
-    for received_index, received in enumerate(rows):
-        if received.get("action") == "received" and received.get("historyKind") != "seed":
-            if received_index in paired_received_indexes:
-                continue
-            received["_dropUnpairedReceived"] = True
     return rows
 
 
@@ -2973,6 +3049,23 @@ def check_once(dry_run=False, force=False, owner_key=None):
             pending_received_at,
             window_seconds=interval_seconds + 120,
         )
+        balance_received_event = None
+        if not received_events:
+            balance_received_event = record_balance_detected_received_history(
+                owner_key,
+                sender_employee_id,
+                sender_employee_name,
+                employee_position(employee),
+                target.get("emp_id"),
+                target_name,
+                employee_position(target),
+                berries,
+                pending_received_at,
+                seeds=seeds,
+                remaining=berries,
+            )
+            if balance_received_event:
+                received_events = [balance_received_event]
         if received_events:
             state["lastReceivedHistoryAt"] = received_events[0].get("at")
             state["lastReceivedHistoryCount"] = len(received_events)

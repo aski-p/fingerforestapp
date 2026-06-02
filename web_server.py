@@ -21,9 +21,10 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "2.9"
+APP_VERSION = "3.0"
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "업무일지 달력 요일이 월화수목금토일 한 줄로 고정되도록 배포 CSS를 수정했습니다.",
     "내역조회 순서를 FOREST API 화면 순서와 동일하게 유지하도록 수정했습니다.",
     "업무일지 날짜 선택 버튼이 깨지는 함수 호출 오류를 수정했습니다.",
     "업무일지 달력에서 지난 예약 날짜와 이미 전송 완료된 날짜가 계속 선택된 것처럼 보이는 문제를 수정했습니다.",
