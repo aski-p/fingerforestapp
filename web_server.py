@@ -21,13 +21,14 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.2.7"
+APP_VERSION = "3.2.8"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_HISTORY_MESSAGE_LIMIT = 10
 CHAT_INPUT_CHAR_LIMIT = 8000
 CHAT_OUTPUT_TOKEN_LIMIT = 800
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "열매 보내기 화면의 대상 직원, 전송 설정, 자동전송을 하나의 카드 안에 합쳐 화면 흐름을 정리했습니다.",
     "Claude 채팅창 메시지 영역에 독립 스크롤을 적용해 긴 답변이 입력창과 화면을 밀어내지 않도록 수정했습니다.",
     "키보드가 올라왔을 때 보이는 화면 높이에 맞춰 Claude 채팅창 위치와 높이를 다시 계산하도록 수정했습니다.",
     "열매 보내기/업무일지 좌우 전환은 상단 작업 메뉴 영역에서만 스와이프되도록 제한했습니다.",

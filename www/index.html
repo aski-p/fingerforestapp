@@ -7,7 +7,7 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <link rel="icon" href="/icons/apple-icon-192.png" type="image/png">
-    <link rel="stylesheet" href="/styles.css?v=3.2.7">
+    <link rel="stylesheet" href="/styles.css?v=3.2.8">
     <title>fingerfruit</title>
   </head>
   <body class="logged-out">
@@ -114,64 +114,66 @@
 
         <div id="workspacePager" class="workspace-pager">
           <section id="fruitSendPanel" class="workspace-slide fruit-send-panel" aria-label="열매 보내기">
-            <section class="card getter-menu-card getter-card-target">
-              <div class="section-title">
-                <div>
-                  <h2>대상 직원</h2>
+            <section class="card getter-menu-card getter-card-fruit fruit-send-card">
+              <div class="fruit-card-section getter-card-target">
+                <div class="section-title">
+                  <div>
+                    <h2>대상 직원</h2>
+                  </div>
+                  <span id="targetBadge" class="badge neutral">미선택</span>
                 </div>
-                <span id="targetBadge" class="badge neutral">미선택</span>
+                <div class="searchrow">
+                  <input id="searchInput" placeholder="이름, 사번, 부서 검색">
+                  <button id="searchBtn" type="button">검색</button>
+                </div>
+                <div id="results" class="results" aria-live="polite"></div>
               </div>
-              <div class="searchrow">
-                <input id="searchInput" placeholder="이름, 사번, 부서 검색">
-                <button id="searchBtn" type="button">검색</button>
-              </div>
-              <div id="results" class="results" aria-live="polite"></div>
-            </section>
 
-            <section class="card getter-menu-card getter-card-transfer">
-              <div class="section-title">
-                <div>
-                  <h2>열매 보내기</h2>
+              <div class="fruit-card-section getter-card-transfer">
+                <div class="section-title">
+                  <div>
+                    <h2>전송 설정</h2>
+                  </div>
+                  <span id="fruitScheduleBadge" class="badge neutral">대기</span>
                 </div>
-                <span id="fruitScheduleBadge" class="badge neutral">대기</span>
+                <label>
+                  <span>전달 메시지</span>
+                  <input id="giftMessage" placeholder="자동 전달">
+                </label>
+                <label class="berry-count-label">
+                  <span>보낼 열매 수</span>
+                  <div class="berry-count-row">
+                    <input id="sendBerryCount" type="number" min="1" step="1" inputmode="numeric" placeholder="1">
+                    <label class="send-all-option">
+                      <input id="sendAllBerries" type="checkbox">
+                      <span>열매전부</span>
+                    </label>
+                  </div>
+                </label>
+                <button id="messageBtn" type="button" class="secondary">저장</button>
               </div>
-              <label>
-                <span>전달 메시지</span>
-                <input id="giftMessage" placeholder="자동 전달">
-              </label>
-              <label class="berry-count-label">
-                <span>보낼 열매 수</span>
-                <div class="berry-count-row">
-                  <input id="sendBerryCount" type="number" min="1" step="1" inputmode="numeric" placeholder="1">
-                  <label class="send-all-option">
-                    <input id="sendAllBerries" type="checkbox">
-                    <span>열매전부</span>
-                  </label>
-                </div>
-              </label>
-              <button id="messageBtn" type="button" class="secondary">저장</button>
-            </section>
 
-            <section class="control-card getter-menu-card getter-card-auto">
-              <div class="auto-heading">
-                <div class="auto-title-row">
-                  <h2>자동전송</h2>
-                  <label class="switch">
-                    <input id="autoToggle" type="checkbox">
-                    <span></span>
-                  </label>
+              <div class="fruit-card-section control-card getter-card-auto">
+                <div class="auto-heading">
+                  <div class="auto-title-row">
+                    <h2>자동전송</h2>
+                    <label class="switch">
+                      <input id="autoToggle" type="checkbox">
+                      <span></span>
+                    </label>
+                  </div>
+                  <p id="controlHint">켜면 5분마다 한 번씩 보유 열매를 확인합니다.</p>
                 </div>
-                <p id="controlHint">켜면 5분마다 한 번씩 보유 열매를 확인합니다.</p>
-              </div>
-              <div class="interval-control" aria-label="전송 시간 조절">
-                <div>
-                  <span>전송 시간</span>
-                  <strong id="intervalDisplay">10분</strong>
+                <div class="interval-control" aria-label="전송 시간 조절">
+                  <div>
+                    <span>전송 시간</span>
+                    <strong id="intervalDisplay">10분</strong>
+                  </div>
+                  <button id="intervalAddBtn" type="button">+5분</button>
+                  <button id="intervalResetBtn" type="button">리셋</button>
                 </div>
-                <button id="intervalAddBtn" type="button">+5분</button>
-                <button id="intervalResetBtn" type="button">리셋</button>
+                <button id="runBtn" type="button" class="dark">지금 한 번 실행</button>
               </div>
-              <button id="runBtn" type="button" class="dark">지금 한 번 실행</button>
             </section>
           </section>
 
@@ -388,10 +390,10 @@
 
       <p id="toast" class="toast" role="status"></p>
       <footer class="app-footer">
-        <span>v3.2.7 정식버전 · by aski</span>
+        <span>v3.2.8 정식버전 · by aski</span>
         <a id="supportLink" class="support-link" href="https://qr.kakaopay.com/Ej7ruxJDq" target="_blank" rel="noopener" aria-label="카카오페이로 후원하기">후원하기</a>
       </footer>
     </main>
-    <script src="/app.js?v=3.2.7"></script>
+    <script src="/app.js?v=3.2.8"></script>
   </body>
 </html>
