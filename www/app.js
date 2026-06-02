@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.5.3";
+const appVersion = "3.5.4";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1523,7 +1523,7 @@ function closeWorklogSuccessModal() {
 
 let workspaceTransitionTimer = 0;
 let workspaceDragState = null;
-const workspaceSlideEase = "cubic-bezier(.19, 1, .22, 1)";
+const workspaceSlideEase = "cubic-bezier(.25, .8, .25, 1)";
 
 function workspacePanelName(panel) {
   return panel?.id === "worklogPanel" ? "worklog" : "fruit";
@@ -1566,7 +1566,7 @@ function setWorkspaceTab(name, options = {}) {
   const enterOffset = forward ? `${width}px` : `${-width}px`;
   const exitOffset = forward ? `${-width}px` : `${width}px`;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const duration = reducedMotion ? 120 : 300;
+  const duration = reducedMotion ? 120 : 340;
 
   pager.style.height = `${pager.offsetHeight}px`;
   pager.classList.add("is-animating");
@@ -1703,8 +1703,9 @@ function updateWorkspaceDrag(dx) {
   const clampedDx = Math.max(-maxPull, Math.min(maxPull, dx));
   drag.lastDx = clampedDx;
   drag.targetDx = clampedDx;
-  if (drag.raf) window.cancelAnimationFrame(drag.raf);
-  renderWorkspaceDrag();
+  if (!drag.raf) {
+    drag.raf = window.requestAnimationFrame(renderWorkspaceDrag);
+  }
 }
 
 function finishWorkspaceDrag(nextName, commit) {
@@ -1715,7 +1716,7 @@ function finishWorkspaceDrag(nextName, commit) {
   }
 
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const duration = reducedMotion ? 120 : 260;
+  const duration = reducedMotion ? 120 : 300;
   if (drag.raf) {
     window.cancelAnimationFrame(drag.raf);
     drag.raf = 0;
