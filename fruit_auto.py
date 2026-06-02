@@ -716,13 +716,17 @@ def save_web_push_subscription(owner_key, subscription):
         if existing_owner_key == owner_key:
             continue
         existing_subscriptions[:] = [
-            item for item in existing_subscriptions if item.get("endpoint") != endpoint
+            item for item in existing_subscriptions
+            if item.get("endpoint") != endpoint
+            and not (device_id and item.get("deviceId") == device_id)
+            and not (device_id and user_agent and not item.get("deviceId") and item.get("userAgent") == user_agent)
         ]
     owner_subscriptions = subscriptions.setdefault(owner_key, [])
     owner_subscriptions[:] = [
         item for item in owner_subscriptions
         if item.get("endpoint") != endpoint
         and not (device_id and item.get("deviceId") == device_id)
+        and not (device_id and user_agent and not item.get("deviceId") and item.get("userAgent") == user_agent)
     ]
     owner_subscriptions.append(subscription)
     owner_subscriptions[:] = owner_subscriptions[-3:]
@@ -764,6 +768,10 @@ def notify_web_push(payload, owner_keys):
         if not is_push_enabled(owner_key):
             continue
         for subscription in list(subscriptions_by_owner.get(owner_key, [])):
+            if not subscription.get("deviceId"):
+                stale.append((owner_key, subscription.get("endpoint")))
+                log_event({"action": "web_push_legacy_subscription_removed", "ownerKey": owner_key})
+                continue
             request = {
                 "subscription": subscription,
                 "payload": payload,
