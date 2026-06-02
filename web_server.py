@@ -21,7 +21,7 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.1"
+APP_VERSION = "3.1.1"
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
     "내역조회에서 상대 프로필 사진이 로그인 사용자 사진으로 대체 표시되는 문제를 수정했습니다.",
@@ -488,19 +488,7 @@ def wake_daemon():
 
 
 def ensure_daemon_running():
-    if daemon_running():
-        return True
-    log_path = BASE_DIR / "daemon.log"
-    with log_path.open("a", encoding="utf-8") as log:
-        subprocess.Popen(
-            [sys.executable, str(BASE_DIR / "fruit_auto.py"), "daemon"],
-            cwd=str(BASE_DIR.parent.parent),
-            stdin=subprocess.DEVNULL,
-            stdout=log,
-            stderr=log,
-            start_new_session=True,
-        )
-    return True
+    return False
 
 
 def run_check_once(owner_key, force=False):
@@ -745,8 +733,6 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/worklog-settings":
                 fruit_auto.set_worklog_settings(payload, owner_key=owner_key)
                 result = state_response(owner_key)
-                ensure_daemon_running()
-                wake_daemon()
             elif parsed.path == "/api/worklog-run-now":
                 result = fruit_auto.save_worklog_once(owner_key=owner_key, force=True)
                 fruit_auto.notify_result(result)
@@ -754,7 +740,6 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/interval":
                 fruit_auto.set_run_interval(payload.get("minutes"), owner_key=owner_key)
                 result = state_response(owner_key)
-                wake_daemon()
             elif parsed.path == "/api/refresh":
                 fruit_auto.refresh_balance(force=True, owner_key=owner_key)
                 result = state_response(owner_key)
@@ -763,12 +748,9 @@ class Handler(BaseHTTPRequestHandler):
                     fruit_auto.set_target_by_name(payload.get("target_name"))
                 fruit_auto.set_enabled(True, owner_key=owner_key)
                 result = state_response(owner_key)
-                ensure_daemon_running()
-                wake_daemon()
             elif parsed.path == "/api/off":
                 fruit_auto.set_enabled(False, owner_key=owner_key)
                 result = state_response(owner_key)
-                wake_daemon()
             elif parsed.path == "/api/run-now":
                 try:
                     result = run_check_once(owner_key, force=True)

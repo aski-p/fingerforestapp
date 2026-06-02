@@ -26,7 +26,11 @@ LOG_PATH = DATA_DIR / "runs.log"
 HISTORY_PATH = DATA_DIR / "history.log"
 HISTORY_OBSERVATIONS_PATH = DATA_DIR / "history_observations.sqlite3"
 PID_PATH = DATA_DIR / "daemon.pid"
+TICK_LOCK_PATH = DATA_DIR / "tick.lock"
+TICK_CURSOR_PATH = DATA_DIR / "tick_cursor.json"
 WEB_PUSH_SCRIPT_PATH = BASE_DIR / "send_web_push.js"
+DEFAULT_TICK_MAX_SECONDS = 240
+DEFAULT_TICK_MAX_OWNERS = 50
 DEFAULT_RUN_INTERVAL_MINUTES = 5
 MIN_RUN_INTERVAL_MINUTES = 5
 MAX_RUN_INTERVAL_MINUTES = 60
@@ -485,6 +489,59 @@ def release_daemon_pid():
             PID_PATH.unlink()
     except OSError:
         pass
+
+
+def claim_tick_lock():
+    if TICK_LOCK_PATH.exists():
+        try:
+            existing_pid = int(TICK_LOCK_PATH.read_text(encoding="utf-8").strip())
+        except ValueError:
+            existing_pid = None
+        if existing_pid and is_process_alive(existing_pid):
+            raise FruitAutoError(f"tick already running: pid {existing_pid}")
+        try:
+            TICK_LOCK_PATH.unlink()
+        except OSError:
+            pass
+    TICK_LOCK_PATH.write_text(f"{os.getpid()}\n", encoding="utf-8")
+
+
+def release_tick_lock():
+    try:
+        if TICK_LOCK_PATH.exists() and TICK_LOCK_PATH.read_text(encoding="utf-8").strip() == str(os.getpid()):
+            TICK_LOCK_PATH.unlink()
+    except OSError:
+        pass
+
+
+def tick_limits():
+    try:
+        max_seconds = int(os.environ.get("FRUIT_TICK_MAX_SECONDS", DEFAULT_TICK_MAX_SECONDS))
+    except ValueError:
+        max_seconds = DEFAULT_TICK_MAX_SECONDS
+    try:
+        max_owners = int(os.environ.get("FRUIT_TICK_MAX_OWNERS", DEFAULT_TICK_MAX_OWNERS))
+    except ValueError:
+        max_owners = DEFAULT_TICK_MAX_OWNERS
+    return max(30, max_seconds), max(1, max_owners)
+
+
+def rotate_tick_owners(owners):
+    owners = list(owners)
+    if len(owners) <= 1:
+        return owners
+    cursor = load_json(TICK_CURSOR_PATH, {})
+    last_owner = cursor.get("lastOwnerKey")
+    if last_owner not in owners:
+        return owners
+    index = owners.index(last_owner)
+    return owners[index + 1:] + owners[:index + 1]
+
+
+def save_tick_cursor(owner_key):
+    if not owner_key:
+        return
+    save_json(TICK_CURSOR_PATH, {"lastOwnerKey": owner_key, "updatedAt": now_iso()})
 
 
 def read_openclaw_config():
@@ -1829,8 +1886,16 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
         counterpart_position_name = employee_hint.get("positionName") or ""
         counterpart_employee_id = employee_hint.get("employeeId") or ""
         sender_is_me = action == "sent"
-        avatar_employee_id = counterpart_employee_id
-        display_name = display_employee(counterpart, counterpart_position_name)
+        if action == "received":
+            avatar_employee_id = str(sender_employee_id or "")
+            display_name = display_employee(sender_employee_name, sender_position_name)
+            display_employee_id = str(sender_employee_id or "")
+            display_position_name = sender_position_name
+        else:
+            avatar_employee_id = counterpart_employee_id
+            display_name = display_employee(counterpart, counterpart_position_name)
+            display_employee_id = counterpart_employee_id
+            display_position_name = counterpart_position_name
         history_date = history_date_from_month_day(month, day)
         item = {
                 "at": reliable_history_event_time(matched_event),
@@ -1844,7 +1909,8 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
                 "target": counterpart,
                 "targetEmployeeId": counterpart_employee_id,
                 "targetPositionName": counterpart_position_name,
-                "senderEmployeeId": sender_employee_id if sender_is_me else (counterpart_employee_id or sender_employee_id),
+                "senderEmployeeId": display_employee_id,
+                "senderPositionName": display_position_name,
                 "avatarEmployeeId": avatar_employee_id,
                 "displayName": display_name,
                 "senderIsMe": sender_is_me,
@@ -3734,6 +3800,66 @@ def run_daemon():
         release_daemon_pid()
 
 
+def run_tick():
+    try:
+        claim_tick_lock()
+    except FruitAutoError as exc:
+        result = {"action": "skipped", "reason": "tick_already_running", "error": str(exc)}
+        log_event({"action": "tick_skipped", "reason": "already_running", "error": str(exc)})
+        return result
+
+    results = []
+    processed_owners = []
+    started_at = time.time()
+    max_seconds, max_owners = tick_limits()
+    try:
+        owners, next_delay = scheduled_owner_keys()
+        owners = rotate_tick_owners(owners)
+        if not owners:
+            result = {"action": "skipped", "reason": "nothing_due", "nextDelaySeconds": next_delay}
+            log_event({"action": "tick", "result": result})
+            return result
+        for owner_key in owners:
+            if len(processed_owners) >= max_owners:
+                break
+            if time.time() - started_at >= max_seconds:
+                break
+            processed_owners.append(owner_key)
+            try:
+                account = get_account_state(owner_key)
+                if account.get("enabled") and account_next_run_delay(account) <= 0:
+                    result = check_once(owner_key=owner_key)
+                    results.append(result)
+                    if result.get("reason") != "already_attempted_this_interval":
+                        log_event({"action": "tick_transfer", "ownerKey": owner_key, "result": result})
+                    notify_result(result)
+                if account.get("worklogEnabled"):
+                    result = run_worklog_if_due(owner_key)
+                    results.append(result)
+                    if result.get("action") == "worklog_sent":
+                        log_event({"action": "tick_worklog", "ownerKey": owner_key, "result": result})
+                        notify_result(result)
+            except Exception as exc:
+                result = {"action": "failed", "error": str(exc), "ownerKey": owner_key}
+                results.append(result)
+                log_event({"action": "tick_error", "ownerKey": owner_key, "error": str(exc)})
+                notify_result(result)
+        if processed_owners:
+            save_tick_cursor(processed_owners[-1])
+        remaining_due = max(0, len(owners) - len(processed_owners))
+        return {
+            "action": "tick_complete",
+            "processedOwners": len(processed_owners),
+            "remainingDueOwners": remaining_due,
+            "maxOwners": max_owners,
+            "maxSeconds": max_seconds,
+            "elapsedSeconds": int(time.time() - started_at),
+            "results": results,
+        }
+    finally:
+        release_tick_lock()
+
+
 def main():
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -3743,6 +3869,7 @@ def main():
     sub.add_parser("logout")
     sub.add_parser("status")
     sub.add_parser("daemon")
+    sub.add_parser("tick")
     login = sub.add_parser("login")
     login.add_argument("--id", required=True)
     login.add_argument("--password", required=True)
@@ -3777,6 +3904,8 @@ def main():
         elif args.cmd == "daemon":
             run_daemon()
             return 0
+        elif args.cmd == "tick":
+            result = run_tick()
         elif args.cmd == "login":
             result = save_credentials(args.id, args.password)
         elif args.cmd == "search":

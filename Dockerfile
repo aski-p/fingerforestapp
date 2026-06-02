@@ -13,4 +13,4 @@ COPY . .
 
 ENV FRUIT_AUTO_DATA_DIR=/data
 
-CMD ["sh", "-c", "python3 web_server.py 0.0.0.0 ${PORT:-8080}"]
+CMD ["sh", "-c", "python3 start_fingerfruit.py 0.0.0.0 ${PORT:-8080}"]
