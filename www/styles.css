@@ -42,6 +42,12 @@
   text-rendering: optimizeLegibility;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html {
   overflow-x: hidden;
 }
@@ -1089,7 +1095,7 @@ textarea:focus {
   border-radius: 8px;
   padding: 4px;
   background: #f2fbf5;
-  touch-action: pan-y;
+  touch-action: none;
   user-select: none;
 }
 
@@ -1406,6 +1412,7 @@ textarea:focus {
 .worklog-card {
   margin-top: 0;
   padding: 16px;
+  overflow: hidden;
 }
 
 .worklog-block {
@@ -1414,6 +1421,7 @@ textarea:focus {
   margin-top: 16px;
   border-top: 1px solid #eef2f6;
   padding-top: 16px;
+  min-width: 0;
 }
 
 .worklog-card .section-title {
@@ -1429,6 +1437,7 @@ textarea:focus {
 
 .worklog-block label {
   margin-bottom: 0;
+  min-width: 0;
 }
 
 .worklog-block label span {
@@ -1442,14 +1451,18 @@ textarea:focus {
 .worklog-card input,
 .worklog-card select {
   height: 46px;
+  min-width: 0;
 }
 
 .worklog-card textarea {
+  width: 100%;
   min-height: 112px;
+  min-width: 0;
 }
 
 .worklog-card .searchrow {
   grid-template-columns: minmax(0, 1fr) 68px;
+  min-width: 0;
 }
 
 .worklog-card .searchrow button,
