@@ -484,10 +484,8 @@ def app_public_base_url(_handler=None):
 def app_info(handler):
     base_url = app_public_base_url(handler)
     install_url = f"{base_url}/install.html" if base_url else "/install.html"
-    latest_apk = versioned_download_file("fingerfruit-android", "apk") or latest_download_file("fingerfruit-android-v", ".apk")
-    latest_ios = versioned_download_file("fingerfruit-ios", "mobileconfig") or latest_download_file("fingerfruit-ios-v", ".mobileconfig")
-    android_name = latest_apk.name if latest_apk else f"fingerfruit-android-v{APP_VERSION}.apk"
-    ios_name = latest_ios.name if latest_ios else f"fingerfruit-ios-v{APP_VERSION}.mobileconfig"
+    android_name = f"fingerfruit-android-v{APP_VERSION}.apk"
+    ios_name = f"fingerfruit-ios-v{APP_VERSION}.mobileconfig"
     return {
         "latestVersion": APP_VERSION,
         "minSupportedVersion": APP_VERSION,
@@ -628,25 +626,15 @@ class Handler(BaseHTTPRequestHandler):
             root = BASE_DIR
         path = (root / rel).resolve()
         if parsed.path == "/android.apk":
-            latest_apk = versioned_download_file("fingerfruit-android", "apk") or latest_download_file("fingerfruit-android-v", ".apk")
-            if latest_apk:
-                path = latest_apk.resolve()
-                root = latest_apk.parent
+            current_apk = versioned_download_file("fingerfruit-android", "apk")
+            if current_apk:
+                path = current_apk.resolve()
+                root = current_apk.parent
         elif parsed.path == "/ios.mobileconfig":
-            latest_ios = versioned_download_file("fingerfruit-ios", "mobileconfig") or latest_download_file("fingerfruit-ios-v", ".mobileconfig")
-            if latest_ios:
-                path = latest_ios.resolve()
-                root = latest_ios.parent
-        elif parsed.path.startswith("/downloads/fingerfruit-android-v") and parsed.path.endswith(".apk") and not path.exists():
-            latest_apk = latest_download_file("fingerfruit-android-v", ".apk")
-            if latest_apk:
-                path = latest_apk.resolve()
-                root = latest_apk.parent
-        elif parsed.path.startswith("/downloads/fingerfruit-ios-v") and parsed.path.endswith(".mobileconfig") and not path.exists():
-            latest_ios = latest_download_file("fingerfruit-ios-v", ".mobileconfig")
-            if latest_ios:
-                path = latest_ios.resolve()
-                root = latest_ios.parent
+            current_ios = versioned_download_file("fingerfruit-ios", "mobileconfig")
+            if current_ios:
+                path = current_ios.resolve()
+                root = current_ios.parent
         if not str(path).startswith(str(root.resolve())) or not path.exists() or not path.is_file():
             self.send_error(404)
             return
