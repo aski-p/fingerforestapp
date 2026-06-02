@@ -21,7 +21,7 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.3.0"
+APP_VERSION = "3.2.1"
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
     "내역조회에서 받음 항목 본문 이름을 받은 사람 기준으로 표시하도록 수정했습니다.",
