@@ -21,13 +21,15 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.2.3"
+APP_VERSION = "3.2.4"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_HISTORY_MESSAGE_LIMIT = 10
 CHAT_INPUT_CHAR_LIMIT = 8000
 CHAT_OUTPUT_TOKEN_LIMIT = 800
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "열매 보내기 설정을 대상 직원, 전송 설정, 자동전송이 한 화면에 묶이도록 정리하고 업무일지는 좌우 스와이프 패널로 분리했습니다.",
+    "Claude 채팅이 FingerFruit 서버에 키가 없을 때 카카오봇 Claude Haiku 서버로 안전하게 이어지도록 수정했습니다.",
     "Claude 채팅 팝업 크기를 모바일 화면에 맞게 줄이고 버튼 아이콘을 말풍선 디자인으로 교체했습니다.",
     "스킨 선택 시 상단/카드/업무일지/내역조회 UI 색상이 선택한 컨셉에 맞게 따라가도록 정리했습니다.",
     "Android 래퍼 설치 버전 표시가 실제 APK 버전과 다르게 남아있던 문제를 수정했습니다.",
@@ -536,13 +538,44 @@ def clean_chat_text(value, limit=CHAT_INPUT_CHAR_LIMIT):
     return str(value or "").strip()[:limit]
 
 
+def kakao_claude_chat(message):
+    webhook_url = os.environ.get("KAKAO_CLAUDE_WEBHOOK_URL") or "https://kakao-skill-webhook-production.up.railway.app/kakao-skill-webhook"
+    request_body = json.dumps(
+        {
+            "userRequest": {
+                "utterance": message,
+                "user": {"id": "fingerfruit-chat"},
+            }
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+    request = urllib.request.Request(
+        webhook_url,
+        data=request_body,
+        method="POST",
+        headers={"Content-Type": "application/json; charset=utf-8"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=35) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:500]
+        raise fruit_auto.FruitAutoError(f"카카오 Claude 서버 오류: {exc.code} {detail}") from exc
+    outputs = data.get("template", {}).get("outputs", []) if isinstance(data, dict) else []
+    for output in outputs:
+        text = output.get("simpleText", {}).get("text") if isinstance(output, dict) else ""
+        if text:
+            return {"reply": str(text).strip(), "model": "claude-haiku-via-kakao"}
+    raise fruit_auto.FruitAutoError("카카오 Claude 응답이 비어 있습니다.")
+
+
 def claude_chat(payload):
     api_key = claude_api_key()
-    if not api_key:
-        raise fruit_auto.FruitAutoError("Claude API 키가 설정되지 않았습니다.")
     message = clean_chat_text(payload.get("message"))
     if not message:
         raise fruit_auto.FruitAutoError("메시지를 입력하세요.")
+    if not api_key:
+        return kakao_claude_chat(message)
     messages = []
     remaining_input = max(0, CHAT_INPUT_CHAR_LIMIT - len(message))
     history = payload.get("history")

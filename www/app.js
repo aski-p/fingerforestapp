@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.2.3";
+const appVersion = "3.2.4";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1443,6 +1443,26 @@ function closeWorklogCalendar() {
   syncModalOpenState();
 }
 
+function setWorkspaceTab(name) {
+  document.querySelectorAll("[data-workspace-slide]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.workspaceSlide === name);
+  });
+}
+
+function scrollWorkspacePanel(name) {
+  const target = name === "worklog" ? $("worklogPanel") : $("fruitSendPanel");
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+  setWorkspaceTab(name);
+}
+
+function syncWorkspaceTabFromScroll() {
+  const pager = $("workspacePager");
+  if (!pager) return;
+  const active = pager.scrollLeft > pager.clientWidth * 0.45 ? "worklog" : "fruit";
+  setWorkspaceTab(active);
+}
+
 function setWorklogProjects(projects, selectedId = "") {
   worklogProjects = projects || worklogProjects || [];
   const select = $("worklogProjectSelect");
@@ -2277,6 +2297,15 @@ $("worklogCalendarApplyBtn").addEventListener("click", () => {
   renderWorklogDates();
   closeWorklogCalendar();
 });
+
+document.querySelectorAll("[data-workspace-slide]").forEach((button) => {
+  button.addEventListener("click", () => scrollWorkspacePanel(button.dataset.workspaceSlide));
+});
+
+$("workspacePager").addEventListener("scroll", () => {
+  window.clearTimeout(syncWorkspaceTabFromScroll.timer);
+  syncWorkspaceTabFromScroll.timer = window.setTimeout(syncWorkspaceTabFromScroll, 80);
+}, { passive: true });
 
 $("worklogSeedCount").addEventListener("input", () => {
   const value = Math.max(0, Math.min(3, Math.floor(Number($("worklogSeedCount").value || 0))));
