@@ -22,7 +22,7 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.3.1"
+APP_VERSION = "3.3.2"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_HISTORY_MESSAGE_LIMIT = 10
 CHAT_INPUT_CHAR_LIMIT = 8000
@@ -30,6 +30,7 @@ CHAT_OUTPUT_TOKEN_LIMIT = 800
 CHAT_REPLY_INSTRUCTION = "답변은 800토큰 안에서 끝맺음까지 완결해 주세요. 길면 핵심만 요약하고 문장 중간에서 끊기지 않게 마무리하세요."
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "열매 보내기 지금 한 번 실행 결과를 팝업으로 표시해 보낸 열매 개수와 보낼 열매 없음 상태를 명확히 보여주도록 수정했습니다.",
     "스와이프 전환 중 scroll-snap을 잠깐 비활성화해 페이지가 딱딱하게 붙지 않고 부드럽게 이동하도록 보강했습니다.",
     "열매 보내기 합쳐진 카드에 남아 있던 Getter 테마용 오른쪽 예약 여백을 줄여 입력칸과 버튼 간격을 다시 정리했습니다.",
     "Claude 채팅 답변이 800토큰 안에서 완결되도록 서버 지시문과 fallback 요청을 보강했습니다.",

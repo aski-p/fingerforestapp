@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.3.1";
+const appVersion = "3.3.2";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1470,11 +1470,38 @@ function closeWorklogCalendar() {
   syncModalOpenState();
 }
 
-function openWorklogSuccessModal(projectName = "") {
-  const detail = projectName ? `${projectName} 업무일지가 작성되었습니다.` : "지금 한 번 작성이 성공적으로 완료되었습니다.";
-  $("worklogSuccessMessage").textContent = detail;
+function openSuccessModal(title, message, ok = true) {
+  $("worklogSuccessTitle").textContent = title;
+  $("worklogSuccessMessage").textContent = message;
+  $("worklogSuccessModal").classList.toggle("is-warn", !ok);
   $("worklogSuccessModal").classList.remove("hidden");
   document.body.classList.add("modal-open");
+}
+
+function openWorklogSuccessModal(projectName = "") {
+  const detail = projectName ? `${projectName} 업무일지가 작성되었습니다.` : "지금 한 번 작성이 성공적으로 완료되었습니다.";
+  openSuccessModal("업무일지 작성 완료", detail, true);
+}
+
+function openFruitRunResultModal(result) {
+  if (result?.action === "sent") {
+    const count = Number(result.berries || 0);
+    const target = result.target ? ` ${result.target}님에게` : "";
+    openSuccessModal("열매 전송 완료", `${target} 열매 ${count}개를 보냈습니다.`, true);
+    return;
+  }
+  if (result?.action === "none") {
+    openSuccessModal("보낼 열매 없음", "현재 보낼 수 있는 열매가 없습니다.", false);
+    return;
+  }
+  if (result?.action === "waiting") {
+    openSuccessModal("전송 대기 중", "열매 수신 확인 후 설정된 대기 시간이 지나면 전송됩니다.", false);
+    return;
+  }
+  const detail = result?.reason === "already_attempted_this_interval"
+    ? `이번 주기는 이미 확인했습니다. 다음 ${intervalMinutes()}분에 다시 시도합니다.`
+    : `실행 결과: ${result?.action || "확인 필요"}`;
+  openSuccessModal("실행 결과", detail, false);
 }
 
 function closeWorklogSuccessModal() {
@@ -2611,23 +2638,14 @@ $("runBtn").addEventListener("click", async () => {
     toast("실행 중입니다...");
     await saveTransferSettings();
     const result = await api("/api/run-now", {});
-    if (result.action === "sent") {
-      // Successful runs are reflected by the refreshed status/history; no bottom toast needed.
-    } else if (result.action === "none") {
-      toast(`보낼 열매가 없습니다. 다음 ${intervalMinutes()}분에 다시 확인합니다.`);
-    } else if (result.reason === "already_attempted_this_interval") {
-      toast(`이번 주기는 이미 확인했습니다. 다음 ${intervalMinutes()}분에 다시 시도합니다.`);
-    } else if (result.action === "failed") {
-      toast(`실행 실패. 다음 ${intervalMinutes()}분에 다시 확인합니다.`);
-    } else {
-      toast(`실행 결과: ${result.action}`);
-    }
+    toast("");
+    openFruitRunResultModal(result);
     await refresh({ silent: true });
     if (!$("historyModal").classList.contains("hidden")) {
       await refreshHistory({ silent: true });
     }
   } catch (err) {
-    toast(`실행 실패: ${err.message}. 다음 ${intervalMinutes()}분에 다시 확인합니다.`);
+    openSuccessModal("실행 실패", `${err.message}. 다음 ${intervalMinutes()}분에 다시 확인합니다.`, false);
   } finally {
     setBusy(false);
   }
