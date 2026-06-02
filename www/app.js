@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.2.9";
+const appVersion = "3.3.0";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -350,6 +350,7 @@ function syncModalOpenState() {
     "profileModal",
     "releaseNotesModal",
     "worklogCalendarModal",
+    "worklogSuccessModal",
   ].some(isModalVisible);
   document.body.classList.toggle("modal-open", visible);
 }
@@ -1469,10 +1470,47 @@ function closeWorklogCalendar() {
   syncModalOpenState();
 }
 
+function openWorklogSuccessModal(projectName = "") {
+  const detail = projectName ? `${projectName} 업무일지가 작성되었습니다.` : "지금 한 번 작성이 성공적으로 완료되었습니다.";
+  $("worklogSuccessMessage").textContent = detail;
+  $("worklogSuccessModal").classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+
+function closeWorklogSuccessModal() {
+  $("worklogSuccessModal").classList.add("hidden");
+  syncModalOpenState();
+}
+
 function setWorkspaceTab(name) {
   document.querySelectorAll("[data-workspace-slide]").forEach((button) => {
     button.classList.toggle("active", button.dataset.workspaceSlide === name);
   });
+}
+
+function animateWorkspaceScroll(left, nextName) {
+  const pager = $("workspacePager");
+  if (!pager) return;
+  const start = pager.scrollLeft;
+  const distance = left - start;
+  const duration = 360;
+  const startedAt = performance.now();
+  pager.classList.add("is-animating");
+
+  function step(now) {
+    const elapsed = Math.min(1, (now - startedAt) / duration);
+    const eased = 1 - Math.pow(1 - elapsed, 3);
+    pager.scrollLeft = start + distance * eased;
+    if (elapsed < 1) {
+      requestAnimationFrame(step);
+      return;
+    }
+    pager.scrollLeft = left;
+    pager.classList.remove("is-animating");
+    setWorkspaceTab(nextName);
+  }
+
+  requestAnimationFrame(step);
 }
 
 function scrollWorkspacePanel(name) {
@@ -1480,7 +1518,8 @@ function scrollWorkspacePanel(name) {
   const target = name === "worklog" ? $("worklogPanel") : $("fruitSendPanel");
   if (!pager || !target) return;
   const maxLeft = Math.max(0, pager.scrollWidth - pager.clientWidth);
-  pager.scrollLeft = Math.min(maxLeft, Math.max(0, target.offsetLeft));
+  const nextLeft = Math.min(maxLeft, Math.max(0, target.offsetLeft));
+  animateWorkspaceScroll(nextLeft, name);
   setWorkspaceTab(name);
 }
 
@@ -1533,7 +1572,8 @@ function bindWorkspaceSwipeZone() {
       if (!touch) return;
       const dx = touch.clientX - startX;
       const dy = touch.clientY - startY;
-      if (Math.abs(dx) < 42 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+      const requiredDistance = Math.min(110, Math.max(64, zone.clientWidth * 0.2));
+      if (Math.abs(dx) < requiredDistance || Math.abs(dx) < Math.abs(dy) * 1.35) return;
       const current = activeWorkspacePanel();
       if (dx < 0 && current !== "worklog") scrollWorkspacePanel("worklog");
       if (dx > 0 && current !== "fruit") scrollWorkspacePanel("fruit");
@@ -2158,6 +2198,10 @@ function closeTopModal() {
     closeWorklogCalendar();
     return true;
   }
+  if (isModalVisible("worklogSuccessModal")) {
+    closeWorklogSuccessModal();
+    return true;
+  }
   if (isModalVisible("profileModal")) {
     closeProfileModal();
     return true;
@@ -2435,7 +2479,8 @@ $("worklogRunBtn").addEventListener("click", async () => {
     const result = await api("/api/worklog-run-now", {});
     worklogDraftDirty = false;
     renderState(result.state || currentState);
-    toast(`업무일지를 작성했습니다. ${result.projectName || ""}`);
+    toast("");
+    openWorklogSuccessModal(result.projectName || "");
   } catch (err) {
     if (isAuthError({ error: err.message }, { status: 401 }) || !isUnlocked()) {
       clearAuthenticatedUi();
@@ -2604,6 +2649,7 @@ $("rememberLogin").addEventListener("change", () => {
 $("supportLink").addEventListener("click", openSupportLink);
 $("chatOpenBtn").addEventListener("click", openChatPopup);
 $("chatCloseBtn").addEventListener("click", closeChatPopup);
+$("worklogSuccessCloseBtn").addEventListener("click", closeWorklogSuccessModal);
 $("chatForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   await sendChatMessage();

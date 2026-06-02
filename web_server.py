@@ -22,13 +22,18 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.2.9"
+APP_VERSION = "3.3.0"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_HISTORY_MESSAGE_LIMIT = 10
 CHAT_INPUT_CHAR_LIMIT = 8000
 CHAT_OUTPUT_TOKEN_LIMIT = 800
+CHAT_REPLY_INSTRUCTION = "답변은 800토큰 안에서 끝맺음까지 완결해 주세요. 길면 핵심만 요약하고 문장 중간에서 끊기지 않게 마무리하세요."
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "Claude 채팅 답변이 800토큰 안에서 완결되도록 서버 지시문과 fallback 요청을 보강했습니다.",
+    "업무일지 지금 한 번 작성 성공 시 완료 팝업이 표시되도록 추가했습니다.",
+    "업무일지 화면 여백과 버튼 높이를 조정해 꽉 찬 느낌을 줄였습니다.",
+    "열매 보내기/업무일지 스와이프 전환에 완만한 애니메이션과 더 높은 전환 임계값을 적용했습니다.",
     "Claude 채팅을 로그인된 본인 세션 기준으로만 호출하게 고정하고 카카오 Claude fallback 사용자 키도 계정별로 분리했습니다.",
     "Android 로그인 실패가 서버 500으로 보이지 않도록 로그인 API 오류 응답을 401로 정리했습니다.",
     "열매 보내기 화면의 대상 직원, 전송 설정, 자동전송을 하나의 카드 안에 합쳐 화면 흐름을 정리했습니다.",
@@ -561,10 +566,11 @@ def kakao_chat_user_id(owner_key):
 
 def kakao_claude_chat(message, owner_key):
     webhook_url = os.environ.get("KAKAO_CLAUDE_WEBHOOK_URL") or "https://kakao-skill-webhook-production.up.railway.app/kakao-skill-webhook"
+    utterance = f"{CHAT_REPLY_INSTRUCTION}\n\n사용자 질문:\n{message}"
     request_body = json.dumps(
         {
             "userRequest": {
-                "utterance": message,
+                "utterance": utterance,
                 "user": {"id": kakao_chat_user_id(owner_key)},
             }
         },
@@ -616,6 +622,7 @@ def claude_chat(payload, owner_key):
         {
             "model": CLAUDE_MODEL,
             "max_tokens": CHAT_OUTPUT_TOKEN_LIMIT,
+            "system": CHAT_REPLY_INSTRUCTION,
             "messages": messages,
         },
         ensure_ascii=False,
