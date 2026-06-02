@@ -1125,6 +1125,7 @@ textarea:focus {
 
 .workspace-pager {
   display: block;
+  position: relative;
   margin: 0;
   padding: 0 0 8px;
   width: 100%;
@@ -1140,6 +1141,7 @@ textarea:focus {
 
 .workspace-pager.is-animating {
   pointer-events: none;
+  overflow: hidden;
   scroll-snap-type: none !important;
 }
 
@@ -1167,8 +1169,31 @@ textarea:focus {
 }
 
 .workspace-slide.is-active.fruit-send-panel,
-.workspace-slide.is-active.worklog-panel {
+.workspace-slide.is-active.worklog-panel,
+.workspace-slide.is-entering.fruit-send-panel,
+.workspace-slide.is-entering.worklog-panel,
+.workspace-slide.is-exiting.fruit-send-panel,
+.workspace-slide.is-exiting.worklog-panel {
   display: grid;
+}
+
+.workspace-slide.is-entering,
+.workspace-slide.is-exiting {
+  width: 100%;
+  max-width: 100%;
+  will-change: opacity, transform;
+}
+
+.workspace-slide.is-exiting {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.workspace-slide.is-entering {
+  position: relative;
+  z-index: 2;
 }
 
 .workspace-slide > .card {

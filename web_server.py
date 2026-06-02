@@ -22,7 +22,7 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.4.4"
+APP_VERSION = "3.4.5"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_HISTORY_MESSAGE_LIMIT = 10
 CHAT_INPUT_CHAR_LIMIT = 8000
@@ -30,6 +30,7 @@ CHAT_OUTPUT_TOKEN_LIMIT = 800
 CHAT_REPLY_INSTRUCTION = "답변은 800토큰 안에서 끝맺음까지 완결해 주세요. 길면 핵심만 요약하고 문장 중간에서 끊기지 않게 마무리하세요."
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "열매 보내기/업무일지 화면 폭 고정 구조는 유지하면서 스와이프 전환 시 부드러운 slide-in/slide-out 애니메이션을 복원했습니다.",
     "열매 보내기/업무일지 전환 구조를 가로 스크롤 패널에서 단일 표시 패널로 바꿔 화면이 오른쪽 빈 영역으로 밀리는 문제를 막았습니다.",
     "업무일지 화면을 열매 보내기처럼 큰 카드 안의 정리된 작은 카드 구조로 재배치하고 긴 프로젝트명/입력칸이 카드 밖으로 삐져나오지 않게 조정했습니다.",
     "업무일지 카드에서 Getter 장식 클래스가 만드는 예약 여백을 제거해 카드 내부 폼이 열매 보내기처럼 맞게 보이도록 수정했습니다.",

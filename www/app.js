@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.4.4";
+const appVersion = "3.4.5";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1516,12 +1516,83 @@ function closeWorklogSuccessModal() {
   syncModalOpenState();
 }
 
-function setWorkspaceTab(name) {
+let workspaceTransitionTimer = 0;
+
+function workspacePanelName(panel) {
+  return panel?.id === "worklogPanel" ? "worklog" : "fruit";
+}
+
+function setWorkspaceTab(name, options = {}) {
+  const nextName = name === "worklog" ? "worklog" : "fruit";
+  const pager = $("workspacePager");
+  const fruitPanel = $("fruitSendPanel");
+  const worklogPanel = $("worklogPanel");
+  const currentPanel = document.querySelector(".workspace-slide.is-active");
+  const nextPanel = nextName === "worklog" ? worklogPanel : fruitPanel;
+  const currentName = workspacePanelName(currentPanel);
+
   document.querySelectorAll("[data-workspace-slide]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.workspaceSlide === name);
+    button.classList.toggle("active", button.dataset.workspaceSlide === nextName);
   });
-  $("fruitSendPanel")?.classList.toggle("is-active", name !== "worklog");
-  $("worklogPanel")?.classList.toggle("is-active", name === "worklog");
+
+  if (!fruitPanel || !worklogPanel || !nextPanel || !pager) return;
+
+  window.clearTimeout(workspaceTransitionTimer);
+  [fruitPanel, worklogPanel].forEach((panel) => {
+    panel.classList.remove("is-entering", "is-exiting");
+    panel.style.transition = "";
+    panel.style.transform = "";
+    panel.style.opacity = "";
+  });
+
+  const shouldAnimate = options.animate && currentPanel && currentPanel !== nextPanel;
+  if (!shouldAnimate) {
+    fruitPanel.classList.toggle("is-active", nextName !== "worklog");
+    worklogPanel.classList.toggle("is-active", nextName === "worklog");
+    pager.classList.remove("is-animating");
+    syncWorkspacePagerHeight();
+    return;
+  }
+
+  const forward = currentName !== "worklog" && nextName === "worklog";
+  const enterOffset = forward ? "22px" : "-22px";
+  const exitOffset = forward ? "-18px" : "18px";
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const duration = reducedMotion ? 140 : 320;
+
+  pager.style.height = `${pager.offsetHeight}px`;
+  pager.classList.add("is-animating");
+  nextPanel.classList.add("is-active", "is-entering");
+  currentPanel.classList.add("is-exiting");
+  nextPanel.style.transition = "none";
+  currentPanel.style.transition = "none";
+  nextPanel.style.transform = `translateX(${enterOffset})`;
+  nextPanel.style.opacity = "0.45";
+  currentPanel.style.transform = "translateX(0)";
+  currentPanel.style.opacity = "1";
+
+  void nextPanel.offsetWidth;
+  const transition = `transform ${duration}ms cubic-bezier(.22, 1, .36, 1), opacity ${duration}ms ease`;
+  nextPanel.style.transition = transition;
+  currentPanel.style.transition = transition;
+  nextPanel.style.transform = "translateX(0)";
+  nextPanel.style.opacity = "1";
+  currentPanel.style.transform = `translateX(${exitOffset})`;
+  currentPanel.style.opacity = "0";
+
+  workspaceTransitionTimer = window.setTimeout(() => {
+    fruitPanel.classList.toggle("is-active", nextName !== "worklog");
+    worklogPanel.classList.toggle("is-active", nextName === "worklog");
+    [fruitPanel, worklogPanel].forEach((panel) => {
+      panel.classList.remove("is-entering", "is-exiting");
+      panel.style.transition = "";
+      panel.style.transform = "";
+      panel.style.opacity = "";
+    });
+    pager.classList.remove("is-animating");
+    pager.style.height = "";
+    syncWorkspacePagerHeight();
+  }, duration + 40);
 }
 
 function syncWorkspacePagerHeight() {
@@ -1558,10 +1629,11 @@ function animateWorkspaceScroll(left, nextName) {
 }
 
 function scrollWorkspacePanel(name) {
-  setWorkspaceTab(name);
+  setWorkspaceTab(name, { animate: true });
 }
 
 function syncWorkspaceTabFromScroll() {
+  if ($("workspacePager")?.classList.contains("is-animating")) return;
   setWorkspaceTab(activeWorkspacePanel());
 }
 
