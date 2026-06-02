@@ -141,6 +141,8 @@ function runSecurityMigration() {
 }
 
 const $ = (id) => document.getElementById(id);
+const historyTimeZone = "Asia/Seoul";
+const historyTimezoneOffsetMinutes = -540;
 let currentState = {};
 let busy = false;
 runSecurityMigration();
@@ -149,7 +151,7 @@ let currentOwnerKey = "";
 let authValidated = false;
 let recoveringSession = null;
 let pushSyncing = false;
-let selectedHistoryDate = localDateValue(new Date());
+let selectedHistoryDate = historyDateValue(new Date());
 let pendingAppearanceSettings = null;
 let worklogProjects = [];
 let selectedWorklogDates = [];
@@ -1009,6 +1011,7 @@ function fmtHistoryDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleDateString("ko-KR", {
+    timeZone: historyTimeZone,
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -1021,6 +1024,18 @@ function localDateValue(date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function historyDateValue(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: historyTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${lookup.year}-${lookup.month}-${lookup.day}`;
 }
 
 function parseLocalDateValue(value) {
@@ -1087,6 +1102,7 @@ function fmtTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleTimeString("ko-KR", {
+    timeZone: historyTimeZone,
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -1611,7 +1627,7 @@ async function refreshHistory({ silent = false } = {}) {
     body.innerHTML = '<div class="history-empty">선택한 날짜 내역을 불러오는 중입니다...</div>';
     const query = new URLSearchParams({
       date: selectedHistoryDate,
-      tz: String(new Date().getTimezoneOffset()),
+      tz: String(historyTimezoneOffsetMinutes),
     });
     const data = await api(`/api/history?${query.toString()}`);
     renderHistory(data.items || []);
@@ -1844,7 +1860,7 @@ $("logoutBtn").addEventListener("click", async () => {
 });
 
 function openHistoryModal() {
-  if (!selectedHistoryDate) selectedHistoryDate = localDateValue(new Date());
+  if (!selectedHistoryDate) selectedHistoryDate = historyDateValue(new Date());
   syncHistoryDateControls();
   $("historyModal").classList.remove("hidden");
   document.body.classList.add("modal-open");
@@ -2007,7 +2023,7 @@ $("historyCalendarBtn").addEventListener("click", () => {
   }
 });
 $("historyDateInput").addEventListener("change", async (event) => {
-  selectedHistoryDate = event.target.value || localDateValue(new Date());
+  selectedHistoryDate = event.target.value || historyDateValue(new Date());
   syncHistoryDateControls();
   await refreshHistory();
 });
