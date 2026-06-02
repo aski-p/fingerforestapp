@@ -2174,43 +2174,142 @@ body.logged-out .chat-popup {
 
 .ranking-row {
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr) auto;
+  grid-template-columns: 62px minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
-  min-height: 66px;
+  min-height: 74px;
   border-bottom: 1px solid #eef2f6;
   color: #1f2937;
   font-size: 14px;
 }
 
 .ranking-row.has-level {
-  grid-template-columns: 54px minmax(0, 1fr) auto auto;
+  grid-template-columns: 62px minmax(0, 1fr) auto auto;
 }
 
 .ranking-medal {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
   color: #344054;
   font-size: 16px;
   font-weight: 1000;
+  isolation: isolate;
 }
 
-.ranking-row:nth-child(1) .ranking-medal {
-  background: #ffe08a;
-  color: #9a6a00;
+.ranking-medal-first {
+  overflow: visible;
+  background:
+    radial-gradient(circle at 32% 22%, #fff8cc 0 12%, transparent 13%),
+    radial-gradient(circle at 65% 72%, rgba(255, 255, 255, .72) 0 11%, transparent 12%),
+    linear-gradient(135deg, #fff7a8 0%, #ffd147 32%, #f59e0b 68%, #b45309 100%);
+  box-shadow:
+    0 0 0 3px rgba(255, 236, 153, .62),
+    0 8px 18px rgba(245, 158, 11, .34),
+    inset 0 1px 0 rgba(255, 255, 255, .72);
+  color: #713f12;
 }
 
-.ranking-row:nth-child(2) .ranking-medal {
-  background: #cbd5e1;
-  color: #475467;
+.ranking-medal-first::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: inherit;
+  background: conic-gradient(from 20deg, transparent 0 15%, rgba(255, 255, 255, .9) 16% 18%, transparent 19% 48%, rgba(255, 255, 255, .76) 49% 51%, transparent 52% 100%);
+  animation: rankingShine 2.2s linear infinite;
+  z-index: -1;
 }
 
-.ranking-row:nth-child(3) .ranking-medal {
-  background: #d9b38c;
-  color: #7c4a20;
+.ranking-crown {
+  position: absolute;
+  top: -21px;
+  left: 50%;
+  color: #facc15;
+  font-size: 34px;
+  line-height: 1;
+  text-shadow:
+    0 1px 0 #92400e,
+    0 0 8px rgba(250, 204, 21, .95),
+    0 0 14px rgba(251, 191, 36, .74);
+  transform: translateX(-50%) rotate(-5deg);
+}
+
+.ranking-rank-text {
+  position: relative;
+  z-index: 1;
+  color: inherit;
+  font-size: 17px;
+  font-weight: 1000;
+  line-height: 1;
+}
+
+.ranking-medal-first .ranking-rank-text {
+  margin-top: 9px;
+  color: #78350f;
+}
+
+.ranking-spark {
+  position: absolute;
+  color: #fff7ad;
+  font-size: 15px;
+  line-height: 1;
+  text-shadow: 0 0 8px rgba(255, 255, 255, .95), 0 0 14px rgba(250, 204, 21, .9);
+  animation: rankingTwinkle 1.45s ease-in-out infinite;
+}
+
+.ranking-spark.spark-a {
+  top: -10px;
+  right: -5px;
+}
+
+.ranking-spark.spark-b {
+  bottom: 4px;
+  left: -6px;
+  animation-delay: .55s;
+}
+
+.ranking-medal-second {
+  background:
+    radial-gradient(circle at 32% 24%, #ffffff 0 11%, transparent 12%),
+    linear-gradient(135deg, #f8fafc 0%, #cbd5e1 42%, #94a3b8 100%);
+  box-shadow: 0 0 0 2px rgba(203, 213, 225, .8), inset 0 1px 0 rgba(255, 255, 255, .85);
+  color: #334155;
+}
+
+.ranking-medal-third {
+  background:
+    radial-gradient(circle at 32% 24%, #fff3df 0 11%, transparent 12%),
+    linear-gradient(135deg, #fed7aa 0%, #c47b42 48%, #92400e 100%);
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, .24), inset 0 1px 0 rgba(255, 245, 230, .78);
+  color: #431407;
+}
+
+.ranking-medal-icon {
+  position: absolute;
+  top: 5px;
+  color: rgba(255, 255, 255, .62);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+@keyframes rankingShine {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes rankingTwinkle {
+  0%, 100% {
+    opacity: .35;
+    transform: scale(.8) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.18) rotate(18deg);
+  }
 }
 
 .ranking-name {

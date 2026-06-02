@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.3.6";
+const appVersion = "3.3.7";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1894,13 +1894,45 @@ function renderRanking(data) {
     const hasLevel = (data.kind || rankingKind) === "level";
     return `
       <div class="ranking-row${hasLevel ? " has-level" : ""}">
-        <span class="ranking-medal">${escapeHtml(item.rank || "-")}</span>
+        ${renderRankingMedal(item.rank)}
         <strong class="ranking-name">${escapeHtml(item.name || "-")}</strong>
         ${hasLevel ? `<span class="ranking-level">${escapeHtml(item.level || "-")}</span>` : ""}
         <span class="ranking-count">${fmtNumber(item.count || 0)}개</span>
       </div>
     `;
   }).join("");
+}
+
+function renderRankingMedal(rank) {
+  const rankNumber = Number(rank);
+  const label = rank ? `${fmtNumber(rank)}등` : "-";
+  if (rankNumber === 1) {
+    return `
+      <span class="ranking-medal ranking-medal-first" aria-label="1등">
+        <span class="ranking-crown" aria-hidden="true">♛</span>
+        <span class="ranking-spark spark-a" aria-hidden="true">✦</span>
+        <span class="ranking-spark spark-b" aria-hidden="true">✧</span>
+        <span class="ranking-rank-text">1</span>
+      </span>
+    `;
+  }
+  if (rankNumber === 2) {
+    return `
+      <span class="ranking-medal ranking-medal-second" aria-label="2등">
+        <span class="ranking-medal-icon" aria-hidden="true">Ⅱ</span>
+        <span class="ranking-rank-text">2</span>
+      </span>
+    `;
+  }
+  if (rankNumber === 3) {
+    return `
+      <span class="ranking-medal ranking-medal-third" aria-label="3등">
+        <span class="ranking-medal-icon" aria-hidden="true">Ⅲ</span>
+        <span class="ranking-rank-text">3</span>
+      </span>
+    `;
+  }
+  return `<span class="ranking-medal">${escapeHtml(label)}</span>`;
 }
 
 async function refreshRanking() {
