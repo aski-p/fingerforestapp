@@ -1070,6 +1070,7 @@ textarea:focus {
   padding: 4px;
   background: #f2fbf5;
   touch-action: pan-y;
+  user-select: none;
 }
 
 .workspace-tabs button {
@@ -1124,6 +1125,39 @@ textarea:focus {
 
 .fruit-card-section {
   padding: 16px;
+}
+
+.fruit-send-unified {
+  display: grid;
+  gap: 14px;
+}
+
+.fruit-send-title {
+  margin-bottom: 0;
+}
+
+.fruit-unified-block {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.fruit-unified-block + .fruit-unified-block {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.fruit-unified-block h3,
+.compact-title h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 15px;
+  font-weight: 950;
+  line-height: 1.2;
+}
+
+.compact-title {
+  margin-bottom: -2px;
 }
 
 .fruit-card-section + .fruit-card-section {
@@ -1233,6 +1267,11 @@ textarea:focus {
   display: grid;
   gap: 8px;
   margin-top: 12px;
+}
+
+.results:empty {
+  display: none;
+  margin-top: 0;
 }
 
 .person,
@@ -1802,7 +1841,8 @@ body.logged-out .chat-popup {
   min-width: 0;
 }
 
-.auto-title-row h2 {
+.auto-title-row h2,
+.auto-title-row h3 {
   flex: 0 1 auto;
 }
 
@@ -2936,12 +2976,20 @@ body.theme-getter .fruit-send-card .fruit-card-section {
 }
 
 body.theme-getter .fruit-send-card .getter-card-target {
-  padding-right: 128px;
+  padding-right: 0;
 }
 
 body.theme-getter .fruit-send-card .getter-card-transfer,
 body.theme-getter .fruit-send-card .getter-card-auto {
   padding-right: 16px;
+}
+
+body.theme-getter .fruit-send-card .fruit-send-unified {
+  min-height: 0;
+}
+
+body.theme-getter .fruit-send-card .fruit-send-title {
+  padding-right: 96px;
 }
 
 body.theme-getter .fruit-send-card .control-card {

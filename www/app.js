@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.2.8";
+const appVersion = "3.2.9";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1036,6 +1036,17 @@ function fmtDate(value) {
   });
 }
 
+function fmtPlanTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
 function fmtDay(value) {
   if (!value) return "-";
   const date = new Date(value);
@@ -1486,43 +1497,48 @@ function activeWorkspacePanel() {
 }
 
 function bindWorkspaceSwipeZone() {
-  const zone = document.querySelector(".workspace-tabs");
-  if (!zone) return;
-  let startX = 0;
-  let startY = 0;
-  let tracking = false;
+  const zones = [document.querySelector(".workspace-tabs"), $("workspacePager")].filter(Boolean);
+  if (!zones.length) return;
+  const interactiveSelector = "input, textarea, select, button, a, label, .results, .person, .date-chips, .modal";
 
-  zone.addEventListener("touchstart", (event) => {
-    const touch = event.touches && event.touches[0];
-    if (!touch) return;
-    startX = touch.clientX;
-    startY = touch.clientY;
-    tracking = true;
-  }, { passive: true });
+  zones.forEach((zone) => {
+    let startX = 0;
+    let startY = 0;
+    let tracking = false;
 
-  zone.addEventListener("touchmove", (event) => {
-    if (!tracking) return;
-    const touch = event.touches && event.touches[0];
-    if (!touch) return;
-    const dx = touch.clientX - startX;
-    const dy = touch.clientY - startY;
-    if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.2) {
-      event.preventDefault();
-    }
-  }, { passive: false });
+    zone.addEventListener("touchstart", (event) => {
+      if (zone.id === "workspacePager" && event.target.closest(interactiveSelector)) return;
+      const touch = event.touches && event.touches[0];
+      if (!touch) return;
+      startX = touch.clientX;
+      startY = touch.clientY;
+      tracking = true;
+    }, { passive: true });
 
-  zone.addEventListener("touchend", (event) => {
-    if (!tracking) return;
-    tracking = false;
-    const touch = event.changedTouches && event.changedTouches[0];
-    if (!touch) return;
-    const dx = touch.clientX - startX;
-    const dy = touch.clientY - startY;
-    if (Math.abs(dx) < 42 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
-    const current = activeWorkspacePanel();
-    if (dx < 0 && current !== "worklog") scrollWorkspacePanel("worklog");
-    if (dx > 0 && current !== "fruit") scrollWorkspacePanel("fruit");
-  }, { passive: true });
+    zone.addEventListener("touchmove", (event) => {
+      if (!tracking) return;
+      const touch = event.touches && event.touches[0];
+      if (!touch) return;
+      const dx = touch.clientX - startX;
+      const dy = touch.clientY - startY;
+      if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+        event.preventDefault();
+      }
+    }, { passive: false });
+
+    zone.addEventListener("touchend", (event) => {
+      if (!tracking) return;
+      tracking = false;
+      const touch = event.changedTouches && event.changedTouches[0];
+      if (!touch) return;
+      const dx = touch.clientX - startX;
+      const dy = touch.clientY - startY;
+      if (Math.abs(dx) < 42 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+      const current = activeWorkspacePanel();
+      if (dx < 0 && current !== "worklog") scrollWorkspacePanel("worklog");
+      if (dx > 0 && current !== "fruit") scrollWorkspacePanel("fruit");
+    }, { passive: true });
+  });
 }
 
 function setWorklogProjects(projects, selectedId = "") {
@@ -1649,10 +1665,11 @@ function renderState(state) {
   $("sendAllBerries").disabled = !unlocked;
   const sendModeText = sendAllBerries ? "보유 열매 전부" : `${sendCount}개`;
   const daemonText = state.daemonRunning ? "데몬 실행 중" : "데몬 확인 필요";
-  $("fruitScheduleBadge").textContent = enabled ? `예약됨 ${intervalMinutes(state)}분마다 전송` : "대기";
+  const nextFruitRunAt = state.nextRunAt || new Date(Date.now() + intervalMinutes(state) * 60000).toISOString();
+  $("fruitScheduleBadge").textContent = enabled ? `예약됨 ${fmtPlanTime(nextFruitRunAt)} 예정` : "대기";
   $("fruitScheduleBadge").className = `badge ${enabled ? "ok" : "neutral"}`;
   $("controlHint").textContent = enabled
-    ? `켜짐 상태입니다. ${daemonText}. 다음 확인 ${fmtDate(state.nextRunAt)}. 전송 수 ${sendModeText}`
+    ? `켜짐 상태입니다. ${daemonText}. 다음 확인 ${fmtDate(nextFruitRunAt)}. 전송 수 ${sendModeText}`
     : hasTarget
       ? `켜면 ${intervalMinutes(state)}분마다 한 번씩 보유 열매를 확인하고 ${sendModeText} 보냅니다.`
       : "대상 직원을 먼저 검색해서 선택하세요.";

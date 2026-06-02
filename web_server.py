@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import hashlib
 import mimetypes
 import os
 import subprocess
@@ -21,13 +22,15 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.2.8"
+APP_VERSION = "3.2.9"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_HISTORY_MESSAGE_LIMIT = 10
 CHAT_INPUT_CHAR_LIMIT = 8000
 CHAT_OUTPUT_TOKEN_LIMIT = 800
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "Claude 채팅을 로그인된 본인 세션 기준으로만 호출하게 고정하고 카카오 Claude fallback 사용자 키도 계정별로 분리했습니다.",
+    "Android 로그인 실패가 서버 500으로 보이지 않도록 로그인 API 오류 응답을 401로 정리했습니다.",
     "열매 보내기 화면의 대상 직원, 전송 설정, 자동전송을 하나의 카드 안에 합쳐 화면 흐름을 정리했습니다.",
     "Claude 채팅창 메시지 영역에 독립 스크롤을 적용해 긴 답변이 입력창과 화면을 밀어내지 않도록 수정했습니다.",
     "키보드가 올라왔을 때 보이는 화면 높이에 맞춰 Claude 채팅창 위치와 높이를 다시 계산하도록 수정했습니다.",
@@ -484,6 +487,15 @@ def sanitize_error(exc):
     return text[:500]
 
 
+def error_status(error, path=""):
+    auth_markers = ("로그인", "세션", "기기 CID", "PMS login", "PMS 로그인", "Forest token", "Forest employee")
+    if path == "/api/login":
+        return 401
+    if any(marker in error for marker in auth_markers[:3]):
+        return 401
+    return 500
+
+
 def public_base_url(handler):
     forwarded_proto = handler.headers.get("X-Forwarded-Proto") or ""
     proto = forwarded_proto.split(",")[0].strip() or "https"
@@ -542,13 +554,18 @@ def clean_chat_text(value, limit=CHAT_INPUT_CHAR_LIMIT):
     return str(value or "").strip()[:limit]
 
 
-def kakao_claude_chat(message):
+def kakao_chat_user_id(owner_key):
+    scoped = hashlib.sha256(str(owner_key or "anonymous").encode("utf-8")).hexdigest()[:16]
+    return f"fingerfruit-chat-{scoped}"
+
+
+def kakao_claude_chat(message, owner_key):
     webhook_url = os.environ.get("KAKAO_CLAUDE_WEBHOOK_URL") or "https://kakao-skill-webhook-production.up.railway.app/kakao-skill-webhook"
     request_body = json.dumps(
         {
             "userRequest": {
                 "utterance": message,
-                "user": {"id": "fingerfruit-chat"},
+                "user": {"id": kakao_chat_user_id(owner_key)},
             }
         },
         ensure_ascii=False,
@@ -573,13 +590,13 @@ def kakao_claude_chat(message):
     raise fruit_auto.FruitAutoError("카카오 Claude 응답이 비어 있습니다.")
 
 
-def claude_chat(payload):
+def claude_chat(payload, owner_key):
     api_key = claude_api_key()
     message = clean_chat_text(payload.get("message"))
     if not message:
         raise fruit_auto.FruitAutoError("메시지를 입력하세요.")
     if not api_key:
-        return kakao_claude_chat(message)
+        return kakao_claude_chat(message, owner_key)
     messages = []
     remaining_input = max(0, CHAT_INPUT_CHAR_LIMIT - len(message))
     history = payload.get("history")
@@ -827,7 +844,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_json(404, {"ok": False, "error": "not found"})
             except Exception as exc:
                 error = sanitize_error(exc)
-                self.send_json(401 if "로그인" in error or "세션" in error or "기기 CID" in error else 500, {"ok": False, "error": error})
+                self.send_json(error_status(error, parsed.path), {"ok": False, "error": error})
             return
 
         self.send_static()
@@ -842,7 +859,8 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == "/api/login":
                 result = fruit_auto.save_credentials(payload.get("id"), payload.get("password"), device_id=self.device_id())
             elif parsed.path == "/api/chat":
-                result = claude_chat(payload)
+                owner_key, _session_token = self.require_session_owner()
+                result = claude_chat(payload, owner_key)
             else:
                 owner_key, session_token = self.require_session_owner()
             if parsed.path == "/api/login":
@@ -926,7 +944,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(200, {"ok": True, "result": result})
         except Exception as exc:
             error = sanitize_error(exc)
-            self.send_json(401 if "로그인" in error or "세션" in error or "기기 CID" in error else 500, {"ok": False, "error": error})
+            self.send_json(error_status(error, parsed.path), {"ok": False, "error": error})
 
 
 class FruitThreadingHTTPServer(ThreadingHTTPServer):
