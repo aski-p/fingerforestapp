@@ -370,21 +370,14 @@ body.logged-out .hero {
 }
 
 .hero-identity {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
-  gap: 10px;
+  flex: 0 0 auto;
+  display: flex;
   align-items: center;
   border: 0;
   padding: 0;
   background: transparent;
   color: inherit;
   text-align: left;
-}
-
-.hero-copy {
-  min-width: 0;
-  display: block;
 }
 
 .getter-hero-art {
@@ -658,12 +651,6 @@ h2 {
   font-size: 12px;
   line-height: 1.45;
   word-break: keep-all;
-}
-
-.hero-copy .hero-title,
-.hero-copy .subtitle {
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .kicker,

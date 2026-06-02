@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.4.6";
+const appVersion = "3.4.8";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -564,11 +564,16 @@ function applyAvatar(button, initialEl, label, photoUrl = getProfilePhoto()) {
   initialEl.textContent = getInitial(label);
 }
 
+function currentProfileLabel() {
+  return $("profileUserName")?.textContent || currentState.senderEmployeeName || currentState.loginUser || "fingerfruit";
+}
+
 function updateProfileUi(label, unlocked = isUnlocked(), photoUrl = getProfilePhoto()) {
   const displayLabel = unlocked ? label || "사용자" : "fingerfruit";
   const displayPhoto = unlocked ? photoUrl : "";
   document.body.classList.toggle("logged-out", !unlocked);
-  $("heroTitleText").textContent = displayLabel;
+  const heroTitleText = $("heroTitleText");
+  if (heroTitleText) heroTitleText.textContent = displayLabel;
   $("profileUserName").textContent = displayLabel;
   applyAvatar($("heroProfileBtn").querySelector(".profile-avatar"), $("heroAvatarInitial"), displayLabel, displayPhoto);
   applyAvatar($("profilePreview"), $("profilePreviewInitial"), displayLabel, displayPhoto);
@@ -1517,6 +1522,7 @@ function closeWorklogSuccessModal() {
 }
 
 let workspaceTransitionTimer = 0;
+let workspaceDragState = null;
 
 function workspacePanelName(panel) {
   return panel?.id === "worklogPanel" ? "worklog" : "fruit";
@@ -1600,32 +1606,118 @@ function syncWorkspacePagerHeight() {
   if (pager) pager.style.height = "";
 }
 
-function animateWorkspaceScroll(left, nextName) {
+function workspacePanels() {
   const pager = $("workspacePager");
-  if (!pager) return;
-  const start = pager.scrollLeft;
-  const distance = left - start;
-  const duration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 180 : 640;
-  const startedAt = performance.now();
-  pager.classList.add("is-animating");
+  const fruitPanel = $("fruitSendPanel");
+  const worklogPanel = $("worklogPanel");
+  const currentPanel = document.querySelector(".workspace-slide.is-active");
+  return { pager, fruitPanel, worklogPanel, currentPanel };
+}
 
-  function step(now) {
-    const elapsed = Math.min(1, (now - startedAt) / duration);
-    const eased = elapsed < 0.5
-      ? 4 * elapsed * elapsed * elapsed
-      : 1 - Math.pow(-2 * elapsed + 2, 3) / 2;
-    pager.scrollLeft = start + distance * eased;
-    if (elapsed < 1) {
-      requestAnimationFrame(step);
-      return;
-    }
-    pager.scrollLeft = left;
-    pager.classList.remove("is-animating");
-    setWorkspaceTab(nextName);
-    syncWorkspacePagerHeight();
+function resetWorkspaceDragStyles() {
+  const { pager, fruitPanel, worklogPanel } = workspacePanels();
+  window.clearTimeout(workspaceTransitionTimer);
+  [fruitPanel, worklogPanel].forEach((panel) => {
+    if (!panel) return;
+    panel.classList.remove("is-entering", "is-exiting");
+    panel.style.transition = "";
+    panel.style.transform = "";
+    panel.style.opacity = "";
+  });
+  if (pager) {
+    pager.classList.remove("is-animating", "is-dragging");
+    pager.style.height = "";
+  }
+  workspaceDragState = null;
+}
+
+function prepareWorkspaceDrag(dx) {
+  const { pager, fruitPanel, worklogPanel, currentPanel } = workspacePanels();
+  if (!pager || !fruitPanel || !worklogPanel || !currentPanel) return null;
+  const currentName = workspacePanelName(currentPanel);
+  const nextName = dx < 0 ? "worklog" : "fruit";
+  const nextPanel = nextName === "worklog" ? worklogPanel : fruitPanel;
+  if (nextName === currentName || currentPanel === nextPanel) return null;
+
+  window.clearTimeout(workspaceTransitionTimer);
+  [fruitPanel, worklogPanel].forEach((panel) => {
+    panel.classList.remove("is-entering", "is-exiting");
+    panel.style.transition = "none";
+    panel.style.transform = "";
+    panel.style.opacity = "1";
+  });
+
+  const width = Math.max(1, pager.clientWidth || currentPanel.clientWidth || window.innerWidth);
+  pager.style.height = `${pager.offsetHeight}px`;
+  pager.classList.add("is-animating", "is-dragging");
+  nextPanel.classList.add("is-active", "is-entering");
+  currentPanel.classList.add("is-exiting");
+
+  workspaceDragState = {
+    pager,
+    currentPanel,
+    nextPanel,
+    currentName,
+    nextName,
+    direction: dx < 0 ? -1 : 1,
+    width,
+    lastDx: 0,
+  };
+  return workspaceDragState;
+}
+
+function updateWorkspaceDrag(dx) {
+  let drag = workspaceDragState;
+  if (!drag || Math.sign(dx) !== drag.direction) {
+    resetWorkspaceDragStyles();
+    drag = prepareWorkspaceDrag(dx);
+  }
+  if (!drag) {
+    const { currentPanel } = workspacePanels();
+    if (currentPanel) currentPanel.style.transform = `translateX(${dx * 0.18}px)`;
+    return;
   }
 
-  requestAnimationFrame(step);
+  const maxPull = drag.width * 0.92;
+  const clampedDx = Math.max(-maxPull, Math.min(maxPull, dx));
+  const nextX = -drag.direction * drag.width + clampedDx;
+  const progress = Math.min(1, Math.abs(clampedDx) / drag.width);
+  drag.lastDx = clampedDx;
+  drag.currentPanel.style.transform = `translateX(${clampedDx}px)`;
+  drag.currentPanel.style.opacity = String(1 - progress * 0.22);
+  drag.nextPanel.style.transform = `translateX(${nextX}px)`;
+  drag.nextPanel.style.opacity = String(0.82 + progress * 0.18);
+}
+
+function finishWorkspaceDrag(nextName, commit) {
+  const drag = workspaceDragState;
+  if (!drag) {
+    if (commit) setWorkspaceTab(nextName, { animate: true });
+    return;
+  }
+
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const duration = reducedMotion ? 140 : 260;
+  const transition = `transform ${duration}ms cubic-bezier(.22, 1, .36, 1), opacity ${duration}ms ease`;
+  drag.currentPanel.style.transition = transition;
+  drag.nextPanel.style.transition = transition;
+
+  if (commit) {
+    drag.currentPanel.style.transform = `translateX(${drag.direction * drag.width}px)`;
+    drag.currentPanel.style.opacity = "0";
+    drag.nextPanel.style.transform = "translateX(0)";
+    drag.nextPanel.style.opacity = "1";
+  } else {
+    drag.currentPanel.style.transform = "translateX(0)";
+    drag.currentPanel.style.opacity = "1";
+    drag.nextPanel.style.transform = `translateX(${-drag.direction * drag.width}px)`;
+    drag.nextPanel.style.opacity = "0.82";
+  }
+
+  workspaceTransitionTimer = window.setTimeout(() => {
+    setWorkspaceTab(commit ? nextName : drag.currentName);
+    resetWorkspaceDragStyles();
+  }, duration + 30);
 }
 
 function scrollWorkspacePanel(name) {
@@ -1663,6 +1755,7 @@ function bindWorkspaceSwipeZone() {
       startY = touch.clientY;
       tracking = true;
       horizontal = false;
+      resetWorkspaceDragStyles();
     }, { passive: true });
 
     zone.addEventListener("touchmove", (event) => {
@@ -1674,6 +1767,7 @@ function bindWorkspaceSwipeZone() {
       if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.35) {
         horizontal = true;
         event.preventDefault();
+        updateWorkspaceDrag(dx);
       }
     }, { passive: false });
 
@@ -1685,18 +1779,28 @@ function bindWorkspaceSwipeZone() {
       const dx = touch.clientX - startX;
       const dy = touch.clientY - startY;
       const requiredDistance = Math.min(68, Math.max(34, zone.clientWidth * distanceRatio));
-      if (Math.abs(dx) < requiredDistance || Math.abs(dx) < Math.abs(dy) * 1.35) return;
+      if (Math.abs(dx) < requiredDistance || Math.abs(dx) < Math.abs(dy) * 1.35) {
+        finishWorkspaceDrag(activeWorkspacePanel(), false);
+        return;
+      }
       const current = activeWorkspacePanel();
       const next = dx < 0 ? "worklog" : "fruit";
       if (next !== current) {
         suppressNextWorkspaceClick = true;
         event.preventDefault();
-        scrollWorkspacePanel(next);
+        finishWorkspaceDrag(next, true);
         window.setTimeout(() => {
           suppressNextWorkspaceClick = false;
         }, 350);
+      } else {
+        finishWorkspaceDrag(current, false);
       }
     }, { passive: false });
+
+    zone.addEventListener("touchcancel", () => {
+      tracking = false;
+      finishWorkspaceDrag(activeWorkspacePanel(), false);
+    }, { passive: true });
 
     zone.addEventListener("click", (event) => {
       if (!suppressNextWorkspaceClick || !horizontal) return;
@@ -2282,7 +2386,7 @@ async function openSettingsModal() {
 async function openProfileModal() {
   const senderLabel = isUnlocked()
     ? personNameLabel(currentState.loginUser || currentState.senderEmployeeName, currentSenderEmployeeId())
-    : $("heroTitleText").textContent;
+    : currentProfileLabel();
   const openedPhoto = currentSenderPhoto();
   updateProfileUi(senderLabel, isUnlocked(), openedPhoto);
   $("profileModal").classList.remove("hidden");
@@ -2559,7 +2663,7 @@ $("profilePhotoInput").addEventListener("change", async () => {
       console.warn("profile photo sync failed", err);
     }
     setSenderProfilePhoto(savedPhoto);
-    updateProfileUi($("heroTitleText").textContent, isUnlocked(), savedPhoto);
+    updateProfileUi(currentProfileLabel(), isUnlocked(), savedPhoto);
     toast("프로필 사진을 변경했습니다.");
   } catch (err) {
     toast(`프로필 사진 변경 실패: ${err.message}`);
@@ -2572,7 +2676,7 @@ $("profilePhotoResetBtn").addEventListener("click", async () => {
   const senderId = currentSenderEmployeeId();
   setSenderProfilePhoto("");
   forgetProfilePhoto(senderId);
-  updateProfileUi($("heroTitleText").textContent, isUnlocked(), "");
+  updateProfileUi(currentProfileLabel(), isUnlocked(), "");
   try {
     await api("/api/profile-photo", { image: "" });
   } catch (_err) {
