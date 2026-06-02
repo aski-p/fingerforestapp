@@ -1925,9 +1925,9 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
         if action == "received":
             avatar_employee_id = counterpart_employee_id
             avatar_name = counterpart
-            display_name = display_employee(counterpart, counterpart_position_name)
-            display_employee_id = counterpart_employee_id
-            display_position_name = counterpart_position_name
+            display_name = me_display_name
+            display_employee_id = str(sender_employee_id or "")
+            display_position_name = sender_position_name
             from_employee_id = counterpart_employee_id
             from_display_name = display_employee(counterpart, counterpart_position_name, counterpart or "-")
             from_avatar_name = counterpart

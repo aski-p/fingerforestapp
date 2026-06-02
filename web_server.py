@@ -21,9 +21,10 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.2.0"
+APP_VERSION = "3.3.0"
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "내역조회에서 받음 항목 본문 이름을 받은 사람 기준으로 표시하도록 수정했습니다.",
     "Android APK를 고정 서명 release 빌드로 다시 만들어 업데이트 설치 실패 가능성을 줄였습니다.",
     "내역조회에서 기본 FOREST API에 있는 받은 열매 항목이 짝맞춤 필터 때문에 숨겨지는 문제를 수정했습니다.",
     "내역조회에서 상대 프로필 사진이 로그인 사용자 사진으로 대체 표시되는 문제를 수정했습니다.",
