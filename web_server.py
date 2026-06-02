@@ -22,7 +22,7 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.5.2"
+APP_VERSION = "3.5.3"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_HISTORY_MESSAGE_LIMIT = 10
 CHAT_INPUT_CHAR_LIMIT = 8000
@@ -30,9 +30,8 @@ CHAT_OUTPUT_TOKEN_LIMIT = 800
 CHAT_REPLY_INSTRUCTION = "답변은 800토큰 안에서 끝맺음까지 완결해 주세요. 길면 핵심만 요약하고 문장 중간에서 끊기지 않게 마무리하세요."
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "스와이프 전환 속도를 다시 빠르게 줄이고, 화면 폭 기준 slide-in/slide-out 움직임은 유지했습니다.",
-    "자동전송 열매 저장, 자동전송 켜기, 지금 한 번 전송 시 직원, 메시지, 열매 수가 비어 있으면 입력 확인 팝업으로 막도록 수정했습니다.",
-    "업무일지 설정 저장과 지금 한 번 작성 시 프로젝트, 메시지, 씨앗 수, 일지내용, 업무씨앗 받을 직원 입력 확인 팝업을 추가했습니다.",
+    "스와이프 중간 프레임 보간을 제거해 화면이 손가락 움직임에 바로 따라오도록 수정했습니다.",
+    "스와이프 시작 감지 기준을 낮춰 전환이 끊기지 않고 자연스럽게 시작되도록 조정했습니다.",
 ]
 VALID_THEMES = {
     "default",

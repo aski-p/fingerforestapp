@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.5.2";
+const appVersion = "3.5.3";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1677,21 +1677,14 @@ function prepareWorkspaceDrag(dx) {
 function renderWorkspaceDrag() {
   const drag = workspaceDragState;
   if (!drag) return;
-  drag.renderedDx += (drag.targetDx - drag.renderedDx) * 0.36;
-  if (Math.abs(drag.targetDx - drag.renderedDx) < 0.35) {
-    drag.renderedDx = drag.targetDx;
-  }
+  drag.renderedDx = drag.targetDx;
   const nextX = -drag.direction * drag.width + drag.renderedDx;
   const progress = Math.min(1, Math.abs(drag.renderedDx) / drag.width);
   drag.currentPanel.style.transform = `translate3d(${drag.renderedDx}px, 0, 0)`;
   drag.currentPanel.style.opacity = String(1 - progress * 0.18);
   drag.nextPanel.style.transform = `translate3d(${nextX}px, 0, 0)`;
   drag.nextPanel.style.opacity = String(0.9 + progress * 0.1);
-  if (drag.renderedDx !== drag.targetDx) {
-    drag.raf = window.requestAnimationFrame(renderWorkspaceDrag);
-  } else {
-    drag.raf = 0;
-  }
+  drag.raf = 0;
 }
 
 function updateWorkspaceDrag(dx) {
@@ -1710,9 +1703,8 @@ function updateWorkspaceDrag(dx) {
   const clampedDx = Math.max(-maxPull, Math.min(maxPull, dx));
   drag.lastDx = clampedDx;
   drag.targetDx = clampedDx;
-  if (!drag.raf) {
-    drag.raf = window.requestAnimationFrame(renderWorkspaceDrag);
-  }
+  if (drag.raf) window.cancelAnimationFrame(drag.raf);
+  renderWorkspaceDrag();
 }
 
 function finishWorkspaceDrag(nextName, commit) {
@@ -1795,7 +1787,7 @@ function bindWorkspaceSwipeZone() {
       if (!touch) return;
       const dx = touch.clientX - startX;
       const dy = touch.clientY - startY;
-      if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.35) {
+      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.25) {
         horizontal = true;
         event.preventDefault();
         updateWorkspaceDrag(dx);
