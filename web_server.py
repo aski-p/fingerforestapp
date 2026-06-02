@@ -843,6 +843,8 @@ class Handler(BaseHTTPRequestHandler):
                 owner_key, session_token = self.require_session_owner()
             if parsed.path == "/api/login":
                 pass
+            elif parsed.path == "/api/chat":
+                pass
             elif parsed.path == "/api/logout":
                 result = fruit_auto.logout(owner_key=owner_key, session_token=session_token)
             elif parsed.path == "/api/search":
