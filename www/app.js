@@ -1124,6 +1124,50 @@ function avatarStyle(url) {
   return url ? ` style="--history-photo:url('${String(url).replaceAll("'", "%27")}')"` : "";
 }
 
+function historyFlowPerson(item, side, fallbackName, fallbackPhoto = "") {
+  const id = item?.[`${side}EmployeeId`] || "";
+  const displayName = item?.[`${side}DisplayName`]
+    || personWithPosition(item?.[`${side}AvatarName`], item?.[`${side}PositionName`], fallbackName)
+    || fallbackName
+    || "-";
+  const photo = item?.[`${side}ProfilePhotoUrl`] || getCachedProfilePhoto(id) || fallbackPhoto || "";
+  return { id, displayName, photo };
+}
+
+function historyFlow(item, senderName) {
+  const meId = currentSenderEmployeeId();
+  const meName = personWithPosition(
+    currentState.senderEmployeeName || currentState.loginUser,
+    currentState.senderPositionName,
+    "나"
+  );
+  const mePhoto = currentSenderPhoto();
+  const counterpartName = senderName || item.displayName || item.target || item.senderName || "-";
+  const from = historyFlowPerson(item, "from", item.action === "sent" ? meName : counterpartName, item.action === "sent" ? mePhoto : "");
+  const to = historyFlowPerson(item, "to", item.action === "sent" ? counterpartName : meName, item.action === "received" ? mePhoto : "");
+  return { from, to, meId };
+}
+
+function historyFlowMarkup(item, senderName) {
+  const flow = historyFlow(item, senderName);
+  const personMarkup = (person, roleClass) => {
+    const avatarClass = person.photo ? "history-flow-avatar has-photo" : "history-flow-avatar";
+    return `
+      <span class="history-flow-person ${roleClass}">
+        <span class="${avatarClass}"${avatarStyle(person.photo)}>${person.photo ? "" : escapeHtml(getInitial(person.displayName))}</span>
+        <span class="history-flow-name">${escapeHtml(person.displayName)}</span>
+      </span>
+    `;
+  };
+  return `
+    <span class="history-flow" aria-label="${escapeHtml(`${flow.from.displayName}에서 ${flow.to.displayName}로`)}">
+      ${personMarkup(flow.from, "from")}
+      <span class="history-flow-arrow" aria-hidden="true">→</span>
+      ${personMarkup(flow.to, "to")}
+    </span>
+  `;
+}
+
 function setLockedState(unlocked) {
   $("workspace").classList.toggle("locked", !unlocked);
   document.body.classList.toggle("authenticated", unlocked);
@@ -1546,11 +1590,6 @@ function renderHistory(items) {
       item.targetPositionName || item.senderPositionName,
       "-"
     );
-    const counterpartPhoto = item.avatarProfilePhotoUrl
-      || item.senderProfilePhotoUrl
-      || getCachedProfilePhoto(item.avatarEmployeeId || item.senderEmployeeId || item.targetEmployeeId);
-    const senderPhoto = counterpartPhoto || "";
-    const avatarClass = senderPhoto ? "history-avatar has-photo" : "history-avatar";
     row.innerHTML = `
       <time>${historyTimeMarkup(item)}</time>
       <div class="history-main">
@@ -1559,7 +1598,7 @@ function renderHistory(items) {
         <small>씨앗/열매 ${escapeHtml(berryText)}</small>
       </div>
       <span class="${Number(item.delta) < 0 ? "history-delta minus" : Number(item.delta) > 0 ? "history-delta plus" : "history-delta"}">${escapeHtml(fmtDelta(item.delta))}</span>
-      <span class="${avatarClass}"${avatarStyle(senderPhoto)}>${senderPhoto ? "" : escapeHtml(getInitial(senderName))}</span>
+      ${historyFlowMarkup(item, senderName)}
     `;
     body.appendChild(row);
   });

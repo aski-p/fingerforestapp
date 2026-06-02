@@ -203,23 +203,42 @@ def list_profile_photos_by_name(names):
 
 
 def attach_profile_photos(items):
-    photos = list_profile_photos(
-        item.get("avatarEmployeeId") or item.get("senderEmployeeId")
-        for item in items
-    )
+    employee_ids = []
+    for item in items:
+        employee_ids.extend(
+            [
+                item.get("avatarEmployeeId") or item.get("senderEmployeeId"),
+                item.get("fromEmployeeId"),
+                item.get("toEmployeeId"),
+            ]
+        )
+    photos = list_profile_photos(employee_ids)
     missing_names = [
-        item.get("avatarName") or item.get("target") or item.get("senderName")
+        name
         for item in items
-        if not photos.get(str(item.get("avatarEmployeeId") or item.get("senderEmployeeId") or ""))
+        for name in (
+            item.get("avatarName") or item.get("target") or item.get("senderName"),
+            item.get("fromAvatarName") or item.get("fromDisplayName"),
+            item.get("toAvatarName") or item.get("toDisplayName"),
+        )
+        if name
     ]
     photos_by_name = list_profile_photos_by_name(missing_names)
     for item in items:
-        profile = photos.get(str(item.get("avatarEmployeeId") or item.get("senderEmployeeId") or ""))
+        avatar_key = str(item.get("avatarEmployeeId") or item.get("senderEmployeeId") or "")
+        profile = photos.get(avatar_key)
         if not profile:
             profile = photos_by_name.get(str(item.get("avatarName") or item.get("target") or item.get("senderName") or "").strip())
         if profile:
             item["avatarProfilePhotoUrl"] = profile.get("url") or ""
             item["senderProfilePhotoUrl"] = profile.get("url") or ""
+        for prefix in ("from", "to"):
+            key = str(item.get(f"{prefix}EmployeeId") or "")
+            profile = photos.get(key) if key else None
+            if not profile:
+                profile = photos_by_name.get(str(item.get(f"{prefix}AvatarName") or item.get(f"{prefix}DisplayName") or "").strip())
+            if profile:
+                item[f"{prefix}ProfilePhotoUrl"] = profile.get("url") or ""
     return items
 
 

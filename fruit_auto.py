@@ -1773,7 +1773,11 @@ def match_official_history_event(local_events, used_indexes, action, counterpart
             if str(event.get("targetEmployeeId") or "") != str(event.get("_historyEmployeeId") or ""):
                 continue
         if str(event_counterpart or "") != str(counterpart or ""):
-            continue
+            if sent_by_me:
+                continue
+            receiver_name = event.get("targetEmployeeName") or event.get("target")
+            if str(receiver_name or "") != str(counterpart or ""):
+                continue
         if parse_int(event.get("berries"), None) != berries:
             continue
         event_message = normalize_history_message(event.get("message"))
@@ -1842,7 +1846,11 @@ def remove_future_observed_history_times(rows):
 
 
 def sort_history_rows(rows):
-    return list(rows)
+    def sort_key(row):
+        parsed = parse_iso(row.get("at"))
+        return parsed or dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+
+    return sorted(rows, key=sort_key, reverse=True)
 
 
 def official_history(limit=40, owner_key=None, date=None, timezone_offset_minutes=0):
@@ -1871,7 +1879,8 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
         seed_count, fruit_count = parse_seed_berry_counts(row.get("stdMBerryCnt"))
         delta = parse_int(row.get("stdDBerryPmCnt"))
         action = "received" if delta > 0 else "sent"
-        counterpart = row.get("tgtEmpNm") or ""
+        api_counterpart = row.get("tgtEmpNm") or ""
+        counterpart = api_counterpart
         content_message = row.get("tgtMsg") or "[열매선물]"
         is_seed_history = is_seed_history_message(content_message)
         matched_event = match_official_history_event(
@@ -1883,22 +1892,48 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
             content_message,
             fruit_count if action == "sent" else None,
         )
+        if action == "received" and matched_event:
+            counterpart = matched_event.get("senderEmployeeName") or matched_event.get("sender") or counterpart
         employee_hint = employee_hint_from_event(matched_event, action) if matched_event else employee_hints.get(str(counterpart), {})
+        if (
+            action == "received"
+            and not matched_event
+            and str(api_counterpart or "") == str(sender_employee_name or "")
+            and state.get("targetEmployeeName")
+        ):
+            counterpart = state.get("targetEmployeeName") or counterpart
+            employee_hint = {
+                "employeeId": str(state.get("targetEmployeeId") or ""),
+                "positionName": state.get("targetPositionName") or "",
+            }
         counterpart_position_name = employee_hint.get("positionName") or ""
         counterpart_employee_id = employee_hint.get("employeeId") or ""
         sender_is_me = action == "sent"
+        me_display_name = display_employee(sender_employee_name, sender_position_name, "나")
         if action == "received":
             avatar_employee_id = counterpart_employee_id
             avatar_name = counterpart
             display_name = display_employee(counterpart, counterpart_position_name)
             display_employee_id = counterpart_employee_id
             display_position_name = counterpart_position_name
+            from_employee_id = counterpart_employee_id
+            from_display_name = display_employee(counterpart, counterpart_position_name, counterpart or "-")
+            from_avatar_name = counterpart
+            to_employee_id = str(sender_employee_id or "")
+            to_display_name = me_display_name
+            to_avatar_name = sender_employee_name
         else:
             avatar_employee_id = str(sender_employee_id or "")
             avatar_name = sender_employee_name
             display_name = display_employee(counterpart, counterpart_position_name)
             display_employee_id = str(sender_employee_id or "")
             display_position_name = sender_position_name
+            from_employee_id = str(sender_employee_id or "")
+            from_display_name = me_display_name
+            from_avatar_name = sender_employee_name
+            to_employee_id = counterpart_employee_id
+            to_display_name = display_employee(counterpart, counterpart_position_name, counterpart or "-")
+            to_avatar_name = counterpart
         history_date = history_date_from_month_day(month, day)
         item = {
                 "at": reliable_history_event_time(matched_event),
@@ -1917,6 +1952,12 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
                 "avatarEmployeeId": avatar_employee_id,
                 "avatarName": avatar_name,
                 "displayName": display_name,
+                "fromEmployeeId": from_employee_id,
+                "fromDisplayName": from_display_name,
+                "fromAvatarName": from_avatar_name,
+                "toEmployeeId": to_employee_id,
+                "toDisplayName": to_display_name,
+                "toAvatarName": to_avatar_name,
                 "senderIsMe": sender_is_me,
                 "seeds": seed_count,
                 "berries": 0 if is_seed_history else abs(delta),
@@ -2065,6 +2106,25 @@ def history(limit=40, owner_key=None, date=None, timezone_offset_minutes=0):
             avatar_name = counterpart_name
             sender_name = counterpart or "보낸사람"
             delta = berries
+        my_display_name = display_employee(
+            state.get("senderEmployeeName") or state.get("loginUser") or event.get("targetEmployeeName"),
+            state.get("senderPositionName") or event.get("targetPositionName"),
+            "나",
+        )
+        if sent_by_me:
+            from_employee_id = sender_employee_id
+            from_display_name = sender_name
+            from_avatar_name = avatar_name
+            to_employee_id = str(event.get("targetEmployeeId") or "")
+            to_display_name = counterpart
+            to_avatar_name = event.get("target") or event.get("targetEmployeeName") or counterpart
+        else:
+            from_employee_id = sender_employee_id
+            from_display_name = counterpart
+            from_avatar_name = avatar_name
+            to_employee_id = my_employee_id
+            to_display_name = my_display_name
+            to_avatar_name = state.get("senderEmployeeName") or state.get("loginUser") or ""
         if action == "received":
             display_seeds = state.get("lastSeedCount")
             display_remaining = event.get("receiverRemaining")
@@ -2084,6 +2144,12 @@ def history(limit=40, owner_key=None, date=None, timezone_offset_minutes=0):
             "senderName": sender_name,
             "senderPositionName": event.get("senderPositionName"),
             "displayName": counterpart,
+            "fromEmployeeId": from_employee_id,
+            "fromDisplayName": from_display_name,
+            "fromAvatarName": from_avatar_name,
+            "toEmployeeId": to_employee_id,
+            "toDisplayName": to_display_name,
+            "toAvatarName": to_avatar_name,
             "senderIsMe": sent_by_me,
             "seeds": display_seeds,
             "berries": event.get("berries"),
