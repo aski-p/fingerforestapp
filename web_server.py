@@ -22,7 +22,7 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.4.8"
+APP_VERSION = "3.5.1"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_HISTORY_MESSAGE_LIMIT = 10
 CHAT_INPUT_CHAR_LIMIT = 8000
@@ -30,6 +30,8 @@ CHAT_OUTPUT_TOKEN_LIMIT = 800
 CHAT_REPLY_INSTRUCTION = "답변은 800토큰 안에서 끝맺음까지 완결해 주세요. 길면 핵심만 요약하고 문장 중간에서 끊기지 않게 마무리하세요."
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "자동전송 열매 저장, 자동전송 켜기, 지금 한 번 전송 시 직원, 메시지, 열매 수가 비어 있으면 입력 확인 팝업으로 막도록 수정했습니다.",
+    "업무일지 설정 저장과 지금 한 번 작성 시 프로젝트, 메시지, 씨앗 수, 일지내용, 업무씨앗 받을 직원이 비어 있으면 각각 입력 확인 팝업을 띄우도록 수정했습니다.",
     "상단 헤더에서 사용자 이름 텍스트를 제거하고 프로필 사진만 남겨 버튼 영역이 좁아지지 않게 정리했습니다.",
     "업무일지 자동 작성 시간 입력칸의 iOS 시간 텍스트가 위로 뜨지 않도록 세로 정렬을 보정했습니다.",
     "열매 보내기/업무일지 화면 폭 고정 구조는 유지하면서 스와이프 전환 시 부드러운 slide-in/slide-out 애니메이션을 복원했습니다.",

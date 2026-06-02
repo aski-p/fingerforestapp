@@ -204,6 +204,15 @@ def get_send_all_berries(state=None):
     return bool(state.get("sendAllBerries"))
 
 
+def validate_transfer_settings(state):
+    if not state.get("targetEmployeeId") or not state.get("targetEmployeeName"):
+        raise FruitAutoError("자동전송 받을 직원을 선택해 주세요.")
+    if not str(state.get("giftMessage") or "").strip():
+        raise FruitAutoError("메시지를 작성해주세요.")
+    if not get_send_all_berries(state) and get_send_berry_count(state) <= 0:
+        raise FruitAutoError("보낼 열매 수를 작성해주세요.")
+
+
 def seconds_since(value):
     if not value:
         return None
@@ -3090,7 +3099,10 @@ def set_target(emp_id, name=None, duty_id=None, dept_nm=None, pos_nm=None, owner
 def set_message(message, owner_key=None):
     owner_key = require_owner(owner_key)
     state = get_account_state(owner_key)
-    state["giftMessage"] = message or DEFAULT_STATE["giftMessage"]
+    message = str(message or "").strip()
+    if not message:
+        raise FruitAutoError("메시지를 작성해주세요.")
+    state["giftMessage"] = message
     state["updatedAt"] = now_iso()
     save_account_state(owner_key, state)
     return state
@@ -3099,6 +3111,14 @@ def set_message(message, owner_key=None):
 def set_send_berry_count(count, send_all=False, owner_key=None):
     owner_key = require_owner(owner_key)
     state = get_account_state(owner_key)
+    if not send_all and str(count or "").strip() == "":
+        raise FruitAutoError("보낼 열매 수를 작성해주세요.")
+    try:
+        requested_count = int(count or 0)
+    except (TypeError, ValueError):
+        requested_count = 0
+    if not send_all and requested_count <= 0:
+        raise FruitAutoError("보낼 열매 수를 작성해주세요.")
     state["sendBerryCount"] = get_send_berry_count({"sendBerryCount": count})
     state["sendAllBerries"] = bool(send_all)
     state["updatedAt"] = now_iso()
@@ -3138,8 +3158,8 @@ def set_run_interval(minutes, owner_key=None):
 def set_enabled(enabled, owner_key=None):
     owner_key = require_owner(owner_key)
     state = get_account_state(owner_key)
-    if enabled and not state.get("targetEmployeeId"):
-        raise FruitAutoError("대상 직원을 먼저 검색해서 선택하세요.")
+    if enabled:
+        validate_transfer_settings(state)
     interval_seconds = get_run_interval_seconds(state)
     state.update(
         {
@@ -3543,18 +3563,24 @@ def set_worklog_settings(payload, owner_key=None):
         raise FruitAutoError("씨앗 선물은 최대 3개까지 가능합니다.")
     project_id = payload.get("projectId", state.get("worklogProjectId"))
     project_name = payload.get("projectName", state.get("worklogProjectName"))
+    seed_message = str(payload.get("seedMessage", state.get("worklogSeedMessage") or "") or "").strip()
     content = str(payload.get("content", state.get("worklogContent") or "") or "").strip()
     enabled = bool(payload.get("enabled", state.get("worklogEnabled")))
-    if enabled:
-        if not project_id or not project_name:
-            raise FruitAutoError("업무일지 프로젝트를 선택하세요.")
-        if not content:
-            raise FruitAutoError("업무일지 내용을 입력하세요.")
     target_employee_id = payload.get("targetEmployeeId", state.get("worklogTargetEmployeeId"))
     target_employee_name = payload.get("targetEmployeeName", state.get("worklogTargetEmployeeName"))
     target_dept_name = payload.get("targetDeptName", state.get("worklogTargetDeptName"))
     target_position_name = payload.get("targetPositionName", state.get("worklogTargetPositionName"))
     target_duty_id = payload.get("targetDutyId", state.get("worklogTargetDutyId"))
+    if not project_id or not project_name:
+        raise FruitAutoError("프로젝트를 선택해주세요.")
+    if not seed_message:
+        raise FruitAutoError("메시지를 작성해주세요.")
+    if seed_count <= 0:
+        raise FruitAutoError("보낼 씨앗 수를 작성해주세요.")
+    if not content:
+        raise FruitAutoError("일지내용을 작성해주세요.")
+    if not target_employee_id or not target_employee_name:
+        raise FruitAutoError("업무씨앗 받을 직원을 선택해 주세요.")
     saved_at = now_iso()
     schedule_time = normalize_schedule_time(payload.get("scheduleTime", state.get("worklogScheduleTime")))
     schedule_dates = prune_expired_schedule_dates(
@@ -3568,7 +3594,7 @@ def set_worklog_settings(payload, owner_key=None):
         "worklogScheduleDates": schedule_dates,
         "worklogScheduleTime": schedule_time,
         "worklogSeedCount": seed_count,
-        "worklogSeedMessage": str(payload.get("seedMessage", state.get("worklogSeedMessage") or "") or ""),
+        "worklogSeedMessage": seed_message,
         "worklogTargetEmployeeId": target_employee_id,
         "worklogTargetEmployeeName": target_employee_name,
         "worklogTargetDeptName": target_dept_name,

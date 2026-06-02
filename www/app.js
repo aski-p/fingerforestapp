@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.4.8";
+const appVersion = "3.5.1";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1523,6 +1523,7 @@ function closeWorklogSuccessModal() {
 
 let workspaceTransitionTimer = 0;
 let workspaceDragState = null;
+const workspaceSlideEase = "cubic-bezier(.19, 1, .22, 1)";
 
 function workspacePanelName(panel) {
   return panel?.id === "worklogPanel" ? "worklog" : "fruit";
@@ -1561,10 +1562,11 @@ function setWorkspaceTab(name, options = {}) {
   }
 
   const forward = currentName !== "worklog" && nextName === "worklog";
-  const enterOffset = forward ? "22px" : "-22px";
-  const exitOffset = forward ? "-18px" : "18px";
+  const width = Math.max(1, pager.clientWidth || nextPanel.clientWidth || window.innerWidth);
+  const enterOffset = forward ? `${width}px` : `${-width}px`;
+  const exitOffset = forward ? `${-width}px` : `${width}px`;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const duration = reducedMotion ? 140 : 320;
+  const duration = reducedMotion ? 160 : 520;
 
   pager.style.height = `${pager.offsetHeight}px`;
   pager.classList.add("is-animating");
@@ -1578,7 +1580,7 @@ function setWorkspaceTab(name, options = {}) {
   currentPanel.style.opacity = "1";
 
   void nextPanel.offsetWidth;
-  const transition = `transform ${duration}ms cubic-bezier(.22, 1, .36, 1), opacity ${duration}ms ease`;
+  const transition = `transform ${duration}ms ${workspaceSlideEase}, opacity ${duration}ms ease-out`;
   nextPanel.style.transition = transition;
   currentPanel.style.transition = transition;
   nextPanel.style.transform = "translateX(0)";
@@ -1617,6 +1619,9 @@ function workspacePanels() {
 function resetWorkspaceDragStyles() {
   const { pager, fruitPanel, worklogPanel } = workspacePanels();
   window.clearTimeout(workspaceTransitionTimer);
+  if (workspaceDragState?.raf) {
+    window.cancelAnimationFrame(workspaceDragState.raf);
+  }
   [fruitPanel, worklogPanel].forEach((panel) => {
     if (!panel) return;
     panel.classList.remove("is-entering", "is-exiting");
@@ -1662,8 +1667,31 @@ function prepareWorkspaceDrag(dx) {
     direction: dx < 0 ? -1 : 1,
     width,
     lastDx: 0,
+    targetDx: 0,
+    renderedDx: 0,
+    raf: 0,
   };
   return workspaceDragState;
+}
+
+function renderWorkspaceDrag() {
+  const drag = workspaceDragState;
+  if (!drag) return;
+  drag.renderedDx += (drag.targetDx - drag.renderedDx) * 0.28;
+  if (Math.abs(drag.targetDx - drag.renderedDx) < 0.35) {
+    drag.renderedDx = drag.targetDx;
+  }
+  const nextX = -drag.direction * drag.width + drag.renderedDx;
+  const progress = Math.min(1, Math.abs(drag.renderedDx) / drag.width);
+  drag.currentPanel.style.transform = `translate3d(${drag.renderedDx}px, 0, 0)`;
+  drag.currentPanel.style.opacity = String(1 - progress * 0.18);
+  drag.nextPanel.style.transform = `translate3d(${nextX}px, 0, 0)`;
+  drag.nextPanel.style.opacity = String(0.9 + progress * 0.1);
+  if (drag.renderedDx !== drag.targetDx) {
+    drag.raf = window.requestAnimationFrame(renderWorkspaceDrag);
+  } else {
+    drag.raf = 0;
+  }
 }
 
 function updateWorkspaceDrag(dx) {
@@ -1674,19 +1702,17 @@ function updateWorkspaceDrag(dx) {
   }
   if (!drag) {
     const { currentPanel } = workspacePanels();
-    if (currentPanel) currentPanel.style.transform = `translateX(${dx * 0.18}px)`;
+    if (currentPanel) currentPanel.style.transform = `translate3d(${dx * 0.14}px, 0, 0)`;
     return;
   }
 
   const maxPull = drag.width * 0.92;
   const clampedDx = Math.max(-maxPull, Math.min(maxPull, dx));
-  const nextX = -drag.direction * drag.width + clampedDx;
-  const progress = Math.min(1, Math.abs(clampedDx) / drag.width);
   drag.lastDx = clampedDx;
-  drag.currentPanel.style.transform = `translateX(${clampedDx}px)`;
-  drag.currentPanel.style.opacity = String(1 - progress * 0.22);
-  drag.nextPanel.style.transform = `translateX(${nextX}px)`;
-  drag.nextPanel.style.opacity = String(0.82 + progress * 0.18);
+  drag.targetDx = clampedDx;
+  if (!drag.raf) {
+    drag.raf = window.requestAnimationFrame(renderWorkspaceDrag);
+  }
 }
 
 function finishWorkspaceDrag(nextName, commit) {
@@ -1697,21 +1723,26 @@ function finishWorkspaceDrag(nextName, commit) {
   }
 
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const duration = reducedMotion ? 140 : 260;
-  const transition = `transform ${duration}ms cubic-bezier(.22, 1, .36, 1), opacity ${duration}ms ease`;
+  const duration = reducedMotion ? 160 : 480;
+  if (drag.raf) {
+    window.cancelAnimationFrame(drag.raf);
+    drag.raf = 0;
+    renderWorkspaceDrag();
+  }
+  const transition = `transform ${duration}ms ${workspaceSlideEase}, opacity ${duration}ms ease-out`;
   drag.currentPanel.style.transition = transition;
   drag.nextPanel.style.transition = transition;
 
   if (commit) {
-    drag.currentPanel.style.transform = `translateX(${drag.direction * drag.width}px)`;
+    drag.currentPanel.style.transform = `translate3d(${drag.direction * drag.width}px, 0, 0)`;
     drag.currentPanel.style.opacity = "0";
-    drag.nextPanel.style.transform = "translateX(0)";
+    drag.nextPanel.style.transform = "translate3d(0, 0, 0)";
     drag.nextPanel.style.opacity = "1";
   } else {
-    drag.currentPanel.style.transform = "translateX(0)";
+    drag.currentPanel.style.transform = "translate3d(0, 0, 0)";
     drag.currentPanel.style.opacity = "1";
-    drag.nextPanel.style.transform = `translateX(${-drag.direction * drag.width}px)`;
-    drag.nextPanel.style.opacity = "0.82";
+    drag.nextPanel.style.transform = `translate3d(${-drag.direction * drag.width}px, 0, 0)`;
+    drag.nextPanel.style.opacity = "0.9";
   }
 
   workspaceTransitionTimer = window.setTimeout(() => {
@@ -2739,6 +2770,70 @@ function worklogPayload(enabledOverride) {
   };
 }
 
+function validateWorklogPayload(payload) {
+  if (!payload.projectId || !payload.projectName) {
+    return "프로젝트를 선택해주세요.";
+  }
+  if (!payload.seedMessage) {
+    return "메시지를 작성해주세요.";
+  }
+  if (!payload.seedCount) {
+    return "보낼 씨앗 수를 작성해주세요.";
+  }
+  if (!payload.content) {
+    return "일지내용을 작성해주세요.";
+  }
+  if (!payload.targetEmployeeId || !payload.targetEmployeeName) {
+    return "업무씨앗 받을 직원을 선택해 주세요.";
+  }
+  return "";
+}
+
+function requireValidWorklogPayload(enabledOverride) {
+  const payload = worklogPayload(enabledOverride);
+  const message = validateWorklogPayload(payload);
+  if (message) {
+    openSuccessModal("입력 확인", message, false);
+    return null;
+  }
+  return payload;
+}
+
+function transferSettingsPayload() {
+  const sendAll = $("sendAllBerries").checked;
+  const countValue = $("sendBerryCount").value.trim();
+  const count = Number(countValue);
+  return {
+    message: $("giftMessage").value.trim(),
+    countValue,
+    count: Number.isFinite(count) ? Math.floor(count) : 0,
+    sendAll,
+  };
+}
+
+function validateTransferSettings(payload) {
+  if (!currentState.targetEmployeeId || !currentState.targetEmployeeName) {
+    return "자동전송 받을 직원을 선택해 주세요.";
+  }
+  if (!payload.message) {
+    return "메시지를 작성해주세요.";
+  }
+  if (!payload.sendAll && (!payload.countValue || payload.count <= 0)) {
+    return "보낼 열매 수를 작성해주세요.";
+  }
+  return "";
+}
+
+function requireValidTransferSettings() {
+  const payload = transferSettingsPayload();
+  const message = validateTransferSettings(payload);
+  if (message) {
+    openSuccessModal("입력 확인", message, false);
+    return null;
+  }
+  return payload;
+}
+
 $("worklogSearchBtn").addEventListener("click", async () => {
   const query = $("worklogSearchInput").value.trim();
   if (!isUnlocked()) {
@@ -2837,13 +2932,15 @@ $("worklogSaveBtn").addEventListener("click", async () => {
     return;
   }
   try {
+    const payload = requireValidWorklogPayload();
+    if (!payload) return;
     setBusy(true);
-    const state = await api("/api/worklog-settings", worklogPayload());
+    const state = await api("/api/worklog-settings", payload);
     worklogDraftDirty = false;
     renderState(state);
     toast(state.worklogEnabled ? "업무일지 예약을 저장했습니다." : "업무일지 설정을 저장했습니다.");
   } catch (err) {
-    toast(`업무일지 저장 실패: ${err.message}`);
+    openSuccessModal("입력 확인", err.message, false);
   } finally {
     setBusy(false);
   }
@@ -2855,8 +2952,10 @@ $("worklogRunBtn").addEventListener("click", async () => {
     return;
   }
   try {
+    const payload = requireValidWorklogPayload(false);
+    if (!payload) return;
     setBusy(true);
-    await api("/api/worklog-settings", worklogPayload(false));
+    await api("/api/worklog-settings", payload);
     const result = await api("/api/worklog-run-now", {});
     worklogDraftDirty = false;
     renderState(result.state || currentState);
@@ -2867,7 +2966,7 @@ $("worklogRunBtn").addEventListener("click", async () => {
       clearAuthenticatedUi();
       toast("");
     } else {
-      toast(`업무일지 즉시 작성 실패: ${err.message}`);
+      openSuccessModal("입력 확인", err.message, false);
     }
   } finally {
     setBusy(false);
@@ -2899,7 +2998,9 @@ $("searchBtn").addEventListener("click", async () => {
 $("messageBtn").addEventListener("click", async () => {
   try {
     setBusy(true);
-    const { state, count, sendAll } = await saveTransferSettings();
+    const saved = await saveTransferSettings();
+    if (!saved) return;
+    const { state, count, sendAll } = saved;
     renderState(state);
     toast(sendAll ? "전송 설정을 저장했습니다. 앞으로 보유 열매를 전부 보냅니다." : `전송 설정을 저장했습니다. 앞으로 최대 ${count}개씩 보냅니다.`);
   } catch (err) {
@@ -2923,10 +3024,13 @@ $("sendBerryCount").addEventListener("input", () => {
 });
 
 async function saveTransferSettings() {
-  const sendAll = $("sendAllBerries").checked;
+  const payload = requireValidTransferSettings();
+  if (!payload) return null;
+  const sendAll = payload.sendAll;
   $("sendBerryCount").disabled = sendAll;
-  const count = Math.max(1, Math.floor(Number($("sendBerryCount").value || 1)));
-  await api("/api/message", { message: $("giftMessage").value.trim() });
+  const count = payload.count;
+  $("sendBerryCount").value = count;
+  await api("/api/message", { message: payload.message });
   const state = await api("/api/send-count", { count, sendAll });
   return { state, count, sendAll };
 }
@@ -2941,7 +3045,11 @@ $("autoToggle").addEventListener("change", async () => {
   try {
     setBusy(true);
     if ($("autoToggle").checked) {
-      await saveTransferSettings();
+      const saved = await saveTransferSettings();
+      if (!saved) {
+        $("autoToggle").checked = false;
+        return;
+      }
     }
     const path = $("autoToggle").checked ? "/api/on" : "/api/off";
     const state = await api(path, {});
@@ -2987,8 +3095,9 @@ $("runBtn").addEventListener("click", async () => {
   }
   try {
     setBusy(true);
+    const saved = await saveTransferSettings();
+    if (!saved) return;
     toast("실행 중입니다...");
-    await saveTransferSettings();
     const result = await api("/api/run-now", {});
     toast("");
     openFruitRunResultModal(result);

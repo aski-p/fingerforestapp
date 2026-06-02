@@ -1132,6 +1132,10 @@ textarea:focus {
   scroll-snap-type: none !important;
 }
 
+.workspace-pager.is-dragging {
+  pointer-events: auto;
+}
+
 .workspace-pager.is-animating .workspace-slide {
   scroll-snap-align: none;
 }
@@ -1169,6 +1173,8 @@ textarea:focus {
   width: 100%;
   max-width: 100%;
   will-change: opacity, transform;
+  backface-visibility: hidden;
+  transform: translate3d(0, 0, 0);
 }
 
 .workspace-slide.is-exiting {
