@@ -2,12 +2,12 @@
 <html lang="ko">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#f7f9fc">
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <link rel="icon" href="/icons/apple-icon-192.png" type="image/png">
-    <link rel="stylesheet" href="/styles.css?v=3.2.4">
+    <link rel="stylesheet" href="/styles.css?v=3.2.6">
     <title>fingerfruit</title>
   </head>
   <body class="logged-out">
@@ -131,8 +131,9 @@
             <section class="card getter-menu-card getter-card-transfer">
               <div class="section-title">
                 <div>
-                  <h2>전송 설정</h2>
+                  <h2>열매 보내기</h2>
                 </div>
+                <span id="fruitScheduleBadge" class="badge neutral">대기</span>
               </div>
               <label>
                 <span>전달 메시지</span>
@@ -387,10 +388,10 @@
 
       <p id="toast" class="toast" role="status"></p>
       <footer class="app-footer">
-        <span>v3.2.4 정식버전 · by aski</span>
+        <span>v3.2.6 정식버전 · by aski</span>
         <a id="supportLink" class="support-link" href="https://qr.kakaopay.com/Ej7ruxJDq" target="_blank" rel="noopener" aria-label="카카오페이로 후원하기">후원하기</a>
       </footer>
     </main>
-    <script src="/app.js?v=3.2.4"></script>
+    <script src="/app.js?v=3.2.6"></script>
   </body>
 </html>

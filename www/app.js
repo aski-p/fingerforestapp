@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.2.4";
+const appVersion = "3.2.6";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1587,6 +1587,8 @@ function renderState(state) {
   $("sendAllBerries").disabled = !unlocked;
   const sendModeText = sendAllBerries ? "보유 열매 전부" : `${sendCount}개`;
   const daemonText = state.daemonRunning ? "데몬 실행 중" : "데몬 확인 필요";
+  $("fruitScheduleBadge").textContent = enabled ? `예약됨 ${intervalMinutes(state)}분마다 전송` : "대기";
+  $("fruitScheduleBadge").className = `badge ${enabled ? "ok" : "neutral"}`;
   $("controlHint").textContent = enabled
     ? `켜짐 상태입니다. ${daemonText}. 다음 확인 ${fmtDate(state.nextRunAt)}. 전송 수 ${sendModeText}`
     : hasTarget
@@ -2040,7 +2042,6 @@ function renderChatMessages() {
 function openChatPopup() {
   $("chatPopup").classList.remove("hidden");
   renderChatMessages();
-  window.setTimeout(() => $("chatInput")?.focus(), 60);
 }
 
 function closeChatPopup() {

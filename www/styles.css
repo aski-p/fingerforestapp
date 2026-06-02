@@ -42,6 +42,10 @@
   text-rendering: optimizeLegibility;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body.theme-dark {
   --bg: #101418;
   --surface: #171d23;
@@ -202,16 +206,21 @@ body.theme-cyber {
 }
 
 body.theme-peach {
-  --bg: #fff7ed;
-  --surface-tint: #ffedd5;
-  --line: #fecaca;
-  --line-strong: #fb7185;
-  --accent: #be123c;
-  --accent-bright: #fb7185;
-  --accent-soft: #ffe4e6;
-  --button: #7c2d12;
-  --blue-soft: #fff7ed;
-  --gold-soft: #fed7aa;
+  --bg: #fff4ec;
+  --surface: #fffaf7;
+  --surface-soft: #fff0e6;
+  --surface-tint: #ffe8d8;
+  --line: #ffd2bd;
+  --line-strong: #fb9f75;
+  --text: #3d1f16;
+  --text-strong: #24100b;
+  --muted: #8a5b4a;
+  --accent: #c75028;
+  --accent-bright: #fb8757;
+  --accent-soft: #ffe1d0;
+  --button: #9a3412;
+  --blue-soft: #fff1e8;
+  --gold-soft: #ffd9bd;
 }
 
 body.theme-mono {
@@ -285,7 +294,9 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  overflow-x: hidden;
   background: var(--bg);
+  touch-action: manipulation;
 }
 
 body.theme-getter {
@@ -321,6 +332,7 @@ input:disabled {
   min-height: 100vh;
   margin: 0 auto;
   padding: max(18px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom));
+  overflow-x: clip;
 }
 
 .hero {
@@ -811,16 +823,30 @@ h2 {
   margin-bottom: 14px;
 }
 
+.section-title > div {
+  min-width: 0;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   min-width: 54px;
   min-height: 28px;
   border-radius: 999px;
   padding: 0 10px;
   font-size: 12px;
   font-weight: 900;
+}
+
+#fruitScheduleBadge {
+  max-width: 48%;
+  min-height: 30px;
+  border-radius: 8px;
+  line-height: 1.15;
+  text-align: center;
+  white-space: normal;
 }
 
 .badge.ok {
@@ -1027,6 +1053,7 @@ textarea:focus {
 
 .workspace {
   display: block;
+  overflow-x: hidden;
 }
 
 .workspace.locked {
@@ -1062,12 +1089,12 @@ textarea:focus {
 .workspace-pager {
   display: flex;
   gap: 12px;
-  margin: 0 -18px;
-  padding: 0 18px 8px;
+  margin: 0 -16px;
+  padding: 0 16px 8px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
-  scroll-padding: 18px;
+  scroll-padding: 16px;
   scrollbar-width: none;
 }
 
@@ -1523,6 +1550,11 @@ textarea:focus {
   box-shadow: 0 14px 34px var(--shadow);
 }
 
+body.logged-out .chat-fab,
+body.logged-out .chat-popup {
+  display: none;
+}
+
 .chat-fab-mark {
   position: relative;
   display: block;
@@ -1640,7 +1672,8 @@ textarea:focus {
   max-height: 96px;
   resize: none;
   padding: 9px 10px;
-  font-size: 13px;
+  font-size: 16px;
+  line-height: 1.35;
 }
 
 .chat-form button {
@@ -2603,6 +2636,8 @@ body .empty,
 body .saved-login,
 body .login-profile,
 body input,
+body select,
+body textarea,
 body .push-control,
 body .send-all-option,
 body .interval-control,
@@ -3133,6 +3168,14 @@ body .modal {
     margin-right: -14px;
     padding-left: 14px;
     padding-right: 14px;
+  }
+
+  .workspace-pager {
+    margin-left: -14px;
+    margin-right: -14px;
+    padding-left: 14px;
+    padding-right: 14px;
+    scroll-padding: 14px;
   }
 
   h1 {
