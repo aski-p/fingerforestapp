@@ -1103,6 +1103,11 @@ textarea:focus {
 
 .workspace-pager.is-animating {
   pointer-events: none;
+  scroll-snap-type: none !important;
+}
+
+.workspace-pager.is-animating .workspace-slide {
+  scroll-snap-align: none;
 }
 
 .workspace-pager::-webkit-scrollbar {
@@ -1117,7 +1122,7 @@ textarea:focus {
 
 .fruit-send-panel {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .fruit-send-card {
@@ -1128,12 +1133,12 @@ textarea:focus {
 }
 
 .fruit-card-section {
-  padding: 16px;
+  padding: 14px;
 }
 
 .fruit-send-unified {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .fruit-send-title {
@@ -1142,13 +1147,28 @@ textarea:focus {
 
 .fruit-unified-block {
   display: grid;
-  gap: 12px;
+  gap: 9px;
   min-width: 0;
 }
 
 .fruit-unified-block + .fruit-unified-block {
   border-top: 1px solid var(--line);
-  padding-top: 14px;
+  padding-top: 10px;
+}
+
+.fruit-unified-block label {
+  margin-bottom: 0;
+}
+
+.fruit-send-card input,
+.fruit-send-card select {
+  height: 46px;
+}
+
+.fruit-send-card .secondary,
+.fruit-send-card .dark,
+.fruit-send-card .searchrow button {
+  min-height: 46px;
 }
 
 .fruit-unified-block h3,
@@ -1887,7 +1907,7 @@ body.logged-out .chat-popup {
   grid-template-columns: 18px auto;
   gap: 7px;
   align-items: center;
-  min-height: 50px;
+  min-height: 46px;
   margin: 0;
   border: 1px solid #dce8f0;
   border-radius: 8px;
@@ -1912,7 +1932,7 @@ body.logged-out .chat-popup {
 .control-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
+  gap: 10px;
   align-items: center;
 }
 
@@ -1941,10 +1961,10 @@ body.logged-out .chat-popup {
 }
 
 .control-card p:not(.label) {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   color: #667085;
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .interval-control {
@@ -1953,7 +1973,7 @@ body.logged-out .chat-popup {
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: center;
-  padding: 12px;
+  padding: 10px;
   border: 1px solid #dce8f0;
   border-radius: 8px;
   background: #f8fbfd;
@@ -3062,7 +3082,7 @@ body.theme-getter .fruit-send-card {
 }
 
 body.theme-getter .fruit-send-card .fruit-card-section {
-  padding: 16px;
+  padding: 14px;
 }
 
 body.theme-getter .fruit-send-card .getter-card-target {
@@ -3071,7 +3091,7 @@ body.theme-getter .fruit-send-card .getter-card-target {
 
 body.theme-getter .fruit-send-card .getter-card-transfer,
 body.theme-getter .fruit-send-card .getter-card-auto {
-  padding-right: 16px;
+  padding-right: 0;
 }
 
 body.theme-getter .fruit-send-card .fruit-send-unified {
@@ -3079,12 +3099,18 @@ body.theme-getter .fruit-send-card .fruit-send-unified {
 }
 
 body.theme-getter .fruit-send-card .fruit-send-title {
-  padding-right: 96px;
+  padding-right: 82px;
 }
 
 body.theme-getter .fruit-send-card .control-card {
   min-height: 0;
   margin-top: 0;
+}
+
+body.theme-getter .fruit-send-card .getter-card-transfer .section-title,
+body.theme-getter .fruit-send-card .getter-card-transfer > label,
+body.theme-getter .fruit-send-card .getter-card-auto > div:first-child {
+  width: 100%;
 }
 
 body.theme-getter .fruit-send-card .control-card::before {

@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.3.0";
+const appVersion = "3.3.1";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1493,13 +1493,15 @@ function animateWorkspaceScroll(left, nextName) {
   if (!pager) return;
   const start = pager.scrollLeft;
   const distance = left - start;
-  const duration = 360;
+  const duration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 180 : 640;
   const startedAt = performance.now();
   pager.classList.add("is-animating");
 
   function step(now) {
     const elapsed = Math.min(1, (now - startedAt) / duration);
-    const eased = 1 - Math.pow(1 - elapsed, 3);
+    const eased = elapsed < 0.5
+      ? 4 * elapsed * elapsed * elapsed
+      : 1 - Math.pow(-2 * elapsed + 2, 3) / 2;
     pager.scrollLeft = start + distance * eased;
     if (elapsed < 1) {
       requestAnimationFrame(step);
