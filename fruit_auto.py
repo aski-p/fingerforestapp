@@ -1847,10 +1847,14 @@ def remove_future_observed_history_times(rows):
 
 def sort_history_rows(rows):
     def sort_key(row):
+        api_index = parse_int(row.get("_apiIndex"), None)
+        if api_index is not None:
+            return (0, api_index)
         parsed = parse_iso(row.get("at"))
-        return parsed or dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+        fallback_time = parsed or dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+        return (1, -fallback_time.timestamp())
 
-    return sorted(rows, key=sort_key, reverse=True)
+    return sorted(rows, key=sort_key)
 
 
 def official_history(limit=40, owner_key=None, date=None, timezone_offset_minutes=0):
@@ -1872,7 +1876,7 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
     employee_hints = local_history_hints_by_name(local_events)
     rows = []
     seed_api_ordinal_by_date = {}
-    for row in content:
+    for api_index, row in enumerate(content):
         day = parse_int(str(row.get("stdDt") or "").replace("일", ""), None)
         if selected_day is not None and day != selected_day:
             continue
@@ -1938,6 +1942,7 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
         item = {
                 "at": reliable_history_event_time(matched_event),
                 "_matchedTimeSource": matched_event.get("timeSource") if matched_event else None,
+                "_apiIndex": api_index,
                 "displayTime": row.get("stdDt") or "",
                 "timeLabel": "받음" if action == "received" else "보냄",
                 "action": action,
@@ -1991,12 +1996,9 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
             fingerprint = row.get("_officialSeedFingerprint")
             occurrence_by_fingerprint[fingerprint] = occurrence_by_fingerprint.get(fingerprint, 0) + 1
             first_seen_at = lookup.get((fingerprint, occurrence_by_fingerprint[fingerprint]))
-            if first_seen_at and observed_time_matches_history_date(first_seen_at, row.get("historyDate")) and not row.get("at"):
-                row["at"] = first_seen_at
+            if first_seen_at and observed_time_matches_history_date(first_seen_at, row.get("historyDate")):
+                row["observedAt"] = first_seen_at
                 row["_matchedTimeSource"] = "seed_observed"
-            elif row.get("_apiOrderTime") and not row.get("at"):
-                row["at"] = row.get("_apiOrderTime")
-                row["_matchedTimeSource"] = "api_order"
     berry_rows_by_date = {}
     for row in rows:
         if row.get("historyKind") != "seed" and row.get("historyDate"):
@@ -2013,8 +2015,8 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
             fingerprint = row.get("_officialFingerprint")
             occurrence_by_fingerprint[fingerprint] = occurrence_by_fingerprint.get(fingerprint, 0) + 1
             first_seen_at = lookup.get((fingerprint, occurrence_by_fingerprint[fingerprint]))
-            if first_seen_at and not row.get("at"):
-                row["at"] = first_seen_at
+            if first_seen_at:
+                row["observedAt"] = first_seen_at
                 row["_matchedTimeSource"] = "observed_db"
     for row in rows:
         if not row.get("at"):
@@ -2037,6 +2039,7 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
         row.pop("_officialSeedFingerprint", None)
         row.pop("_apiOrderTime", None)
         row.pop("_matchedTimeSource", None)
+        row.pop("_apiIndex", None)
         row.pop("_dropUnpairedReceived", None)
         row.pop("ownerKey", None)
         row.pop("historyEmployeeId", None)
