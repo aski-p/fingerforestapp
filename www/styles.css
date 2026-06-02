@@ -1116,7 +1116,7 @@ textarea:focus {
   overflow-x: hidden;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
-  scroll-snap-type: x mandatory;
+  scroll-snap-type: none;
   scroll-padding: 16px;
   scrollbar-width: none;
   touch-action: pan-y;
@@ -1140,7 +1140,6 @@ textarea:focus {
   flex: 0 0 100%;
   min-width: 0;
   align-self: flex-start;
-  scroll-snap-align: start;
 }
 
 .fruit-send-panel {

@@ -22,7 +22,7 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.3.9"
+APP_VERSION = "3.4.0"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_HISTORY_MESSAGE_LIMIT = 10
 CHAT_INPUT_CHAR_LIMIT = 8000
@@ -30,6 +30,7 @@ CHAT_OUTPUT_TOKEN_LIMIT = 800
 CHAT_REPLY_INSTRUCTION = "답변은 800토큰 안에서 끝맺음까지 완결해 주세요. 길면 핵심만 요약하고 문장 중간에서 끊기지 않게 마무리하세요."
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "업무일지/열매보내기 본문 세로 스크롤 중 화면이 옆으로 밀리지 않도록 스와이프 전환 감지를 상단 탭 영역으로만 제한했습니다.",
     "왕관 팝업 랭킹 리스트를 서버 기본 제한 없이 전체 조회하도록 바꾸고 팝업 안에서 스크롤해 볼 수 있게 정리했습니다.",
     "메인 화면 왕관 버튼 텍스트를 실제 왕관 이미지로 교체했습니다.",
     "랭킹 1/2/3등 이미지 위에 숫자가 겹쳐 보이지 않도록 배지 이미지만 표시하게 정리했습니다.",

@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.3.9";
+const appVersion = "3.4.0";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1582,9 +1582,8 @@ function activeWorkspacePanel() {
 }
 
 function bindWorkspaceSwipeZone() {
-  const zones = [document.querySelector(".workspace-tabs"), $("workspacePager")].filter(Boolean);
+  const zones = [document.querySelector(".workspace-tabs")].filter(Boolean);
   if (!zones.length) return;
-  const interactiveSelector = "input, textarea, select, button, a, label, .results, .person, .date-chips, .modal";
 
   zones.forEach((zone) => {
     let startX = 0;
@@ -1592,7 +1591,6 @@ function bindWorkspaceSwipeZone() {
     let tracking = false;
 
     zone.addEventListener("touchstart", (event) => {
-      if (zone.id === "workspacePager" && event.target.closest(interactiveSelector)) return;
       const touch = event.touches && event.touches[0];
       if (!touch) return;
       startX = touch.clientX;
