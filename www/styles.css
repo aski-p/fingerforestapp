@@ -1122,11 +1122,13 @@ textarea:focus {
 
 .fruit-send-panel {
   display: grid;
+  align-items: start;
   gap: 8px;
 }
 
 .fruit-send-card {
   display: grid;
+  align-items: start;
   gap: 0;
   padding: 0;
   overflow: hidden;
@@ -1138,6 +1140,8 @@ textarea:focus {
 
 .fruit-send-unified {
   display: grid;
+  align-content: start;
+  align-items: start;
   gap: 7px;
 }
 
