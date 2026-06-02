@@ -89,6 +89,18 @@
         background: #e8f8ef;
         color: #047857;
       }
+      .setup-steps {
+        margin: 14px 0 0;
+        padding: 12px 14px 12px 30px;
+        border-radius: 8px;
+        background: #f8fbff;
+        color: #475467;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      .setup-steps li + li {
+        margin-top: 6px;
+      }
       .note {
         margin-top: 18px;
         padding: 12px;
@@ -116,6 +128,12 @@
         <h2>iPhone</h2>
         <p>Push 알림은 Safari에서 앱을 열고 공유 버튼의 홈 화면에 추가로 설치한 뒤 앱 안의 PUSH를 켜야 동작합니다.</p>
         <a id="iosDownloadLink" class="secondary" href="/ios.mobileconfig">아이폰 설치 파일 최신버전 다운로드</a>
+        <ol class="setup-steps" aria-label="아이폰 Push 설정법">
+          <li>설치 파일을 받은 뒤 Safari에서 fingerfruit를 엽니다.</li>
+          <li>공유 버튼을 눌러 홈 화면에 추가합니다.</li>
+          <li>홈 화면의 fingerfruit 앱을 실행합니다.</li>
+          <li>앱 안에서 PUSH를 켜고 iPhone 알림 허용을 누릅니다.</li>
+        </ol>
       </section>
 
       <p class="note">설치 파일은 현재 열려 있는 최신 fingerfruit URL로 연결됩니다.</p>
