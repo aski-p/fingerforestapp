@@ -15,7 +15,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV85";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.0";
+const appVersion = "3.1";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -343,7 +343,12 @@ function apiBaseCandidates() {
   const currentBase = normalizeBaseUrl(location.origin);
   const primaryBase = normalizeBaseUrl(primaryApiBaseUrl);
   const fallbackBase = normalizeBaseUrl(fallbackBaseUrl);
-  const activeBase = normalizeBaseUrl(storeGet(activeApiBaseKey));
+  const allowedBases = [currentBase, primaryBase, fallbackBase].filter((item, index, list) => item && list.indexOf(item) === index);
+  let activeBase = normalizeBaseUrl(storeGet(activeApiBaseKey));
+  if (activeBase && !allowedBases.includes(activeBase)) {
+    storeRemove(activeApiBaseKey);
+    activeBase = "";
+  }
   return [activeBase, currentBase, primaryBase, fallbackBase].filter((item, index, list) => item && list.indexOf(item) === index);
 }
 

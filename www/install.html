@@ -131,8 +131,10 @@
         return url.toString();
       };
 
+      const iosProfilePath = "/ios.mobileconfig";
+
       androidLink.href = withFreshParam(androidLink.getAttribute("href"));
-      iosLink.href = withFreshParam(iosLink.getAttribute("href"));
+      iosLink.href = withFreshParam(iosProfilePath);
 
       fetch(`/api/app-info?fresh=${encodeURIComponent(fresh)}`, { cache: "no-store" })
         .then((res) => res.ok ? res.json() : null)
@@ -141,7 +143,7 @@
           if (!info) return;
           if (info.latestVersion) versionBadge.textContent = `v${info.latestVersion} 정식버전 · by aski`;
           if (info.androidApkUrl) androidLink.href = withFreshParam(info.androidApkUrl);
-          if (info.iosProfileUrl && iosLink) iosLink.href = withFreshParam(info.iosProfileUrl);
+          if (iosLink) iosLink.href = withFreshParam(iosProfilePath);
         })
         .catch(() => {
           versionBadge.textContent = "최신 버전 확인 실패 · by aski";
@@ -152,6 +154,10 @@
           event.preventDefault();
           window.FruitAndroid.openSupport(url);
         }
+      });
+      iosLink.addEventListener("click", (event) => {
+        event.preventDefault();
+        window.location.assign(withFreshParam(iosProfilePath));
       });
     </script>
   </body>

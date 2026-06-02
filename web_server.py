@@ -21,9 +21,13 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.0"
+APP_VERSION = "3.1"
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "내역조회에서 상대 프로필 사진이 로그인 사용자 사진으로 대체 표시되는 문제를 수정했습니다.",
+    "한번 실행은 자동 전송 대기시간을 타지 않고 현재 보유 열매를 즉시 전송하도록 수정했습니다.",
+    "앱 실행 시 이전 NAS/임시 API 주소 캐시가 남아 있으면 Railway 기준 주소로 자동 복구하도록 수정했습니다.",
+    "iPhone 설치 파일 버튼이 프로파일 설치 화면으로 바로 열리도록 수정했습니다.",
     "업무일지 달력 요일이 월화수목금토일 한 줄로 고정되도록 배포 CSS를 수정했습니다.",
     "내역조회 순서를 FOREST API 화면 순서와 동일하게 유지하도록 수정했습니다.",
     "업무일지 날짜 선택 버튼이 깨지는 함수 호출 오류를 수정했습니다.",
@@ -599,13 +603,18 @@ class Handler(BaseHTTPRequestHandler):
             return
         data = path.read_bytes()
         ctype = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+        is_mobileconfig = path.suffix == ".mobileconfig" or parsed.path == "/ios.mobileconfig"
+        if is_mobileconfig:
+            ctype = "application/x-apple-aspen-config"
         if ctype.startswith("text/") or ctype in ("application/javascript",):
             ctype += "; charset=utf-8"
         self.send_response(200)
         self.send_header("Content-Type", ctype)
         send_no_cache_headers(self)
         self.send_header("Content-Length", str(len(data)))
-        if parsed.path.startswith("/downloads/") or parsed.path in {"/android.apk", "/ios.mobileconfig"}:
+        if is_mobileconfig:
+            self.send_header("Content-Disposition", f'inline; filename="{path.name}"')
+        elif parsed.path.startswith("/downloads/") or parsed.path == "/android.apk":
             self.send_header("Content-Disposition", f'attachment; filename="{path.name}"')
         self.end_headers()
         if include_body:

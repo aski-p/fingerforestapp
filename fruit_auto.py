@@ -1551,8 +1551,8 @@ def official_received_history_rows(client, owner_key, employee_id, employee_name
             "target": row.get("tgtEmpNm") or "",
             "targetEmployeeId": "",
             "targetPositionName": "",
-            "senderEmployeeId": employee_id,
-            "avatarEmployeeId": employee_id,
+            "senderEmployeeId": "",
+            "avatarEmployeeId": "",
             "displayName": display_employee(employee_name, employee_position),
             "senderIsMe": False,
             "seeds": seed_count,
@@ -1829,7 +1829,7 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
         counterpart_position_name = employee_hint.get("positionName") or ""
         counterpart_employee_id = employee_hint.get("employeeId") or ""
         sender_is_me = action == "sent"
-        avatar_employee_id = (counterpart_employee_id or sender_employee_id) if sender_is_me else sender_employee_id
+        avatar_employee_id = counterpart_employee_id
         display_name = display_employee(counterpart, counterpart_position_name)
         history_date = history_date_from_month_day(month, day)
         item = {
@@ -3072,7 +3072,7 @@ def check_once(dry_run=False, force=False, owner_key=None):
             for received_event in received_events:
                 notify_web_push(received_notification_payload(received_event), [owner_key])
         eligible_at = pending_received_at + dt.timedelta(seconds=interval_seconds)
-        if attempt_at < eligible_at:
+        if not force and attempt_at < eligible_at:
             remaining_seconds = max(0, int((eligible_at - attempt_at).total_seconds()))
             state["nextRunAt"] = eligible_at.replace(microsecond=0).isoformat()
             state["lastResult"] = f"waiting_send_delay_{remaining_seconds}s"
