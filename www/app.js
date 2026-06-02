@@ -8,6 +8,7 @@ const rememberLoginKey = "fruitRememberLogin";
 const rememberedLoginIdKey = "fruitRememberLoginId";
 const rememberedLoginPwKey = "fruitRememberLoginPw";
 const lastReceivedNotificationKey = "fruitLastReceivedNotificationId";
+const lastShownNotificationKey = "fruitLastShownNotification";
 const themeKey = "fruitTheme";
 const fontKey = "fruitFont";
 const profilePhotoKey = "fruitProfilePhoto";
@@ -940,6 +941,21 @@ async function showDeviceNotification(item) {
   }
 }
 
+function claimNotificationDisplay(id) {
+  if (!id) return false;
+  const now = Date.now();
+  try {
+    const previous = JSON.parse(storeGet(lastShownNotificationKey) || "{}");
+    if (previous.id === id && now - Number(previous.at || 0) < recentNotificationWindowMs) {
+      return false;
+    }
+  } catch (_err) {
+    // Corrupt local state should not block a real notification.
+  }
+  storeSet(lastShownNotificationKey, JSON.stringify({ id, at: now }));
+  return true;
+}
+
 async function syncPushSubscriptionIfPossible(state = currentState) {
   if (!isUnlocked() || state.pushEnabled === false || pushSyncing) return;
   if (supportsNativePush()) return;
@@ -969,6 +985,8 @@ async function checkReceivedNotifications({ silent = true } = {}) {
     storeSet(lastReceivedNotificationKey, latest.id);
     const sentAt = latest.at ? new Date(latest.at).getTime() : 0;
     if (!sentAt || Date.now() - sentAt > recentNotificationWindowMs) return;
+    if (!supportsNativePush() && supportsWebPush()) return;
+    if (!claimNotificationDisplay(latest.id)) return;
     const shown = await showDeviceNotification(latest);
     if (!shown && !silent) toast("열매 수신 내역이 있습니다. 알림 권한을 확인하세요.");
   } catch (err) {
