@@ -1133,27 +1133,27 @@ textarea:focus {
 }
 
 .fruit-card-section {
-  padding: 14px;
+  padding: 12px;
 }
 
 .fruit-send-unified {
   display: grid;
-  gap: 10px;
+  gap: 7px;
 }
 
 .fruit-send-title {
-  margin-bottom: 0;
+  margin-bottom: -2px;
 }
 
 .fruit-unified-block {
   display: grid;
-  gap: 9px;
+  gap: 7px;
   min-width: 0;
 }
 
 .fruit-unified-block + .fruit-unified-block {
   border-top: 1px solid var(--line);
-  padding-top: 10px;
+  padding-top: 8px;
 }
 
 .fruit-unified-block label {
@@ -1162,13 +1162,25 @@ textarea:focus {
 
 .fruit-send-card input,
 .fruit-send-card select {
-  height: 46px;
+  height: 42px;
 }
 
 .fruit-send-card .secondary,
 .fruit-send-card .dark,
 .fruit-send-card .searchrow button {
-  min-height: 46px;
+  min-height: 42px;
+}
+
+.fruit-send-card .searchrow {
+  grid-template-columns: minmax(0, 1fr) 62px;
+  gap: 6px;
+  align-items: center;
+}
+
+.fruit-send-card .searchrow button {
+  height: 42px;
+  padding: 0 10px;
+  font-size: 14px;
 }
 
 .fruit-unified-block h3,
@@ -1181,7 +1193,15 @@ textarea:focus {
 }
 
 .compact-title {
-  margin-bottom: -2px;
+  margin-bottom: -4px;
+}
+
+.fruit-send-card .getter-card-target {
+  gap: 5px;
+}
+
+.fruit-send-card .getter-card-transfer {
+  gap: 8px;
 }
 
 .fruit-card-section + .fruit-card-section {
@@ -3087,19 +3107,25 @@ body.theme-getter .getter-card-auto .auto-title-row .switch {
 body.theme-getter .fruit-send-card {
   padding: 0;
   padding-right: 0;
+  min-height: 0;
+  margin-top: 0;
+  overflow: hidden;
 }
 
 body.theme-getter .fruit-send-card .fruit-card-section {
-  padding: 14px;
+  padding: 12px;
 }
 
 body.theme-getter .fruit-send-card .getter-card-target {
   padding-right: 0;
+  margin-top: -2px;
+  gap: 5px;
 }
 
 body.theme-getter .fruit-send-card .getter-card-transfer,
 body.theme-getter .fruit-send-card .getter-card-auto {
   padding-right: 0;
+  gap: 8px;
 }
 
 body.theme-getter .fruit-send-card .fruit-send-unified {
@@ -3108,6 +3134,16 @@ body.theme-getter .fruit-send-card .fruit-send-unified {
 
 body.theme-getter .fruit-send-card .fruit-send-title {
   padding-right: 82px;
+}
+
+body.theme-getter .fruit-send-card .searchrow {
+  grid-template-columns: minmax(0, 1fr) 62px;
+}
+
+body.theme-getter .fruit-send-card .searchrow button {
+  min-height: 42px;
+  height: 42px;
+  padding: 0 10px;
 }
 
 body.theme-getter .fruit-send-card .control-card {
@@ -3404,10 +3440,31 @@ body .modal {
     padding-right: 16px;
   }
 
+  body.theme-getter .fruit-send-card {
+    min-height: 0;
+    margin-top: 0;
+    padding-right: 0;
+  }
+
+  body.theme-getter .fruit-send-card .fruit-card-section {
+    padding: 12px;
+  }
+
+  body.theme-getter .fruit-send-card .getter-card-transfer,
+  body.theme-getter .fruit-send-card .getter-card-auto {
+    padding-right: 0;
+  }
+
   body.theme-getter .getter-card-transfer .section-title,
   body.theme-getter .getter-card-transfer > label:not(.berry-count-label),
   body.theme-getter .getter-card-auto > div:first-child {
     width: calc(100% - 88px);
+  }
+
+  body.theme-getter .fruit-send-card .getter-card-transfer .section-title,
+  body.theme-getter .fruit-send-card .getter-card-transfer > label:not(.berry-count-label),
+  body.theme-getter .fruit-send-card .getter-card-auto > div:first-child {
+    width: 100%;
   }
 }
 
