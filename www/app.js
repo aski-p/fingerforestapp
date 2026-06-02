@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.5.1";
+const appVersion = "3.5.2";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1566,7 +1566,7 @@ function setWorkspaceTab(name, options = {}) {
   const enterOffset = forward ? `${width}px` : `${-width}px`;
   const exitOffset = forward ? `${-width}px` : `${width}px`;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const duration = reducedMotion ? 160 : 520;
+  const duration = reducedMotion ? 120 : 300;
 
   pager.style.height = `${pager.offsetHeight}px`;
   pager.classList.add("is-animating");
@@ -1677,7 +1677,7 @@ function prepareWorkspaceDrag(dx) {
 function renderWorkspaceDrag() {
   const drag = workspaceDragState;
   if (!drag) return;
-  drag.renderedDx += (drag.targetDx - drag.renderedDx) * 0.28;
+  drag.renderedDx += (drag.targetDx - drag.renderedDx) * 0.36;
   if (Math.abs(drag.targetDx - drag.renderedDx) < 0.35) {
     drag.renderedDx = drag.targetDx;
   }
@@ -1723,7 +1723,7 @@ function finishWorkspaceDrag(nextName, commit) {
   }
 
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const duration = reducedMotion ? 160 : 480;
+  const duration = reducedMotion ? 120 : 260;
   if (drag.raf) {
     window.cancelAnimationFrame(drag.raf);
     drag.raf = 0;
