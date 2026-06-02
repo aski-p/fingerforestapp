@@ -21,9 +21,10 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.1.1"
+APP_VERSION = "3.1.2"
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "내역조회에서 기본 FOREST API에 있는 받은 열매 항목이 짝맞춤 필터 때문에 숨겨지는 문제를 수정했습니다.",
     "내역조회에서 상대 프로필 사진이 로그인 사용자 사진으로 대체 표시되는 문제를 수정했습니다.",
     "한번 실행은 자동 전송 대기시간을 타지 않고 현재 보유 열매를 즉시 전송하도록 수정했습니다.",
     "앱 실행 시 이전 NAS/임시 API 주소 캐시가 남아 있으면 Railway 기준 주소로 자동 복구하도록 수정했습니다.",

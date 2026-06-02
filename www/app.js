@@ -15,7 +15,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV85";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.1.1";
+const appVersion = "3.1.2";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1516,45 +1516,9 @@ function renderCachedState() {
   }
 }
 
-function historyPairKey(item) {
-  return `${item.targetEmployeeId || item.avatarEmployeeId || item.target || item.displayName || ""}|${Number(item.berries || Math.abs(Number(item.delta) || 0)) || 0}`;
-}
-
-function filterPairedHistoryItems(items) {
-  const sorted = Array.isArray(items) ? items : [];
-  const usedSentIndexes = new Set();
-  const keepReceivedIndexes = new Set();
-  sorted.forEach((item, index) => {
-    if (item.historyKind === "seed") return;
-    if (item.action !== "received") return;
-    const receivedAt = Date.parse(item.at || "");
-    if (!Number.isFinite(receivedAt)) return;
-    const key = historyPairKey(item);
-    let bestIndex = -1;
-    let bestDelta = Infinity;
-    sorted.forEach((candidate, candidateIndex) => {
-      if (candidate.action !== "sent" || usedSentIndexes.has(candidateIndex)) return;
-      if (historyPairKey(candidate) !== key) return;
-      const sentAt = Date.parse(candidate.at || "");
-      if (!Number.isFinite(sentAt)) return;
-      const delta = sentAt - receivedAt;
-      if (delta < 0 || delta > 12 * 60 * 1000) return;
-      if (delta < bestDelta) {
-        bestDelta = delta;
-        bestIndex = candidateIndex;
-      }
-    });
-    if (bestIndex >= 0) {
-      usedSentIndexes.add(bestIndex);
-      keepReceivedIndexes.add(index);
-    }
-  });
-  return sorted.filter((item, index) => item.historyKind === "seed" || item.action !== "received" || keepReceivedIndexes.has(index));
-}
-
 function renderHistory(items) {
   const body = $("historyBody");
-  items = filterPairedHistoryItems(items);
+  items = Array.isArray(items) ? items : [];
   body.innerHTML = "";
   if (!items.length) {
     body.innerHTML = `<div class="history-empty">${escapeHtml(fmtHistorySelectedDate(selectedHistoryDate))} 내역이 없습니다.</div>`;
