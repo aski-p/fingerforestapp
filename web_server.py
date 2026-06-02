@@ -21,9 +21,10 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.1.2"
+APP_VERSION = "3.2.0"
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "Android APK를 고정 서명 release 빌드로 다시 만들어 업데이트 설치 실패 가능성을 줄였습니다.",
     "내역조회에서 기본 FOREST API에 있는 받은 열매 항목이 짝맞춤 필터 때문에 숨겨지는 문제를 수정했습니다.",
     "내역조회에서 상대 프로필 사진이 로그인 사용자 사진으로 대체 표시되는 문제를 수정했습니다.",
     "한번 실행은 자동 전송 대기시간을 타지 않고 현재 보유 열매를 즉시 전송하도록 수정했습니다.",
@@ -170,13 +171,52 @@ def list_profile_photos(employee_ids):
     return result
 
 
+def list_profile_photos_by_name(names):
+    config = supabase_config()
+    safe_names = sorted({str(item).strip() for item in names if str(item or "").strip()})
+    if not config or not safe_names:
+        return {}
+    quoted_names = ",".join(urllib.parse.quote(item, safe="") for item in safe_names)
+    table = urllib.parse.quote(config["table"], safe="")
+    select = "employee_id,name,profile_image_url,profile_image_path,updated_at"
+    try:
+        rows = supabase_request(
+            "GET",
+            f"/rest/v1/{table}?select={select}&name=in.({quoted_names})",
+            content_type=None,
+        ) or []
+    except Exception:
+        return {}
+    result = {}
+    for row in rows:
+        name = str(row.get("name") or "").strip()
+        if not name:
+            continue
+        url = row.get("profile_image_url")
+        if not url and row.get("profile_image_path"):
+            url = profile_public_url(config, row["profile_image_path"])
+        result[name] = {
+            "url": profile_url_with_version(url, row.get("updated_at")),
+            "employeeId": str(row.get("employee_id") or ""),
+        }
+    return result
+
+
 def attach_profile_photos(items):
     photos = list_profile_photos(
         item.get("avatarEmployeeId") or item.get("senderEmployeeId")
         for item in items
     )
+    missing_names = [
+        item.get("avatarName") or item.get("target") or item.get("senderName")
+        for item in items
+        if not photos.get(str(item.get("avatarEmployeeId") or item.get("senderEmployeeId") or ""))
+    ]
+    photos_by_name = list_profile_photos_by_name(missing_names)
     for item in items:
         profile = photos.get(str(item.get("avatarEmployeeId") or item.get("senderEmployeeId") or ""))
+        if not profile:
+            profile = photos_by_name.get(str(item.get("avatarName") or item.get("target") or item.get("senderName") or "").strip())
         if profile:
             item["avatarProfilePhotoUrl"] = profile.get("url") or ""
             item["senderProfilePhotoUrl"] = profile.get("url") or ""
