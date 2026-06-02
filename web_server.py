@@ -22,7 +22,7 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.3.7"
+APP_VERSION = "3.3.8"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_HISTORY_MESSAGE_LIMIT = 10
 CHAT_INPUT_CHAR_LIMIT = 8000
@@ -30,6 +30,7 @@ CHAT_OUTPUT_TOKEN_LIMIT = 800
 CHAT_REPLY_INSTRUCTION = "답변은 800토큰 안에서 끝맺음까지 완결해 주세요. 길면 핵심만 요약하고 문장 중간에서 끊기지 않게 마무리하세요."
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "랭킹 1등 배지를 문자 왕관이 아닌 실제 왕관 이미지 asset으로 교체하고 2등/3등도 이미지 배지로 바꿨습니다.",
     "설정 버튼 왼쪽에 왕관 버튼을 추가하고 기존 FOREST 랭킹 API로 열매/열매선물/회원레벨 랭킹 팝업을 조회하도록 추가했습니다.",
     "랭킹 팝업의 1등 배지를 반짝이는 왕관 스타일로 바꾸고 2등/3등 배지도 은색/동색 메달 느낌으로 구분했습니다.",
     "열매 보내기 안의 대상 직원, 전송 설정, 자동전송 영역을 업무일지처럼 옅은 카드 배경으로 분리해 섹션 구분을 명확하게 했습니다.",
