@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.2.6";
+const appVersion = "3.2.7";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -247,6 +247,21 @@ function enableReliableInputFocus(input) {
     window.setTimeout(() => input.scrollIntoView({ block: "center", inline: "nearest" }), 180);
   });
 }
+
+function updateVisualViewportMetrics() {
+  const viewport = window.visualViewport;
+  const height = Math.max(320, Math.floor(viewport?.height || window.innerHeight || document.documentElement.clientHeight));
+  const keyboardLift = Math.max(0, Math.floor((window.innerHeight || height) - height - (viewport?.offsetTop || 0)));
+  document.documentElement.style.setProperty("--app-visual-height", `${height}px`);
+  document.documentElement.style.setProperty("--keyboard-lift", `${keyboardLift}px`);
+}
+
+updateVisualViewportMetrics();
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", updateVisualViewportMetrics);
+  window.visualViewport.addEventListener("scroll", updateVisualViewportMetrics);
+}
+window.addEventListener("resize", updateVisualViewportMetrics);
 
 ["loginId", "loginPw"].forEach((id) => enableReliableInputFocus($(id)));
 
@@ -1450,9 +1465,11 @@ function setWorkspaceTab(name) {
 }
 
 function scrollWorkspacePanel(name) {
+  const pager = $("workspacePager");
   const target = name === "worklog" ? $("worklogPanel") : $("fruitSendPanel");
-  if (!target) return;
-  target.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+  if (!pager || !target) return;
+  const maxLeft = Math.max(0, pager.scrollWidth - pager.clientWidth);
+  pager.scrollLeft = Math.min(maxLeft, Math.max(0, target.offsetLeft));
   setWorkspaceTab(name);
 }
 
@@ -1461,6 +1478,51 @@ function syncWorkspaceTabFromScroll() {
   if (!pager) return;
   const active = pager.scrollLeft > pager.clientWidth * 0.45 ? "worklog" : "fruit";
   setWorkspaceTab(active);
+}
+
+function activeWorkspacePanel() {
+  const active = document.querySelector("[data-workspace-slide].active");
+  return active?.dataset.workspaceSlide || "fruit";
+}
+
+function bindWorkspaceSwipeZone() {
+  const zone = document.querySelector(".workspace-tabs");
+  if (!zone) return;
+  let startX = 0;
+  let startY = 0;
+  let tracking = false;
+
+  zone.addEventListener("touchstart", (event) => {
+    const touch = event.touches && event.touches[0];
+    if (!touch) return;
+    startX = touch.clientX;
+    startY = touch.clientY;
+    tracking = true;
+  }, { passive: true });
+
+  zone.addEventListener("touchmove", (event) => {
+    if (!tracking) return;
+    const touch = event.touches && event.touches[0];
+    if (!touch) return;
+    const dx = touch.clientX - startX;
+    const dy = touch.clientY - startY;
+    if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+      event.preventDefault();
+    }
+  }, { passive: false });
+
+  zone.addEventListener("touchend", (event) => {
+    if (!tracking) return;
+    tracking = false;
+    const touch = event.changedTouches && event.changedTouches[0];
+    if (!touch) return;
+    const dx = touch.clientX - startX;
+    const dy = touch.clientY - startY;
+    if (Math.abs(dx) < 42 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+    const current = activeWorkspacePanel();
+    if (dx < 0 && current !== "worklog") scrollWorkspacePanel("worklog");
+    if (dx > 0 && current !== "fruit") scrollWorkspacePanel("fruit");
+  }, { passive: true });
 }
 
 function setWorklogProjects(projects, selectedId = "") {
@@ -2303,6 +2365,8 @@ document.querySelectorAll("[data-workspace-slide]").forEach((button) => {
   button.addEventListener("click", () => scrollWorkspacePanel(button.dataset.workspaceSlide));
 });
 
+bindWorkspaceSwipeZone();
+
 $("workspacePager").addEventListener("scroll", () => {
   window.clearTimeout(syncWorkspaceTabFromScroll.timer);
   syncWorkspaceTabFromScroll.timer = window.setTimeout(syncWorkspaceTabFromScroll, 80);
@@ -2532,6 +2596,15 @@ $("chatInput").addEventListener("keydown", async (event) => {
     event.preventDefault();
     await sendChatMessage();
   }
+});
+$("chatInput").addEventListener("focus", () => {
+  updateVisualViewportMetrics();
+  $("chatPopup").classList.add("keyboard-active");
+  window.setTimeout(renderChatMessages, 80);
+});
+$("chatInput").addEventListener("blur", () => {
+  $("chatPopup").classList.remove("keyboard-active");
+  window.setTimeout(updateVisualViewportMetrics, 80);
 });
 
 async function initApp() {

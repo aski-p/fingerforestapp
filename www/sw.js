@@ -9,6 +9,7 @@ self.addEventListener("push", (event) => {
   const options = {
     body: data.body || "새 알림이 있습니다.",
     tag: data.tag || "fruit-auto",
+    renotify: false,
     icon: "/icons/apple-icon-192.png",
     badge: "/icons/apple-icon-192.png",
     data: {

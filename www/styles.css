@@ -1069,6 +1069,7 @@ textarea:focus {
   border-radius: 8px;
   padding: 4px;
   background: #f2fbf5;
+  touch-action: pan-y;
 }
 
 .workspace-tabs button {
@@ -1091,11 +1092,12 @@ textarea:focus {
   gap: 12px;
   margin: 0 -16px;
   padding: 0 16px 8px;
-  overflow-x: auto;
+  overflow-x: hidden;
   overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
   scroll-padding: 16px;
   scrollbar-width: none;
+  touch-action: pan-y;
 }
 
 .workspace-pager::-webkit-scrollbar {
@@ -1594,18 +1596,25 @@ body.logged-out .chat-popup {
 .chat-popup {
   position: fixed;
   right: max(14px, env(safe-area-inset-right));
-  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 56px);
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 56px + var(--keyboard-lift, 0px));
   z-index: 95;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   width: min(330px, calc(100vw - 28px));
-  height: min(430px, calc(100dvh - 92px));
+  height: min(430px, calc(var(--app-visual-height, 100dvh) - 92px));
+  max-height: calc(var(--app-visual-height, 100dvh) - 20px - env(safe-area-inset-top));
+  min-height: 240px;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
   color: var(--text);
   box-shadow: 0 20px 54px var(--shadow);
+}
+
+.chat-popup.keyboard-active {
+  bottom: max(8px, env(safe-area-inset-bottom));
+  height: min(430px, calc(var(--app-visual-height, 100dvh) - 16px - env(safe-area-inset-top)));
 }
 
 .chat-head {
@@ -1619,10 +1628,14 @@ body.logged-out .chat-popup {
 }
 
 .chat-messages {
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1 1 auto;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 11px;
   background: var(--surface-soft);
 }
@@ -1635,6 +1648,7 @@ body.logged-out .chat-popup {
 }
 
 .chat-message {
+  flex: 0 0 auto;
   max-width: 88%;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1659,6 +1673,7 @@ body.logged-out .chat-popup {
 }
 
 .chat-form {
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 60px;
   gap: 8px;
@@ -1688,9 +1703,14 @@ body.logged-out .chat-popup {
 @media (max-width: 380px) {
   .chat-popup {
     right: 10px;
-    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 52px);
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 52px + var(--keyboard-lift, 0px));
     width: calc(100vw - 20px);
-    height: min(380px, calc(100dvh - 82px));
+    height: min(380px, calc(var(--app-visual-height, 100dvh) - 82px));
+  }
+
+  .chat-popup.keyboard-active {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    height: min(380px, calc(var(--app-visual-height, 100dvh) - 16px - env(safe-area-inset-top)));
   }
 
   .chat-fab {

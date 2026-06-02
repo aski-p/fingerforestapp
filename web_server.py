@@ -21,13 +21,16 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.2.6"
+APP_VERSION = "3.2.7"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_HISTORY_MESSAGE_LIMIT = 10
 CHAT_INPUT_CHAR_LIMIT = 8000
 CHAT_OUTPUT_TOKEN_LIMIT = 800
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "Claude 채팅창 메시지 영역에 독립 스크롤을 적용해 긴 답변이 입력창과 화면을 밀어내지 않도록 수정했습니다.",
+    "키보드가 올라왔을 때 보이는 화면 높이에 맞춰 Claude 채팅창 위치와 높이를 다시 계산하도록 수정했습니다.",
+    "열매 보내기/업무일지 좌우 전환은 상단 작업 메뉴 영역에서만 스와이프되도록 제한했습니다.",
     "열매 보내기 설정을 대상 직원, 전송 설정, 자동전송이 한 화면에 묶이도록 정리하고 업무일지는 좌우 스와이프 패널로 분리했습니다.",
     "Claude 채팅이 FingerFruit 서버에 키가 없을 때 카카오봇 Claude Haiku 서버로 안전하게 이어지도록 수정했습니다.",
     "Claude 채팅 팝업 크기를 모바일 화면에 맞게 줄이고 버튼 아이콘을 말풍선 디자인으로 교체했습니다.",
