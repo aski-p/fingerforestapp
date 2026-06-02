@@ -1535,6 +1535,8 @@ textarea:focus {
   gap: 12px;
   padding: 0 16px 16px;
   overflow: auto;
+  overscroll-behavior: contain;
+  overflow-anchor: none;
 }
 
 .update-body strong {
@@ -1586,6 +1588,7 @@ textarea:focus {
 }
 
 .release-notes-snooze {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -1597,11 +1600,18 @@ textarea:focus {
 
 .release-notes-snooze input {
   position: absolute;
+  top: 50%;
+  left: 0;
+  width: 24px;
+  height: 24px;
+  margin: 0;
   opacity: 0;
-  pointer-events: none;
+  transform: translateY(-50%);
+  cursor: pointer;
 }
 
 .release-notes-snooze i {
+  flex: 0 0 20px;
   display: grid;
   place-items: center;
   width: 20px;
@@ -1609,6 +1619,11 @@ textarea:focus {
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   background: #ffffff;
+  pointer-events: none;
+}
+
+.release-notes-snooze span {
+  pointer-events: none;
 }
 
 .release-notes-snooze input:checked + i {

@@ -1890,8 +1890,24 @@ function showReleaseNotesIfNeeded() {
   $("releaseNotesVersion").textContent = `v${info.latestVersion} 업데이트 내용`;
   $("releaseNotesList").innerHTML = notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("");
   $("releaseNotesSnooze").checked = false;
+  const body = document.querySelector(".release-notes-body");
+  if (body) body.scrollTop = 0;
   $("releaseNotesModal").classList.remove("hidden");
   document.body.classList.add("modal-open");
+}
+
+function stabilizeReleaseNotesScroll() {
+  const body = document.querySelector(".release-notes-body");
+  const bodyTop = body ? body.scrollTop : 0;
+  const pageTop = window.scrollY || document.documentElement.scrollTop || 0;
+  requestAnimationFrame(() => {
+    if (body) body.scrollTop = bodyTop;
+    window.scrollTo(0, pageTop);
+    requestAnimationFrame(() => {
+      if (body) body.scrollTop = bodyTop;
+      window.scrollTo(0, pageTop);
+    });
+  });
 }
 
 function closeReleaseNotesModal() {
@@ -1974,6 +1990,7 @@ $("profileModal").addEventListener("click", (event) => {
 
 $("releaseNotesCloseBtn").addEventListener("click", closeReleaseNotesModal);
 $("releaseNotesOkBtn").addEventListener("click", closeReleaseNotesModal);
+$("releaseNotesSnooze").addEventListener("change", stabilizeReleaseNotesScroll);
 $("releaseNotesModal").addEventListener("click", (event) => {
   if (event.target === $("releaseNotesModal")) closeReleaseNotesModal();
 });
