@@ -21,13 +21,14 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.2.2"
+APP_VERSION = "3.2.3"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_HISTORY_MESSAGE_LIMIT = 10
 CHAT_INPUT_CHAR_LIMIT = 8000
 CHAT_OUTPUT_TOKEN_LIMIT = 800
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "Claude 채팅 팝업 크기를 모바일 화면에 맞게 줄이고 버튼 아이콘을 말풍선 디자인으로 교체했습니다.",
     "스킨 선택 시 상단/카드/업무일지/내역조회 UI 색상이 선택한 컨셉에 맞게 따라가도록 정리했습니다.",
     "Android 래퍼 설치 버전 표시가 실제 APK 버전과 다르게 남아있던 문제를 수정했습니다.",
     "오른쪽 아래 Claude Haiku 채팅 팝업을 추가했습니다.",
