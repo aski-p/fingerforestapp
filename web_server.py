@@ -22,7 +22,7 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.3.5"
+APP_VERSION = "3.3.6"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_HISTORY_MESSAGE_LIMIT = 10
 CHAT_INPUT_CHAR_LIMIT = 8000
@@ -30,7 +30,7 @@ CHAT_OUTPUT_TOKEN_LIMIT = 800
 CHAT_REPLY_INSTRUCTION = "답변은 800토큰 안에서 끝맺음까지 완결해 주세요. 길면 핵심만 요약하고 문장 중간에서 끊기지 않게 마무리하세요."
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "설정 버튼 왼쪽에 완관 버튼을 추가하고 기존 FOREST 랭킹 API로 열매/열매선물/회원레벨 랭킹 팝업을 조회하도록 추가했습니다.",
+    "설정 버튼 왼쪽에 왕관 버튼을 추가하고 기존 FOREST 랭킹 API로 열매/열매선물/회원레벨 랭킹 팝업을 조회하도록 추가했습니다.",
     "열매 보내기 안의 대상 직원, 전송 설정, 자동전송 영역을 업무일지처럼 옅은 카드 배경으로 분리해 섹션 구분을 명확하게 했습니다.",
     "열매 보내기 지금 한 번 실행 결과를 팝업으로 표시해 보낸 열매 개수와 보낼 열매 없음 상태를 명확히 보여주도록 수정했습니다.",
     "스와이프 전환 중 scroll-snap을 잠깐 비활성화해 페이지가 딱딱하게 붙지 않고 부드럽게 이동하도록 보강했습니다.",
