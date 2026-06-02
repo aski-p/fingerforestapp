@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.3.4";
+const appVersion = "3.3.5";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -24,6 +24,8 @@ const apiTimeoutMs = 8000;
 const recentNotificationWindowMs = 2 * 60 * 1000;
 let latestAppInfo = null;
 let releaseNotesShownThisSession = false;
+let rankingKind = "berry";
+let rankingDate = new Date();
 
 function nativeStoreGet(key) {
   try {
@@ -345,6 +347,7 @@ function isModalVisible(id) {
 
 function syncModalOpenState() {
   const visible = [
+    "rankingModal",
     "historyModal",
     "settingsModal",
     "profileModal",
@@ -820,6 +823,7 @@ function clearAuthenticatedUi() {
   $("searchInput").value = "";
   $("worklogSearchInput").value = "";
   closeHistoryModal();
+  closeRankingModal();
   closeSettingsModal();
   closeProfileModal();
   renderState({});
@@ -1255,6 +1259,7 @@ function setLockedState(unlocked) {
     "pushToggle",
     "runBtn",
     "historyOpenBtn",
+    "rankingOpenBtn",
     "refreshBalanceBtn",
     "intervalAddBtn",
     "intervalResetBtn",
@@ -1373,6 +1378,7 @@ function renderWorklogDates() {
     : "날짜 선택";
   if (!selectedWorklogDates.length) {
     box.innerHTML = '<span class="empty">선택 날짜 없음</span>';
+    window.setTimeout(syncWorkspacePagerHeight, 0);
     return;
   }
   selectedWorklogDates.forEach((date) => {
@@ -1386,6 +1392,7 @@ function renderWorklogDates() {
     });
     box.appendChild(chip);
   });
+  window.setTimeout(syncWorkspacePagerHeight, 0);
 }
 
 function markWorklogDraftDirty() {
@@ -1513,6 +1520,15 @@ function setWorkspaceTab(name) {
   document.querySelectorAll("[data-workspace-slide]").forEach((button) => {
     button.classList.toggle("active", button.dataset.workspaceSlide === name);
   });
+  window.requestAnimationFrame(syncWorkspacePagerHeight);
+}
+
+function syncWorkspacePagerHeight() {
+  const pager = $("workspacePager");
+  if (!pager) return;
+  const panel = activeWorkspacePanel() === "worklog" ? $("worklogPanel") : $("fruitSendPanel");
+  if (!panel) return;
+  pager.style.height = `${panel.offsetHeight + 8}px`;
 }
 
 function animateWorkspaceScroll(left, nextName) {
@@ -1537,6 +1553,7 @@ function animateWorkspaceScroll(left, nextName) {
     pager.scrollLeft = left;
     pager.classList.remove("is-animating");
     setWorkspaceTab(nextName);
+    syncWorkspacePagerHeight();
   }
 
   requestAnimationFrame(step);
@@ -1752,6 +1769,7 @@ function renderState(state) {
   }
   syncPushSubscriptionIfPossible(state);
   if (unlocked) window.setTimeout(showReleaseNotesIfNeeded, 0);
+  window.setTimeout(syncWorkspacePagerHeight, 0);
 }
 
 function renderCachedState() {
@@ -1828,6 +1846,78 @@ async function refreshHistory({ silent = false } = {}) {
   } catch (err) {
     body.innerHTML = `<div class="history-empty">내역 조회 실패: ${escapeHtml(err.message)}</div>`;
     if (!silent) toast(`내역 조회 실패: ${err.message}`);
+  }
+}
+
+function rankingMonthValue(date = rankingDate) {
+  return `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function rankingMonthLabel(date = rankingDate) {
+  return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
+}
+
+function isRankingCurrentMonth() {
+  const now = new Date();
+  return rankingDate.getFullYear() === now.getFullYear() && rankingDate.getMonth() === now.getMonth();
+}
+
+function rankingUnit(kind = rankingKind) {
+  return kind === "level" ? "열매누적" : "열매";
+}
+
+function renderRankingTabs() {
+  document.querySelectorAll("[data-ranking-kind]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.rankingKind === rankingKind);
+  });
+  $("rankingMonthbar").classList.toggle("hidden", rankingKind === "level");
+  $("rankingMonthLabel").textContent = rankingMonthLabel();
+  $("rankingNextBtn").disabled = rankingKind !== "level" && isRankingCurrentMonth();
+}
+
+function renderRanking(data) {
+  const my = data.my || {};
+  const items = data.items || [];
+  const body = $("rankingBody");
+  const unit = rankingUnit(data.kind || rankingKind);
+  renderRankingTabs();
+  if ((data.kind || rankingKind) === "level") {
+    $("rankingSummary").innerHTML = `${escapeHtml(data.userName || my.name || "사용자")}님의 <strong>회원레벨 랭킹은 ${fmtNumber(my.rank || 0)}등</strong> 이며<br><strong>${escapeHtml(my.level || "-")} (${unit} ${fmtNumber(my.count || 0)}개)</strong>입니다.`;
+  } else {
+    $("rankingSummary").innerHTML = `${escapeHtml(data.userName || my.name || "사용자")}님의 <strong>${rankingKind === "gift" ? "열매선물 랭킹" : "열매랭킹"}은 ${fmtNumber(my.rank || 0)}등</strong> <strong>(${unit} ${fmtNumber(my.count || 0)}개)</strong> 입니다.`;
+  }
+  if (!items.length) {
+    body.innerHTML = '<div class="ranking-empty">조회된 랭킹이 없습니다.</div>';
+    return;
+  }
+  body.innerHTML = items.map((item) => {
+    const hasLevel = (data.kind || rankingKind) === "level";
+    return `
+      <div class="ranking-row${hasLevel ? " has-level" : ""}">
+        <span class="ranking-medal">${escapeHtml(item.rank || "-")}</span>
+        <strong class="ranking-name">${escapeHtml(item.name || "-")}</strong>
+        ${hasLevel ? `<span class="ranking-level">${escapeHtml(item.level || "-")}</span>` : ""}
+        <span class="ranking-count">${fmtNumber(item.count || 0)}개</span>
+      </div>
+    `;
+  }).join("");
+}
+
+async function refreshRanking() {
+  const body = $("rankingBody");
+  renderRankingTabs();
+  body.innerHTML = '<div class="ranking-empty">랭킹을 불러오는 중입니다...</div>';
+  try {
+    const query = new URLSearchParams({
+      kind: rankingKind,
+      month: rankingMonthValue(),
+    });
+    const data = await api(`/api/ranking?${query.toString()}`);
+    renderRanking(data);
+  } catch (err) {
+    $("rankingSummary").textContent = "랭킹 조회에 실패했습니다.";
+    body.innerHTML = `<div class="ranking-empty">랭킹 조회 실패: ${escapeHtml(err.message)}</div>`;
+    toast(`랭킹 조회 실패: ${err.message}`);
   }
 }
 
@@ -2061,6 +2151,17 @@ function openHistoryModal() {
   refreshHistory();
 }
 
+function openRankingModal() {
+  if (!isUnlocked()) {
+    toast("먼저 로그인하세요.");
+    return;
+  }
+  rankingDate = new Date();
+  $("rankingModal").classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  refreshRanking();
+}
+
 async function openSettingsModal() {
   $("settingsModal").classList.remove("hidden");
   document.body.classList.add("modal-open");
@@ -2112,6 +2213,11 @@ function closeProfileModal() {
 
 function closeHistoryModal() {
   $("historyModal").classList.add("hidden");
+  syncModalOpenState();
+}
+
+function closeRankingModal() {
+  $("rankingModal").classList.add("hidden");
   syncModalOpenState();
 }
 
@@ -2239,6 +2345,10 @@ function closeTopModal() {
     closeSettingsModal();
     return true;
   }
+  if (isModalVisible("rankingModal")) {
+    closeRankingModal();
+    return true;
+  }
   if (isModalVisible("historyModal")) {
     closeHistoryModal();
     return true;
@@ -2260,6 +2370,30 @@ $("historyOpenBtn").addEventListener("click", () => {
     return;
   }
   openHistoryModal();
+});
+
+$("rankingOpenBtn").addEventListener("click", openRankingModal);
+$("rankingCloseBtn").addEventListener("click", closeRankingModal);
+$("rankingModal").addEventListener("click", (event) => {
+  if (event.target === $("rankingModal")) closeRankingModal();
+});
+document.querySelectorAll("[data-ranking-kind]").forEach((button) => {
+  button.addEventListener("click", () => {
+    rankingKind = button.dataset.rankingKind || "berry";
+    refreshRanking();
+  });
+});
+$("rankingPrevBtn").addEventListener("click", () => {
+  rankingDate = new Date(rankingDate.getFullYear(), rankingDate.getMonth() - 1, 1);
+  refreshRanking();
+});
+$("rankingNextBtn").addEventListener("click", () => {
+  if (isRankingCurrentMonth()) {
+    toast("현재월까지만 조회 가능합니다.");
+    return;
+  }
+  rankingDate = new Date(rankingDate.getFullYear(), rankingDate.getMonth() + 1, 1);
+  refreshRanking();
 });
 
 $("historyCloseBtn").addEventListener("click", closeHistoryModal);
@@ -2461,6 +2595,11 @@ $("workspacePager").addEventListener("scroll", () => {
   window.clearTimeout(syncWorkspaceTabFromScroll.timer);
   syncWorkspaceTabFromScroll.timer = window.setTimeout(syncWorkspaceTabFromScroll, 80);
 }, { passive: true });
+window.addEventListener("resize", () => {
+  window.clearTimeout(syncWorkspacePagerHeight.timer);
+  syncWorkspacePagerHeight.timer = window.setTimeout(syncWorkspacePagerHeight, 120);
+});
+window.requestAnimationFrame(syncWorkspacePagerHeight);
 
 $("worklogSeedCount").addEventListener("input", () => {
   const value = Math.max(0, Math.min(3, Math.floor(Number($("worklogSeedCount").value || 0))));

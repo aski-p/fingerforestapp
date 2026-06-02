@@ -743,6 +743,18 @@ h2 {
   font-weight: 900;
 }
 
+.ranking-button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 0 11px;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 1000;
+}
+
 .remember-login {
   display: inline-grid;
   grid-template-columns: 22px auto;
@@ -1094,11 +1106,13 @@ textarea:focus {
   margin: 0 -16px;
   padding: 0 16px 8px;
   overflow-x: hidden;
+  overflow-y: hidden;
   overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
   scroll-padding: 16px;
   scrollbar-width: none;
   touch-action: pan-y;
+  transition: height 0.24s ease;
 }
 
 .workspace-pager.is-animating {
@@ -1117,6 +1131,7 @@ textarea:focus {
 .workspace-slide {
   flex: 0 0 100%;
   min-width: 0;
+  align-self: flex-start;
   scroll-snap-align: start;
 }
 
@@ -1153,11 +1168,14 @@ textarea:focus {
   display: grid;
   gap: 7px;
   min-width: 0;
+  border: 1px solid #f4d8cc;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff7f3;
 }
 
 .fruit-unified-block + .fruit-unified-block {
-  border-top: 1px solid var(--line);
-  padding-top: 8px;
+  margin-top: 8px;
 }
 
 .fruit-unified-block label {
@@ -1216,11 +1234,11 @@ textarea:focus {
   grid-column: auto;
   grid-row: auto;
   margin: 0;
-  border: 0;
-  border-top: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
+  border: 1px solid #f4d8cc;
+  border-radius: 8px;
+  background: #fff7f3;
   box-shadow: none;
+  padding: 12px;
 }
 
 .balance-toolbar {
@@ -2070,6 +2088,157 @@ body.logged-out .chat-popup {
 .history-panel {
   height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   max-height: 720px;
+}
+
+.ranking-panel {
+  height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  max-height: 720px;
+}
+
+.ranking-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 12px 10px;
+  border-bottom: 1px solid #e8edf3;
+  padding-bottom: 8px;
+}
+
+.ranking-tabs button {
+  min-height: 38px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: #98a2b3;
+  font-size: 13px;
+  font-weight: 1000;
+}
+
+.ranking-tabs button.active {
+  border-bottom-color: var(--accent-bright);
+  color: var(--accent);
+}
+
+.ranking-monthbar {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  margin: 0 12px 10px;
+  background: #f8fafc;
+}
+
+.ranking-monthbar button {
+  display: grid;
+  place-items: center;
+  min-height: 42px;
+  border: 0;
+  background: transparent;
+  color: #98a2b3;
+  font-size: 32px;
+  line-height: 1;
+}
+
+.ranking-monthbar strong {
+  color: #1f2937;
+  font-size: 18px;
+  font-weight: 1000;
+  text-align: center;
+}
+
+.ranking-summary {
+  margin: 0 12px 12px;
+  border: 1px solid var(--accent-bright);
+  border-radius: 8px;
+  padding: 18px 12px;
+  background: #ffffff;
+  color: #1f2937;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: center;
+  word-break: keep-all;
+}
+
+.ranking-summary strong {
+  font-weight: 1000;
+}
+
+.ranking-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 12px 12px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ranking-row {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 66px;
+  border-bottom: 1px solid #eef2f6;
+  color: #1f2937;
+  font-size: 14px;
+}
+
+.ranking-row.has-level {
+  grid-template-columns: 54px minmax(0, 1fr) auto auto;
+}
+
+.ranking-medal {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: #344054;
+  font-size: 16px;
+  font-weight: 1000;
+}
+
+.ranking-row:nth-child(1) .ranking-medal {
+  background: #ffe08a;
+  color: #9a6a00;
+}
+
+.ranking-row:nth-child(2) .ranking-medal {
+  background: #cbd5e1;
+  color: #475467;
+}
+
+.ranking-row:nth-child(3) .ranking-medal {
+  background: #d9b38c;
+  color: #7c4a20;
+}
+
+.ranking-name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ranking-level {
+  color: #475467;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.ranking-count {
+  color: #111827;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.ranking-empty {
+  padding: 36px 0;
+  color: #98a2b3;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
 }
 
 .history-date-picker {

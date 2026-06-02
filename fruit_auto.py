@@ -1012,6 +1012,110 @@ def current_seed_fruit(client, employee):
     return seeds, berries
 
 
+def forest_level_label(level):
+    value = str(level or "").strip()
+    labels = {
+        "1": "씨앗 1단계",
+        "2": "씨앗 2단계",
+        "3": "열매 1단계",
+        "4": "열매 2단계",
+        "5": "나무 단계",
+        "6": "숲 단계",
+    }
+    return labels.get(value, "숲 단계")
+
+
+def forest_ranking(kind="berry", month=None, owner_key=None, limit=100):
+    owner_key = require_owner(owner_key)
+    client, employee_info, _login_dataset, employee, sender_employee_id, sender_employee_name = account_login(owner_key)
+    now = dt.datetime.now(KST)
+    std_month = str(month or f"{now.year}{now.month:02d}").replace("-", "")[:6]
+    if len(std_month) != 6 or not std_month.isdigit():
+        std_month = f"{now.year}{now.month:02d}"
+    kind = str(kind or "berry")
+    payload = {"empId": "", "empNm": "", "stdMt": ""}
+    if kind == "berry":
+        payload = {
+            "empId": sender_employee_id,
+            "empNm": sender_employee_name,
+            "stdMt": std_month,
+        }
+    elif kind == "gift":
+        payload = {"empId": "", "stdMt": std_month}
+    elif kind == "level":
+        payload = {"empId": "", "empNm": "", "stdMt": ""}
+    else:
+        raise FruitAutoError("알 수 없는 랭킹 종류입니다.")
+
+    content = client.post_json(f"{FOREST_API}/bryRank", payload)
+    rows = content if isinstance(content, list) else content.get("resultMap") or []
+    rows = list(rows or [])
+    my_row = None
+    ranking_rows = rows
+    if kind == "berry":
+        my_row = rows[0] if rows else None
+        ranking_rows = rows[1:]
+    elif kind == "level":
+        for row in rows:
+            if str(row.get("empId") or row.get("emp_id") or "") == str(sender_employee_id):
+                my_row = row
+                break
+
+    def int_text(value):
+        return parse_int(value, 0)
+
+    def row_name(row):
+        return row.get("empNm") or row.get("emp_nm") or row.get("name") or "-"
+
+    items = []
+    max_items = max(1, min(300, int(limit or 100)))
+    for index, row in enumerate(ranking_rows[:max_items], 1):
+        if kind == "level":
+            count = int_text(row.get("yrBryCnt") or row.get("sumBerry"))
+            items.append({
+                "rank": int_text(row.get("rankNo") or row.get("rnk") or index),
+                "name": row_name(row),
+                "level": forest_level_label(row.get("lvl")),
+                "count": count,
+            })
+        else:
+            items.append({
+                "rank": int_text(row.get("rnk") or row.get("rankNo") or index) or index,
+                "name": row_name(row),
+                "count": int_text(row.get("sumBerry") or row.get("yrBryCnt")),
+            })
+
+    if my_row:
+        if kind == "level":
+            my = {
+                "rank": int_text(my_row.get("rankNo") or my_row.get("rnk")),
+                "name": sender_employee_name,
+                "level": forest_level_label(my_row.get("lvl")),
+                "count": int_text(my_row.get("yrBryCnt") or my_row.get("sumBerry")),
+            }
+        else:
+            my = {
+                "rank": int_text(my_row.get("rnk") or my_row.get("rankNo")),
+                "name": sender_employee_name,
+                "count": int_text(my_row.get("sumBerry") or my_row.get("yrBryCnt")),
+            }
+    else:
+        my = {
+            "rank": 0,
+            "name": sender_employee_name,
+            "level": "씨앗 1단계" if kind == "level" else "",
+            "count": 0,
+        }
+
+    return {
+        "kind": kind,
+        "month": std_month,
+        "userName": sender_employee_name,
+        "my": my,
+        "items": items,
+    }
+
+
 def refresh_balance(force=False):
     state = load_json(STATE_PATH, DEFAULT_STATE)
     checked_at = state.get("balanceCheckedAt") or state.get("lastCheckedAt")
