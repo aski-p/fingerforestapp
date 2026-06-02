@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.4.1";
+const appVersion = "3.4.2";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1584,6 +1584,7 @@ function activeWorkspacePanel() {
 function bindWorkspaceSwipeZone() {
   const zones = [document.querySelector(".workspace-tabs")].filter(Boolean);
   if (!zones.length) return;
+  let suppressNextWorkspaceClick = false;
 
   zones.forEach((zone) => {
     let startX = 0;
@@ -1619,9 +1620,22 @@ function bindWorkspaceSwipeZone() {
       const requiredDistance = Math.min(72, Math.max(38, zone.clientWidth * 0.12));
       if (Math.abs(dx) < requiredDistance || Math.abs(dx) < Math.abs(dy) * 1.15) return;
       const current = activeWorkspacePanel();
-      if (dx < 0 && current !== "worklog") scrollWorkspacePanel("worklog");
-      if (dx > 0 && current !== "fruit") scrollWorkspacePanel("fruit");
-    }, { passive: true });
+      const next = dx < 0 ? "worklog" : "fruit";
+      if (next !== current) {
+        suppressNextWorkspaceClick = true;
+        event.preventDefault();
+        scrollWorkspacePanel(next);
+        window.setTimeout(() => {
+          suppressNextWorkspaceClick = false;
+        }, 350);
+      }
+    }, { passive: false });
+
+    zone.addEventListener("click", (event) => {
+      if (!suppressNextWorkspaceClick) return;
+      event.preventDefault();
+      event.stopPropagation();
+    }, true);
   });
 }
 

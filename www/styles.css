@@ -1148,6 +1148,10 @@ textarea:focus {
   align-self: flex-start;
 }
 
+.workspace-slide > .card {
+  width: 100%;
+}
+
 .fruit-send-panel {
   display: grid;
   align-items: start;

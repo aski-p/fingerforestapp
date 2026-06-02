@@ -22,7 +22,7 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.4.1"
+APP_VERSION = "3.4.2"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_HISTORY_MESSAGE_LIMIT = 10
 CHAT_INPUT_CHAR_LIMIT = 8000
@@ -30,6 +30,8 @@ CHAT_OUTPUT_TOKEN_LIMIT = 800
 CHAT_REPLY_INSTRUCTION = "답변은 800토큰 안에서 끝맺음까지 완결해 주세요. 길면 핵심만 요약하고 문장 중간에서 끊기지 않게 마무리하세요."
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "업무일지 카드에서 Getter 장식 클래스가 만드는 예약 여백을 제거해 카드 내부 폼이 열매 보내기처럼 맞게 보이도록 수정했습니다.",
+    "상단 탭 스와이프 직후 발생하는 버튼 클릭이 전환을 되돌리지 않도록 처리해 탭 스와이프 전환을 복구했습니다.",
     "업무일지 카드 안의 검색/입력/select/textarea 박스가 오른쪽 끝에서 잘리지 않도록 박스 폭 계산을 고정했습니다.",
     "상단 탭 영역 스와이프 임계값을 낮춰 본문 세로 스크롤은 보호하면서도 탭 스와이프 전환은 다시 자연스럽게 동작하게 조정했습니다.",
     "업무일지/열매보내기 본문 세로 스크롤 중 화면이 옆으로 밀리지 않도록 스와이프 전환 감지를 상단 탭 영역으로만 제한했습니다.",
