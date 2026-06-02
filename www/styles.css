@@ -296,6 +296,11 @@ body.font-typewriter { font-family: "Gamja Flower", "NotoFruit", cursive; }
   box-sizing: border-box;
 }
 
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -1416,7 +1421,7 @@ textarea:focus {
 .worklog-card {
   margin-top: 0;
   padding: 16px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .worklog-block {
@@ -1425,6 +1430,7 @@ textarea:focus {
   margin-top: 16px;
   border-top: 1px solid #eef2f6;
   padding-top: 16px;
+  width: 100%;
   min-width: 0;
 }
 
@@ -1440,13 +1446,16 @@ textarea:focus {
 }
 
 .worklog-block label {
+  display: grid;
+  gap: 6px;
   margin-bottom: 0;
+  width: 100%;
   min-width: 0;
 }
 
 .worklog-block label span {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 0;
   color: #667085;
   font-size: 12px;
   font-weight: 900;
@@ -1454,18 +1463,26 @@ textarea:focus {
 
 .worklog-card input,
 .worklog-card select {
+  display: block;
+  width: 100%;
   height: 46px;
   min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .worklog-card textarea {
+  display: block;
   width: 100%;
   min-height: 112px;
   min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .worklog-card .searchrow {
   grid-template-columns: minmax(0, 1fr) 68px;
+  width: 100%;
   min-width: 0;
 }
 

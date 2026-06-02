@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.4.2";
+const appVersion = "3.4.3";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1564,7 +1564,8 @@ function scrollWorkspacePanel(name) {
   const target = name === "worklog" ? $("worklogPanel") : $("fruitSendPanel");
   if (!pager || !target) return;
   const maxLeft = Math.max(0, pager.scrollWidth - pager.clientWidth);
-  const nextLeft = Math.min(maxLeft, Math.max(0, target.offsetLeft));
+  const paddingLeft = Number.parseFloat(window.getComputedStyle(pager).paddingLeft) || 0;
+  const nextLeft = Math.min(maxLeft, Math.max(0, target.offsetLeft - paddingLeft));
   animateWorkspaceScroll(nextLeft, name);
   setWorkspaceTab(name);
 }
@@ -1582,14 +1583,18 @@ function activeWorkspacePanel() {
 }
 
 function bindWorkspaceSwipeZone() {
-  const zones = [document.querySelector(".workspace-tabs")].filter(Boolean);
+  const zones = [
+    { element: document.querySelector(".workspace-tabs"), distanceRatio: 0.10 },
+    { element: $("workspacePager"), distanceRatio: 0.16 },
+  ].filter((zone) => zone.element);
   if (!zones.length) return;
   let suppressNextWorkspaceClick = false;
 
-  zones.forEach((zone) => {
+  zones.forEach(({ element: zone, distanceRatio }) => {
     let startX = 0;
     let startY = 0;
     let tracking = false;
+    let horizontal = false;
 
     zone.addEventListener("touchstart", (event) => {
       const touch = event.touches && event.touches[0];
@@ -1597,6 +1602,7 @@ function bindWorkspaceSwipeZone() {
       startX = touch.clientX;
       startY = touch.clientY;
       tracking = true;
+      horizontal = false;
     }, { passive: true });
 
     zone.addEventListener("touchmove", (event) => {
@@ -1605,7 +1611,8 @@ function bindWorkspaceSwipeZone() {
       if (!touch) return;
       const dx = touch.clientX - startX;
       const dy = touch.clientY - startY;
-      if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+      if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.35) {
+        horizontal = true;
         event.preventDefault();
       }
     }, { passive: false });
@@ -1617,8 +1624,8 @@ function bindWorkspaceSwipeZone() {
       if (!touch) return;
       const dx = touch.clientX - startX;
       const dy = touch.clientY - startY;
-      const requiredDistance = Math.min(72, Math.max(38, zone.clientWidth * 0.12));
-      if (Math.abs(dx) < requiredDistance || Math.abs(dx) < Math.abs(dy) * 1.15) return;
+      const requiredDistance = Math.min(68, Math.max(34, zone.clientWidth * distanceRatio));
+      if (Math.abs(dx) < requiredDistance || Math.abs(dx) < Math.abs(dy) * 1.35) return;
       const current = activeWorkspacePanel();
       const next = dx < 0 ? "worklog" : "fruit";
       if (next !== current) {
@@ -1632,7 +1639,7 @@ function bindWorkspaceSwipeZone() {
     }, { passive: false });
 
     zone.addEventListener("click", (event) => {
-      if (!suppressNextWorkspaceClick) return;
+      if (!suppressNextWorkspaceClick || !horizontal) return;
       event.preventDefault();
       event.stopPropagation();
     }, true);
