@@ -7,7 +7,7 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <link rel="icon" href="/icons/apple-icon-192.png" type="image/png">
-    <link rel="stylesheet" href="/styles.css?v=3.2.1">
+    <link rel="stylesheet" href="/styles.css?v=3.2.2">
     <title>fingerfruit</title>
   </head>
   <body class="logged-out">
@@ -354,12 +354,32 @@
         </div>
       </div>
 
+      <div id="chatPopup" class="chat-popup hidden" role="dialog" aria-labelledby="chatTitle">
+        <div class="chat-head">
+          <div>
+            <p class="label">CLAUDE</p>
+            <h2 id="chatTitle">채팅</h2>
+          </div>
+          <button id="chatCloseBtn" class="icon-button" type="button" aria-label="채팅 닫기">닫기</button>
+        </div>
+        <div id="chatMessages" class="chat-messages" aria-live="polite">
+          <div class="chat-empty">Claude Haiku에게 바로 물어보세요.</div>
+        </div>
+        <form id="chatForm" class="chat-form">
+          <textarea id="chatInput" rows="2" maxlength="8000" placeholder="메시지 입력" enterkeyhint="send"></textarea>
+          <button id="chatSendBtn" type="submit" aria-label="메시지 보내기">전송</button>
+        </form>
+      </div>
+      <button id="chatOpenBtn" class="chat-fab" type="button" aria-label="채팅 열기">
+        <span aria-hidden="true">AI</span>
+      </button>
+
       <p id="toast" class="toast" role="status"></p>
       <footer class="app-footer">
-        <span>v3.2.1 정식버전 · by aski</span>
+        <span>v3.2.2 정식버전 · by aski</span>
         <a id="supportLink" class="support-link" href="https://qr.kakaopay.com/Ej7ruxJDq" target="_blank" rel="noopener" aria-label="카카오페이로 후원하기">후원하기</a>
       </footer>
     </main>
-    <script src="/app.js?v=3.2.1"></script>
+    <script src="/app.js?v=3.2.2"></script>
   </body>
 </html>

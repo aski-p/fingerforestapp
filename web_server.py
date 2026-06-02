@@ -21,9 +21,16 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.2.1"
+APP_VERSION = "3.2.2"
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
+CHAT_HISTORY_MESSAGE_LIMIT = 10
+CHAT_INPUT_CHAR_LIMIT = 8000
+CHAT_OUTPUT_TOKEN_LIMIT = 800
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "스킨 선택 시 상단/카드/업무일지/내역조회 UI 색상이 선택한 컨셉에 맞게 따라가도록 정리했습니다.",
+    "Android 래퍼 설치 버전 표시가 실제 APK 버전과 다르게 남아있던 문제를 수정했습니다.",
+    "오른쪽 아래 Claude Haiku 채팅 팝업을 추가했습니다.",
     "내역조회에서 받음 항목 본문 이름을 받은 사람 기준으로 표시하도록 수정했습니다.",
     "Android APK를 고정 서명 release 빌드로 다시 만들어 업데이트 설치 실패 가능성을 줄였습니다.",
     "내역조회에서 기본 FOREST API에 있는 받은 열매 항목이 짝맞춤 필터 때문에 숨겨지는 문제를 수정했습니다.",
@@ -520,6 +527,72 @@ def versioned_download_file(kind, extension):
     return path if path.exists() and path.is_file() else None
 
 
+def claude_api_key():
+    return os.environ.get("CLAUDE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY") or ""
+
+
+def clean_chat_text(value, limit=CHAT_INPUT_CHAR_LIMIT):
+    return str(value or "").strip()[:limit]
+
+
+def claude_chat(payload):
+    api_key = claude_api_key()
+    if not api_key:
+        raise fruit_auto.FruitAutoError("Claude API 키가 설정되지 않았습니다.")
+    message = clean_chat_text(payload.get("message"))
+    if not message:
+        raise fruit_auto.FruitAutoError("메시지를 입력하세요.")
+    messages = []
+    remaining_input = max(0, CHAT_INPUT_CHAR_LIMIT - len(message))
+    history = payload.get("history")
+    if isinstance(history, list):
+        for item in history[-CHAT_HISTORY_MESSAGE_LIMIT:]:
+            if not isinstance(item, dict):
+                continue
+            role = item.get("role")
+            content = clean_chat_text(item.get("content"), remaining_input)
+            if role in ("user", "assistant") and content:
+                messages.append({"role": role, "content": content})
+                remaining_input = max(0, remaining_input - len(content))
+            if remaining_input <= 0:
+                break
+    messages.append({"role": "user", "content": message})
+    request_body = json.dumps(
+        {
+            "model": CLAUDE_MODEL,
+            "max_tokens": CHAT_OUTPUT_TOKEN_LIMIT,
+            "messages": messages,
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+    request = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=request_body,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=35) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:500]
+        raise fruit_auto.FruitAutoError(f"Claude API 오류: {exc.code} {detail}") from exc
+    content = data.get("content") if isinstance(data, dict) else []
+    text_parts = [
+        str(part.get("text") or "")
+        for part in content
+        if isinstance(part, dict) and part.get("type") == "text" and part.get("text")
+    ]
+    reply = "\n".join(text_parts).strip()
+    if not reply:
+        raise fruit_auto.FruitAutoError("Claude 응답이 비어 있습니다.")
+    return {"reply": reply, "model": data.get("model") or CLAUDE_MODEL}
+
+
 def daemon_running():
     if not fruit_auto.PID_PATH.exists():
         return False
@@ -730,6 +803,8 @@ class Handler(BaseHTTPRequestHandler):
             payload = self.read_json()
             if parsed.path == "/api/login":
                 result = fruit_auto.save_credentials(payload.get("id"), payload.get("password"), device_id=self.device_id())
+            elif parsed.path == "/api/chat":
+                result = claude_chat(payload)
             else:
                 owner_key, session_token = self.require_session_owner()
             if parsed.path == "/api/login":

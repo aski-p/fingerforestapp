@@ -13,10 +13,10 @@ const themeKey = "fruitTheme";
 const fontKey = "fruitFont";
 const profilePhotoKey = "fruitProfilePhoto";
 const profilePhotoCacheKey = "fruitProfilePhotoCache";
-const securityMigrationKey = "fruitSecurityMigrationV85";
+const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.2.1";
+const appVersion = "3.2.2";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -162,6 +162,7 @@ let worklogCalendarMonth = new Date();
 let pendingWorklogTarget = null;
 let worklogDraftDirty = false;
 let activeAppearanceSettings = { theme: "default", font: "pretendard" };
+let chatHistory = [];
 
 let koreanPublicHolidays = {
   "2025-01-01": "신정",
@@ -683,6 +684,9 @@ function renderAppearanceOptions() {
     button.type = "button";
     button.className = "option-button";
     button.dataset.themeOption = theme.id;
+    button.style.setProperty("--option-soft", theme.swatch[0]);
+    button.style.setProperty("--option-accent", theme.swatch[1]);
+    button.style.setProperty("--option-strong", theme.swatch[2]);
     button.innerHTML = `
       <span class="option-swatch" style="--swatch-a:${theme.swatch[0]};--swatch-b:${theme.swatch[1]};--swatch-c:${theme.swatch[2]}"></span>
       <span class="option-title">${escapeHtml(theme.label)}</span>
@@ -1996,7 +2000,60 @@ function closeReleaseNotesModal() {
   syncModalOpenState();
 }
 
+function renderChatMessages() {
+  const box = $("chatMessages");
+  if (!box) return;
+  box.innerHTML = "";
+  if (!chatHistory.length) {
+    box.innerHTML = '<div class="chat-empty">Claude Haiku에게 바로 물어보세요.</div>';
+    return;
+  }
+  chatHistory.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = `chat-message ${item.role === "assistant" ? "assistant" : "user"}`;
+    row.textContent = item.content || "";
+    box.appendChild(row);
+  });
+  box.scrollTop = box.scrollHeight;
+}
+
+function openChatPopup() {
+  $("chatPopup").classList.remove("hidden");
+  renderChatMessages();
+  window.setTimeout(() => $("chatInput")?.focus(), 60);
+}
+
+function closeChatPopup() {
+  $("chatPopup").classList.add("hidden");
+}
+
+async function sendChatMessage() {
+  const input = $("chatInput");
+  const button = $("chatSendBtn");
+  const message = (input.value || "").trim();
+  if (!message || button.disabled) return;
+  input.value = "";
+  chatHistory.push({ role: "user", content: message });
+  chatHistory = chatHistory.slice(-10);
+  renderChatMessages();
+  button.disabled = true;
+  try {
+    const data = await api("/api/chat", { message, history: chatHistory.slice(0, -1) });
+    chatHistory.push({ role: "assistant", content: data.reply || "" });
+  } catch (err) {
+    chatHistory.push({ role: "assistant", content: `오류: ${err.message}` });
+  } finally {
+    chatHistory = chatHistory.slice(-10);
+    button.disabled = false;
+    renderChatMessages();
+  }
+}
+
 function closeTopModal() {
+  if (isModalVisible("chatPopup")) {
+    closeChatPopup();
+    return true;
+  }
   if (isModalVisible("worklogCalendarModal")) {
     closeWorklogCalendar();
     return true;
@@ -2434,6 +2491,18 @@ $("rememberLogin").addEventListener("change", () => {
 });
 
 $("supportLink").addEventListener("click", openSupportLink);
+$("chatOpenBtn").addEventListener("click", openChatPopup);
+$("chatCloseBtn").addEventListener("click", closeChatPopup);
+$("chatForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await sendChatMessage();
+});
+$("chatInput").addEventListener("keydown", async (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    await sendChatMessage();
+  }
+});
 
 async function initApp() {
   initializeAppearanceSettings();
