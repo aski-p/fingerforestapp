@@ -1025,7 +1025,7 @@ def forest_level_label(level):
     return labels.get(value, "숲 단계")
 
 
-def forest_ranking(kind="berry", month=None, owner_key=None, limit=100):
+def forest_ranking(kind="berry", month=None, owner_key=None, limit=None):
     owner_key = require_owner(owner_key)
     client, employee_info, _login_dataset, employee, sender_employee_id, sender_employee_name = account_login(owner_key)
     now = dt.datetime.now(KST)
@@ -1068,8 +1068,15 @@ def forest_ranking(kind="berry", month=None, owner_key=None, limit=100):
         return row.get("empNm") or row.get("emp_nm") or row.get("name") or "-"
 
     items = []
-    max_items = max(1, min(300, int(limit or 100)))
-    for index, row in enumerate(ranking_rows[:max_items], 1):
+    if limit is None:
+        visible_rows = ranking_rows
+    else:
+        try:
+            max_items = int(limit)
+        except (TypeError, ValueError):
+            max_items = len(ranking_rows)
+        visible_rows = ranking_rows[:max(1, max_items)]
+    for index, row in enumerate(visible_rows, 1):
         if kind == "level":
             count = int_text(row.get("yrBryCnt") or row.get("sumBerry"))
             items.append({

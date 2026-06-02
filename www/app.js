@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.3.8";
+const appVersion = "3.3.9";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1912,7 +1912,6 @@ function renderRankingMedal(rank) {
         <img class="ranking-medal-image" src="/icons/rank-crown-gold.svg" alt="" aria-hidden="true">
         <span class="ranking-spark spark-a" aria-hidden="true">✦</span>
         <span class="ranking-spark spark-b" aria-hidden="true">✧</span>
-        <span class="ranking-rank-text">1</span>
       </span>
     `;
   }
@@ -1920,7 +1919,6 @@ function renderRankingMedal(rank) {
     return `
       <span class="ranking-medal ranking-medal-second" aria-label="2등">
         <img class="ranking-medal-image" src="/icons/rank-medal-silver.svg" alt="" aria-hidden="true">
-        <span class="ranking-rank-text">2</span>
       </span>
     `;
   }
@@ -1928,7 +1926,6 @@ function renderRankingMedal(rank) {
     return `
       <span class="ranking-medal ranking-medal-third" aria-label="3등">
         <img class="ranking-medal-image" src="/icons/rank-medal-bronze.svg" alt="" aria-hidden="true">
-        <span class="ranking-rank-text">3</span>
       </span>
     `;
   }

@@ -745,14 +745,22 @@ h2 {
 
 .ranking-button {
   flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 42px;
   min-height: 36px;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
-  padding: 0 11px;
+  padding: 0;
   background: var(--surface);
   color: var(--accent);
-  font-size: 13px;
-  font-weight: 1000;
+}
+
+.ranking-button img {
+  width: 29px;
+  height: 29px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(245, 158, 11, .28));
 }
 
 .remember-login {
@@ -2093,6 +2101,7 @@ body.logged-out .chat-popup {
 .ranking-panel {
   height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   max-height: 720px;
+  min-height: 0;
 }
 
 .ranking-tabs {
@@ -2235,21 +2244,6 @@ body.logged-out .chat-popup {
   z-index: -1;
 }
 
-.ranking-rank-text {
-  position: relative;
-  z-index: 2;
-  color: inherit;
-  font-size: 17px;
-  font-weight: 1000;
-  line-height: 1;
-}
-
-.ranking-medal-first .ranking-rank-text {
-  margin-top: 16px;
-  color: #78350f;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, .65);
-}
-
 .ranking-spark {
   position: absolute;
   color: #fff7ad;
@@ -2280,12 +2274,6 @@ body.logged-out .chat-popup {
   background: transparent;
   box-shadow: none;
   color: #431407;
-}
-
-.ranking-medal-second .ranking-rank-text,
-.ranking-medal-third .ranking-rank-text {
-  margin-top: 12px;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, .62);
 }
 
 @keyframes rankingShine {
