@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.4.3";
+const appVersion = "3.4.4";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1520,15 +1520,13 @@ function setWorkspaceTab(name) {
   document.querySelectorAll("[data-workspace-slide]").forEach((button) => {
     button.classList.toggle("active", button.dataset.workspaceSlide === name);
   });
-  window.requestAnimationFrame(syncWorkspacePagerHeight);
+  $("fruitSendPanel")?.classList.toggle("is-active", name !== "worklog");
+  $("worklogPanel")?.classList.toggle("is-active", name === "worklog");
 }
 
 function syncWorkspacePagerHeight() {
   const pager = $("workspacePager");
-  if (!pager) return;
-  const panel = activeWorkspacePanel() === "worklog" ? $("worklogPanel") : $("fruitSendPanel");
-  if (!panel) return;
-  pager.style.height = `${panel.offsetHeight + 8}px`;
+  if (pager) pager.style.height = "";
 }
 
 function animateWorkspaceScroll(left, nextName) {
@@ -1560,21 +1558,11 @@ function animateWorkspaceScroll(left, nextName) {
 }
 
 function scrollWorkspacePanel(name) {
-  const pager = $("workspacePager");
-  const target = name === "worklog" ? $("worklogPanel") : $("fruitSendPanel");
-  if (!pager || !target) return;
-  const maxLeft = Math.max(0, pager.scrollWidth - pager.clientWidth);
-  const paddingLeft = Number.parseFloat(window.getComputedStyle(pager).paddingLeft) || 0;
-  const nextLeft = Math.min(maxLeft, Math.max(0, target.offsetLeft - paddingLeft));
-  animateWorkspaceScroll(nextLeft, name);
   setWorkspaceTab(name);
 }
 
 function syncWorkspaceTabFromScroll() {
-  const pager = $("workspacePager");
-  if (!pager) return;
-  const active = pager.scrollLeft > pager.clientWidth * 0.45 ? "worklog" : "fruit";
-  setWorkspaceTab(active);
+  setWorkspaceTab(activeWorkspacePanel());
 }
 
 function activeWorkspacePanel() {
@@ -2638,6 +2626,7 @@ document.querySelectorAll("[data-workspace-slide]").forEach((button) => {
 });
 
 bindWorkspaceSwipeZone();
+setWorkspaceTab(activeWorkspacePanel());
 
 $("workspacePager").addEventListener("scroll", () => {
   window.clearTimeout(syncWorkspaceTabFromScroll.timer);

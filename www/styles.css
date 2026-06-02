@@ -50,6 +50,7 @@
 
 html {
   overflow-x: hidden;
+  max-width: 100%;
 }
 
 body.theme-dark {
@@ -304,6 +305,8 @@ body.font-typewriter { font-family: "Gamja Flower", "NotoFruit", cursive; }
 body {
   margin: 0;
   min-width: 320px;
+  width: 100%;
+  max-width: 100%;
   min-height: 100vh;
   overflow-x: hidden;
   background: var(--bg);
@@ -340,10 +343,11 @@ input:disabled {
 
 .app {
   width: min(520px, 100%);
+  max-width: 100%;
   min-height: 100vh;
   margin: 0 auto;
   padding: max(18px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom));
-  overflow-x: clip;
+  overflow-x: hidden;
 }
 
 .hero {
@@ -1120,18 +1124,18 @@ textarea:focus {
 }
 
 .workspace-pager {
-  display: flex;
-  gap: 12px;
-  margin: 0 -16px;
-  padding: 0 16px 8px;
+  display: block;
+  margin: 0;
+  padding: 0 0 8px;
+  width: 100%;
+  max-width: 100%;
   overflow-x: hidden;
-  overflow-y: hidden;
+  overflow-y: visible;
   overscroll-behavior-x: contain;
   scroll-snap-type: none;
-  scroll-padding: 16px;
+  scroll-padding: 0;
   scrollbar-width: none;
   touch-action: pan-y;
-  transition: height 0.24s ease;
 }
 
 .workspace-pager.is-animating {
@@ -1148,9 +1152,23 @@ textarea:focus {
 }
 
 .workspace-slide {
-  flex: 0 0 100%;
+  display: none;
+  width: 100%;
   min-width: 0;
-  align-self: flex-start;
+  max-width: 100%;
+}
+
+.workspace-slide:not(.is-active) {
+  display: none !important;
+}
+
+.workspace-slide.is-active {
+  display: block;
+}
+
+.workspace-slide.is-active.fruit-send-panel,
+.workspace-slide.is-active.worklog-panel {
+  display: grid;
 }
 
 .workspace-slide > .card {
@@ -1420,22 +1438,47 @@ textarea:focus {
 
 .worklog-card {
   margin-top: 0;
-  padding: 16px;
-  overflow: visible;
+  padding: 0;
+  overflow: hidden;
+}
+
+.worklog-panel {
+  display: grid;
+  align-items: start;
+}
+
+.worklog-card-section {
+  padding: 12px;
+}
+
+.worklog-unified {
+  display: grid;
+  align-content: start;
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.worklog-title {
+  margin-bottom: 2px;
 }
 
 .worklog-block {
   display: grid;
-  gap: 12px;
-  margin-top: 16px;
-  border-top: 1px solid #eef2f6;
-  padding-top: 16px;
+  gap: 8px;
+  margin-top: 0;
+  border: 1px solid #f4d8cc;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff7f3;
   width: 100%;
   min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
-.worklog-card .section-title {
-  margin-bottom: 2px;
+.worklog-block + .worklog-block {
+  margin-top: 0;
 }
 
 .worklog-block h3 {
@@ -1469,6 +1512,8 @@ textarea:focus {
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .worklog-card textarea {
@@ -1481,7 +1526,8 @@ textarea:focus {
 }
 
 .worklog-card .searchrow {
-  grid-template-columns: minmax(0, 1fr) 68px;
+  grid-template-columns: minmax(0, 1fr) 62px;
+  gap: 6px;
   width: 100%;
   min-width: 0;
 }
@@ -1500,11 +1546,16 @@ textarea:focus {
   color: #0f172a;
   font-size: 14px;
   font-weight: 900;
+  overflow: hidden;
 }
 
 .selected-person strong,
 .selected-person small {
   display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .selected-person small {
@@ -1598,7 +1649,7 @@ textarea:focus {
 }
 
 .worklog-enable {
-  margin-top: 16px;
+  margin-top: 0;
 }
 
 .worklog-calendar-panel {
@@ -1789,12 +1840,13 @@ textarea:focus {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 0;
+  min-width: 0;
 }
 
 @media (max-width: 380px) {
-  .worklog-card {
-    padding: 14px;
+  .worklog-card-section {
+    padding: 12px;
   }
 
   .worklog-actions {
@@ -3768,10 +3820,10 @@ body .modal {
   }
 
   .workspace-pager {
-    margin-left: -14px;
-    margin-right: -14px;
-    padding-left: 14px;
-    padding-right: 14px;
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
     scroll-padding: 14px;
   }
 
