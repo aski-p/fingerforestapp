@@ -3757,6 +3757,26 @@ body.theme-getter .fruit-send-card .fruit-card-section {
   padding: 12px;
 }
 
+body.theme-getter .workspace-tabs {
+  border-color: rgba(255, 23, 56, 0.48);
+  background:
+    linear-gradient(135deg, rgba(255, 23, 56, 0.18), rgba(18, 3, 6, 0.92)),
+    rgba(18, 3, 6, 0.92);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+body.theme-getter .workspace-tabs button {
+  color: #c7b4bb;
+}
+
+body.theme-getter .workspace-tabs button.active {
+  border: 1px solid rgba(255, 225, 210, 0.28);
+  background:
+    linear-gradient(135deg, rgba(255, 244, 238, 0.96), rgba(255, 218, 204, 0.88));
+  color: #7b1020;
+  box-shadow: 0 8px 18px rgba(255, 23, 56, 0.22);
+}
+
 body.theme-getter .fruit-send-card .getter-card-target {
   padding-right: 0;
   margin-top: -2px;
@@ -3800,6 +3820,61 @@ body.theme-getter .fruit-send-card .getter-card-auto > div:first-child {
 
 body.theme-getter .fruit-send-card .control-card::before {
   content: none;
+}
+
+body.theme-getter .fruit-unified-block {
+  border-color: rgba(255, 23, 56, 0.42);
+  background:
+    linear-gradient(145deg, rgba(255, 244, 238, 0.08), transparent 42%),
+    rgba(28, 5, 10, 0.82);
+  color: #fff5f6;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+body.theme-getter .fruit-unified-block h3,
+body.theme-getter .compact-title h3,
+body.theme-getter .auto-title-row h3 {
+  color: #fff5f6;
+  text-shadow: 0 0 14px rgba(255, 23, 56, 0.34);
+}
+
+body.theme-getter .fruit-unified-block label span,
+body.theme-getter .auto-heading p,
+body.theme-getter .interval-control span {
+  color: #f6b8c1;
+}
+
+body.theme-getter .fruit-send-card input,
+body.theme-getter .fruit-send-card select,
+body.theme-getter .fruit-send-card textarea {
+  border-color: rgba(255, 23, 56, 0.66);
+  background: rgba(20, 4, 8, 0.94);
+  color: #fff5f6;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+body.theme-getter .fruit-send-card input::placeholder {
+  color: rgba(246, 184, 193, 0.72);
+}
+
+body.theme-getter .send-all-option {
+  border-color: rgba(255, 23, 56, 0.58);
+  background:
+    linear-gradient(135deg, rgba(255, 23, 56, 0.14), rgba(20, 4, 8, 0.96));
+  color: #ffe7eb;
+}
+
+body.theme-getter .send-all-option input {
+  accent-color: #e5092f;
+}
+
+body.theme-getter .interval-control {
+  border-color: rgba(255, 23, 56, 0.42);
+  background: rgba(20, 4, 8, 0.72);
+}
+
+body.theme-getter .interval-control strong {
+  color: #fff5f6;
 }
 
 body.theme-getter .metric::before,
@@ -3903,9 +3978,16 @@ body.theme-getter .searchrow button,
 body.theme-getter .interval-control button,
 body.theme-getter .primary.soft,
 body.theme-getter .badge.ok {
-  border: 1px solid rgba(57, 255, 136, 0.38);
-  background: rgba(57, 255, 136, 0.12);
-  color: #7dffad;
+  border: 1px solid rgba(255, 23, 56, 0.54);
+  background:
+    linear-gradient(135deg, rgba(255, 23, 56, 0.22), rgba(20, 4, 8, 0.9));
+  color: #ffe7eb;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+body.theme-getter .searchrow button,
+body.theme-getter .interval-control button {
+  color: #ffccd3;
 }
 
 body.theme-getter .option-button.selected,
@@ -3916,6 +3998,13 @@ body.theme-getter input:focus {
 
 body.theme-getter #targetBadge::before {
   content: "🤖 ";
+}
+
+body.theme-getter #targetBadge,
+body.theme-getter #fruitScheduleBadge {
+  border-color: rgba(57, 255, 136, 0.4);
+  background: rgba(57, 255, 136, 0.1);
+  color: #7dffad;
 }
 
 body.theme-getter .history-date {
