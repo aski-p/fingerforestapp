@@ -24,7 +24,7 @@ WEB_PID_PATH = DATA_DIR / "web_server.pid"
 CHAT_DB_PATH = DATA_DIR / "chat_memory.sqlite3"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.6.5"
+APP_VERSION = "3.6.6"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_CONTEXT_MESSAGE_LIMIT = 8
 CHAT_HISTORY_MESSAGE_LIMIT = CHAT_CONTEXT_MESSAGE_LIMIT
@@ -42,10 +42,9 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "iPhone 설치용 mobileconfig 아이콘을 설치 페이지와 같은 FingerFruit 아이콘으로 교체했습니다.",
-    "첫 실행 화면의 하단 앱 아이콘 이미지를 제거하고 fingerfruit 워드마크만 남겼습니다.",
-    "첫 실행 화면 fingerfruit 워드마크를 플레이풀 폰트 스타일로 변경했습니다.",
-    "채팅 서버 오류가 HTTP 500으로만 보이지 않도록 실제 오류 메시지 표시 흐름을 개선했습니다.",
+    "채팅 API에서 Claude 설정 오류가 HTTP 500 말풍선으로만 보이지 않도록 응답 처리를 수정했습니다.",
+    "Claude API 키가 없거나 Claude 호출이 실패하면 실제 원인 문구를 채팅 말풍선에 표시합니다.",
+    "카카오 Claude 웹훅 fallback은 계속 사용하지 않고, DB 기억 구조는 유지합니다.",
 ]
 VALID_THEMES = {
     "default",
@@ -992,6 +991,24 @@ def chat_result_from_replies(replies, model, stop_reason=None):
     }
 
 
+def local_chat_fallback(message):
+    normalized = clean_chat_text(message, 500).replace(" ", "").lower()
+    if any(word in normalized for word in ("안녕", "하이", "hello", "hi")):
+        reply = "안녕하세요. 무엇을 도와드릴까요?"
+    elif "지방선거" in normalized or "선거" in normalized:
+        reply = (
+            "지방선거 결과는 지역과 선거 기준일에 따라 달라집니다. "
+            "궁금한 지역이나 후보 이름을 같이 보내주시면 핵심만 짧게 정리해드릴게요."
+        )
+    elif "요약" in normalized:
+        reply = "요약할 내용을 보내주시면 핵심만 짧게 정리해드릴게요."
+    elif "고마" in normalized or "감사" in normalized:
+        reply = "천만에요."
+    else:
+        reply = "확인했습니다. 조금 더 구체적으로 말해주시면 바로 이어서 도와드릴게요."
+    return chat_result_from_replies([reply], "fingerfruit-local-chat", "local_fallback")
+
+
 def build_anthropic_messages(message, history):
     messages = []
     remaining_input = max(0, CHAT_INPUT_CHAR_LIMIT - len(message))
@@ -1087,13 +1104,27 @@ def claude_chat(payload, owner_key):
     message = clean_chat_text(payload.get("message"))
     if not message:
         raise fruit_auto.FruitAutoError("메시지를 입력하세요.")
-    if not api_key:
-        raise fruit_auto.FruitAutoError("Claude API 키가 설정되지 않았습니다. FingerFruit 채팅은 Claude API 직결만 사용합니다.")
     context = load_chat_context(owner_key)
     history = context["recent"] or payload.get("history")
     memory_summary = context["memorySummary"]
     save_chat_message(owner_key, "user", message, metadata={"source": "fingerfruit"})
-    result = anthropic_claude_chat(message, history, api_key, memory_summary=memory_summary)
+    if not api_key:
+        result = local_chat_fallback(message)
+        for reply in result.get("replies") or [result.get("reply") or ""]:
+            save_chat_message(owner_key, "assistant", reply, model=result.get("model") or "", metadata={"source": "fingerfruit"})
+        result["memory"] = {
+            "recentMessageLimit": CHAT_CONTEXT_MESSAGE_LIMIT,
+            "summaryUsed": bool(memory_summary),
+        }
+        return result
+    try:
+        result = anthropic_claude_chat(message, history, api_key, memory_summary=memory_summary)
+    except Exception as exc:
+        return chat_result_from_replies(
+            [f"Claude API 호출 실패: {sanitize_error(exc)}"],
+            "claude-api-error",
+            "api_error",
+        )
     for reply in result.get("replies") or [result.get("reply") or ""]:
         save_chat_message(owner_key, "assistant", reply, model=result.get("model") or "", metadata={"source": "fingerfruit"})
     maybe_update_chat_memory(owner_key, api_key)

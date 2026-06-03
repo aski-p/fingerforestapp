@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.6.5";
+const appVersion = "3.6.6";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -2575,7 +2575,7 @@ async function sendChatMessage() {
     const detail = err.name === "AbortError" || /aborted/i.test(err.message || "")
       ? "응답 시간이 길어졌습니다. 잠시 후 다시 물어보세요."
       : err.message;
-    chatHistory.push({ role: "assistant", content: `오류: ${detail}` });
+    chatHistory.push({ role: "assistant", content: detail || "잠시 후 다시 물어보세요." });
   } finally {
     chatHistory = chatHistory.slice(-10);
     button.disabled = false;
