@@ -24,7 +24,7 @@ WEB_PID_PATH = DATA_DIR / "web_server.pid"
 CHAT_DB_PATH = DATA_DIR / "chat_memory.sqlite3"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.6.6"
+APP_VERSION = "3.6.8"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_CONTEXT_MESSAGE_LIMIT = 8
 CHAT_HISTORY_MESSAGE_LIMIT = CHAT_CONTEXT_MESSAGE_LIMIT
@@ -42,9 +42,9 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "채팅 API에서 Claude 설정 오류가 HTTP 500 말풍선으로만 보이지 않도록 응답 처리를 수정했습니다.",
-    "Claude API 키가 없거나 Claude 호출이 실패하면 실제 원인 문구를 채팅 말풍선에 표시합니다.",
-    "카카오 Claude 웹훅 fallback은 계속 사용하지 않고, DB 기억 구조는 유지합니다.",
+    "채팅은 카카오 경유 없이 Anthropic Claude API 직접 호출만 사용합니다.",
+    "Claude 직접 호출이 실패하면 로컬/카카오 대체 답변을 만들지 않습니다.",
+    "직접 연결 상태를 사용자에게 짧게 안내해 가짜 Claude 답변이 보이지 않게 했습니다.",
 ]
 VALID_THEMES = {
     "default",
@@ -917,11 +917,6 @@ def chat_reply_looks_incomplete(reply):
     return len(text) >= 500 or text.endswith(incomplete_endings)
 
 
-def kakao_chat_user_id(owner_key):
-    scoped = hashlib.sha256(str(owner_key or "anonymous").encode("utf-8")).hexdigest()[:16]
-    return f"fingerfruit-chat-{scoped}"
-
-
 def build_chat_system_prompt(memory_summary=""):
     if not memory_summary:
         return CHAT_REPLY_INSTRUCTION
@@ -932,55 +927,6 @@ def build_chat_system_prompt(memory_summary=""):
     )
 
 
-def format_recent_context_for_kakao(history):
-    lines = []
-    for item in history[-CHAT_CONTEXT_MESSAGE_LIMIT:]:
-        role = "사용자" if item.get("role") == "user" else "assistant"
-        content = clean_chat_text(item.get("content"), 1200)
-        if content:
-            lines.append(f"{role}: {content}")
-    return "\n".join(lines)
-
-
-def kakao_claude_chat(message, owner_key, history=None, memory_summary="", is_continuation=False):
-    webhook_url = os.environ.get("KAKAO_CLAUDE_WEBHOOK_URL") or "https://kakao-skill-webhook-production.up.railway.app/kakao-skill-webhook"
-    prompt_label = "이어쓰기 요청" if is_continuation else "사용자 질문"
-    context = ""
-    if memory_summary:
-        context += f"\n\nDB 장기 기억 요약:\n{memory_summary}"
-    recent_context = "" if is_continuation else format_recent_context_for_kakao(history or [])
-    if recent_context:
-        context += f"\n\nDB 최근 대화:\n{recent_context}"
-    utterance = f"{CHAT_REPLY_INSTRUCTION}{context}\n\n{prompt_label}:\n{message}"
-    request_body = json.dumps(
-        {
-            "userRequest": {
-                "utterance": utterance,
-                "user": {"id": kakao_chat_user_id(owner_key)},
-            }
-        },
-        ensure_ascii=False,
-    ).encode("utf-8")
-    request = urllib.request.Request(
-        webhook_url,
-        data=request_body,
-        method="POST",
-        headers={"Content-Type": "application/json; charset=utf-8"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=35) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:500]
-        raise fruit_auto.FruitAutoError(f"카카오 Claude 서버 오류: {exc.code} {detail}") from exc
-    outputs = data.get("template", {}).get("outputs", []) if isinstance(data, dict) else []
-    for output in outputs:
-        text = output.get("simpleText", {}).get("text") if isinstance(output, dict) else ""
-        if text:
-            return {"reply": clean_chat_reply(text), "model": "claude-haiku-via-kakao", "stopReason": "unknown"}
-    raise fruit_auto.FruitAutoError("카카오 Claude 응답이 비어 있습니다.")
-
-
 def chat_result_from_replies(replies, model, stop_reason=None):
     return {
         "reply": "\n\n".join(replies),
@@ -989,24 +935,6 @@ def chat_result_from_replies(replies, model, stop_reason=None):
         "continued": len(replies) > 1,
         "stopReason": stop_reason or "",
     }
-
-
-def local_chat_fallback(message):
-    normalized = clean_chat_text(message, 500).replace(" ", "").lower()
-    if any(word in normalized for word in ("안녕", "하이", "hello", "hi")):
-        reply = "안녕하세요. 무엇을 도와드릴까요?"
-    elif "지방선거" in normalized or "선거" in normalized:
-        reply = (
-            "지방선거 결과는 지역과 선거 기준일에 따라 달라집니다. "
-            "궁금한 지역이나 후보 이름을 같이 보내주시면 핵심만 짧게 정리해드릴게요."
-        )
-    elif "요약" in normalized:
-        reply = "요약할 내용을 보내주시면 핵심만 짧게 정리해드릴게요."
-    elif "고마" in normalized or "감사" in normalized:
-        reply = "천만에요."
-    else:
-        reply = "확인했습니다. 조금 더 구체적으로 말해주시면 바로 이어서 도와드릴게요."
-    return chat_result_from_replies([reply], "fingerfruit-local-chat", "local_fallback")
 
 
 def build_anthropic_messages(message, history):
@@ -1078,27 +1006,6 @@ def anthropic_claude_chat(message, history, api_key, memory_summary=""):
     return chat_result_from_replies(replies, model, stop_reason)
 
 
-def kakao_claude_chat_with_continuations(message, owner_key, history=None, memory_summary=""):
-    replies = []
-    prompt = message
-    for index in range(CHAT_MAX_CONTINUATIONS + 1):
-        result = kakao_claude_chat(
-            prompt,
-            owner_key,
-            history=history,
-            memory_summary=memory_summary,
-            is_continuation=index > 0,
-        )
-        reply = result.get("reply") or ""
-        if not reply:
-            break
-        replies.append(reply)
-        if index >= CHAT_MAX_CONTINUATIONS or not chat_reply_looks_incomplete(reply):
-            break
-        prompt = CHAT_CONTINUE_PROMPT
-    return chat_result_from_replies(replies, "claude-haiku-via-kakao", "unknown")
-
-
 def claude_chat(payload, owner_key):
     api_key = claude_api_key()
     message = clean_chat_text(payload.get("message"))
@@ -1108,26 +1015,26 @@ def claude_chat(payload, owner_key):
     history = context["recent"] or payload.get("history")
     memory_summary = context["memorySummary"]
     save_chat_message(owner_key, "user", message, metadata={"source": "fingerfruit"})
-    if not api_key:
-        result = local_chat_fallback(message)
-        for reply in result.get("replies") or [result.get("reply") or ""]:
-            save_chat_message(owner_key, "assistant", reply, model=result.get("model") or "", metadata={"source": "fingerfruit"})
-        result["memory"] = {
-            "recentMessageLimit": CHAT_CONTEXT_MESSAGE_LIMIT,
-            "summaryUsed": bool(memory_summary),
-        }
-        return result
-    try:
-        result = anthropic_claude_chat(message, history, api_key, memory_summary=memory_summary)
-    except Exception as exc:
-        return chat_result_from_replies(
-            [f"Claude API 호출 실패: {sanitize_error(exc)}"],
-            "claude-api-error",
-            "api_error",
+    result = None
+    if api_key:
+        try:
+            result = anthropic_claude_chat(message, history, api_key, memory_summary=memory_summary)
+        except Exception as exc:
+            fruit_auto.log_event({"action": "chat_anthropic_direct_failed", "error": sanitize_error(exc)})
+    else:
+        fruit_auto.log_event({"action": "chat_anthropic_key_missing"})
+    if result is None:
+        result = chat_result_from_replies(
+            ["Claude 직접 연결이 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요."],
+            "claude-direct-unavailable",
+            "direct_unavailable",
         )
-    for reply in result.get("replies") or [result.get("reply") or ""]:
-        save_chat_message(owner_key, "assistant", reply, model=result.get("model") or "", metadata={"source": "fingerfruit"})
-    maybe_update_chat_memory(owner_key, api_key)
+        result["direct"] = False
+    else:
+        result["direct"] = True
+        for reply in result.get("replies") or [result.get("reply") or ""]:
+            save_chat_message(owner_key, "assistant", reply, model=result.get("model") or "", metadata={"source": "anthropic-direct"})
+        maybe_update_chat_memory(owner_key, api_key)
     result["memory"] = {
         "recentMessageLimit": CHAT_CONTEXT_MESSAGE_LIMIT,
         "summaryUsed": bool(memory_summary),
