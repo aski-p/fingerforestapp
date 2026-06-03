@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.5.7";
+const appVersion = "3.5.8";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -2549,8 +2549,11 @@ async function sendChatMessage() {
   renderChatMessages();
   button.disabled = true;
   try {
-    const data = await api("/api/chat", { message, history: chatHistory.slice(0, -1) });
-    chatHistory.push({ role: "assistant", content: data.reply || "" });
+    const data = await api("/api/chat", { message });
+    const replies = Array.isArray(data.replies) && data.replies.length ? data.replies : [data.reply || ""];
+    replies.forEach((reply) => {
+      if (reply) chatHistory.push({ role: "assistant", content: reply });
+    });
   } catch (err) {
     chatHistory.push({ role: "assistant", content: `오류: ${err.message}` });
   } finally {

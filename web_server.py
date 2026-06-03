@@ -3,6 +3,7 @@ import json
 import hashlib
 import mimetypes
 import os
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -20,18 +21,25 @@ WWW_DIR = BASE_DIR / "www"
 DATA_DIR = fruit_auto.DATA_DIR
 TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
+CHAT_DB_PATH = DATA_DIR / "chat_memory.sqlite3"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.5.7"
+APP_VERSION = "3.5.8"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
-CHAT_HISTORY_MESSAGE_LIMIT = 10
+CHAT_CONTEXT_MESSAGE_LIMIT = 8
+CHAT_HISTORY_MESSAGE_LIMIT = CHAT_CONTEXT_MESSAGE_LIMIT
 CHAT_INPUT_CHAR_LIMIT = 8000
 CHAT_OUTPUT_TOKEN_LIMIT = 800
-CHAT_REPLY_INSTRUCTION = "답변은 800토큰 안에서 끝맺음까지 완결해 주세요. 길면 핵심만 요약하고 문장 중간에서 끊기지 않게 마무리하세요."
+CHAT_MAX_CONTINUATIONS = 4
+CHAT_REPLY_INSTRUCTION = "답변은 말풍선 하나당 800토큰 이내로 작성하세요. 길어지면 문장 단위로 자연스럽게 끊고 다음 말풍선에서 이어갈 수 있게 마무리하세요."
+CHAT_CONTINUE_PROMPT = "이전 답변이 아직 끝나지 않았습니다. 이전 내용을 반복하지 말고 바로 이어서 답변하세요."
+CHAT_MEMORY_SUMMARY_CHAR_LIMIT = 1800
+CHAT_SUMMARY_TRIGGER_MESSAGES = 16
+CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "게타 스페셜 스킨에서 스킨 이름과 이미지가 빈 상태로 보이지 않도록 표시 fallback을 보강했습니다.",
-    "피치 스킨을 더 진한 복숭아 색감으로 전체 조정했습니다.",
+    "Claude 채팅을 DB 저장 기반으로 바꿔 최근 8개 대화와 장기 요약 메모리를 함께 참고하도록 개선했습니다.",
+    "긴 답변은 800토큰 단위 말풍선으로 자연스럽게 이어서 표시되도록 보강했습니다.",
 ]
 VALID_THEMES = {
     "default",
@@ -83,6 +91,12 @@ def supabase_config():
         "key": key,
         "bucket": os.environ.get("SUPABASE_PROFILE_BUCKET") or config.get("profileBucket") or "profiles",
         "table": os.environ.get("SUPABASE_PROFILE_TABLE") or config.get("profileTable") or "profiles",
+        "chat_messages_table": os.environ.get("SUPABASE_CHAT_MESSAGES_TABLE")
+        or config.get("chatMessagesTable")
+        or "fruit_chat_messages",
+        "chat_memories_table": os.environ.get("SUPABASE_CHAT_MEMORIES_TABLE")
+        or config.get("chatMemoriesTable")
+        or "fruit_chat_memories",
     }
 
 
@@ -352,6 +366,309 @@ def saved_login_hint(owner_key=None):
     }
 
 
+def chat_user_identity(owner_key):
+    state = fruit_auto.get_account_state(owner_key)
+    employee_id = str(state.get("senderEmployeeId") or state.get("loginUserId") or "").strip()
+    if employee_id:
+        user_key = employee_id
+    else:
+        user_key = "owner-" + hashlib.sha256(str(owner_key or "").encode("utf-8")).hexdigest()[:24]
+    name = str(state.get("senderEmployeeName") or state.get("loginUser") or user_key).strip()
+    return user_key, name
+
+
+def chat_sqlite_conn():
+    conn = sqlite3.connect(CHAT_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """
+        create table if not exists fruit_chat_messages (
+          id integer primary key autoincrement,
+          user_key text not null,
+          role text not null check (role in ('user', 'assistant')),
+          content text not null,
+          model text,
+          created_at text not null,
+          metadata text not null default '{}'
+        )
+        """
+    )
+    conn.execute(
+        """
+        create table if not exists fruit_chat_memories (
+          user_key text primary key,
+          summary text not null default '',
+          summarized_message_id integer,
+          updated_at text not null
+        )
+        """
+    )
+    conn.execute("create index if not exists idx_fruit_chat_messages_user_created on fruit_chat_messages(user_key, created_at desc)")
+    conn.execute("create index if not exists idx_fruit_chat_messages_user_id on fruit_chat_messages(user_key, id)")
+    return conn
+
+
+def chat_insert_local(user_key, role, content, model="", metadata=None):
+    with chat_sqlite_conn() as conn:
+        conn.execute(
+            """
+            insert into fruit_chat_messages(user_key, role, content, model, created_at, metadata)
+            values (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_key,
+                role,
+                content,
+                model or "",
+                fruit_auto.now_iso(),
+                json.dumps(metadata or {}, ensure_ascii=False),
+            ),
+        )
+
+
+def chat_recent_local(user_key, limit=CHAT_CONTEXT_MESSAGE_LIMIT):
+    with chat_sqlite_conn() as conn:
+        rows = conn.execute(
+            """
+            select id, role, content, model, created_at
+            from fruit_chat_messages
+            where user_key = ?
+            order by id desc
+            limit ?
+            """,
+            (user_key, int(limit)),
+        ).fetchall()
+    return [dict(row) for row in reversed(rows)]
+
+
+def chat_memory_local(user_key):
+    with chat_sqlite_conn() as conn:
+        row = conn.execute(
+            "select summary, summarized_message_id from fruit_chat_memories where user_key = ?",
+            (user_key,),
+        ).fetchone()
+    if not row:
+        return {"summary": "", "summarizedMessageId": 0}
+    return {"summary": row["summary"] or "", "summarizedMessageId": int(row["summarized_message_id"] or 0)}
+
+
+def chat_update_memory_local(user_key, summary, summarized_message_id):
+    with chat_sqlite_conn() as conn:
+        conn.execute(
+            """
+            insert into fruit_chat_memories(user_key, summary, summarized_message_id, updated_at)
+            values (?, ?, ?, ?)
+            on conflict(user_key) do update set
+              summary = excluded.summary,
+              summarized_message_id = excluded.summarized_message_id,
+              updated_at = excluded.updated_at
+            """,
+            (user_key, summary, summarized_message_id, fruit_auto.now_iso()),
+        )
+
+
+def chat_unsummarized_local(user_key, after_id, limit=CHAT_SUMMARY_BATCH_LIMIT):
+    with chat_sqlite_conn() as conn:
+        rows = conn.execute(
+            """
+            select id, role, content, model, created_at
+            from fruit_chat_messages
+            where user_key = ? and id > ?
+            order by id asc
+            limit ?
+            """,
+            (user_key, int(after_id or 0), int(limit)),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def chat_insert_supabase(user_key, name, role, content, model="", metadata=None):
+    config = supabase_config()
+    if not config:
+        raise fruit_auto.FruitAutoError("Supabase 설정이 없습니다.")
+    table = urllib.parse.quote(config["chat_messages_table"], safe="")
+    row = {
+        "user_key": user_key,
+        "name": name,
+        "role": role,
+        "content": content,
+        "model": model or "",
+        "metadata": metadata or {},
+        "created_at": fruit_auto.now_iso(),
+    }
+    supabase_request("POST", f"/rest/v1/{table}", body=row, extra_headers={"Prefer": "return=minimal"})
+
+
+def chat_recent_supabase(user_key, limit=CHAT_CONTEXT_MESSAGE_LIMIT):
+    config = supabase_config()
+    if not config:
+        raise fruit_auto.FruitAutoError("Supabase 설정이 없습니다.")
+    table = urllib.parse.quote(config["chat_messages_table"], safe="")
+    quoted_key = urllib.parse.quote(user_key, safe="")
+    rows = supabase_request(
+        "GET",
+        f"/rest/v1/{table}?select=id,role,content,model,created_at&user_key=eq.{quoted_key}&order=id.desc&limit={int(limit)}",
+        content_type=None,
+    ) or []
+    return list(reversed(rows))
+
+
+def chat_memory_supabase(user_key):
+    config = supabase_config()
+    if not config:
+        raise fruit_auto.FruitAutoError("Supabase 설정이 없습니다.")
+    table = urllib.parse.quote(config["chat_memories_table"], safe="")
+    quoted_key = urllib.parse.quote(user_key, safe="")
+    rows = supabase_request(
+        "GET",
+        f"/rest/v1/{table}?select=summary,summarized_message_id&user_key=eq.{quoted_key}&limit=1",
+        content_type=None,
+    ) or []
+    if not rows:
+        return {"summary": "", "summarizedMessageId": 0}
+    row = rows[0]
+    return {"summary": row.get("summary") or "", "summarizedMessageId": int(row.get("summarized_message_id") or 0)}
+
+
+def chat_update_memory_supabase(user_key, name, summary, summarized_message_id):
+    config = supabase_config()
+    if not config:
+        raise fruit_auto.FruitAutoError("Supabase 설정이 없습니다.")
+    table = urllib.parse.quote(config["chat_memories_table"], safe="")
+    row = {
+        "user_key": user_key,
+        "name": name,
+        "summary": summary,
+        "summarized_message_id": int(summarized_message_id or 0),
+        "updated_at": fruit_auto.now_iso(),
+    }
+    supabase_request(
+        "POST",
+        f"/rest/v1/{table}",
+        body=row,
+        extra_headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
+    )
+
+
+def chat_unsummarized_supabase(user_key, after_id, limit=CHAT_SUMMARY_BATCH_LIMIT):
+    config = supabase_config()
+    if not config:
+        raise fruit_auto.FruitAutoError("Supabase 설정이 없습니다.")
+    table = urllib.parse.quote(config["chat_messages_table"], safe="")
+    quoted_key = urllib.parse.quote(user_key, safe="")
+    rows = supabase_request(
+        "GET",
+        (
+            f"/rest/v1/{table}?select=id,role,content,model,created_at"
+            f"&user_key=eq.{quoted_key}&id=gt.{int(after_id or 0)}&order=id.asc&limit={int(limit)}"
+        ),
+        content_type=None,
+    ) or []
+    return rows
+
+
+def save_chat_message(owner_key, role, content, model="", metadata=None):
+    user_key, name = chat_user_identity(owner_key)
+    content = clean_chat_text(content, CHAT_INPUT_CHAR_LIMIT)
+    if role not in ("user", "assistant") or not content:
+        return
+    try:
+        chat_insert_supabase(user_key, name, role, content, model, metadata)
+    except Exception:
+        chat_insert_local(user_key, role, content, model, metadata)
+
+
+def load_chat_context(owner_key):
+    user_key, _name = chat_user_identity(owner_key)
+    try:
+        recent = chat_recent_supabase(user_key, CHAT_CONTEXT_MESSAGE_LIMIT)
+        memory = chat_memory_supabase(user_key)
+    except Exception:
+        recent = chat_recent_local(user_key, CHAT_CONTEXT_MESSAGE_LIMIT)
+        memory = chat_memory_local(user_key)
+    return {
+        "recent": [
+            {"role": row.get("role"), "content": row.get("content") or ""}
+            for row in recent
+            if row.get("role") in ("user", "assistant") and row.get("content")
+        ],
+        "memorySummary": clean_chat_text(memory.get("summary"), CHAT_MEMORY_SUMMARY_CHAR_LIMIT),
+    }
+
+
+def summarize_chat_memory(existing_summary, rows, api_key):
+    lines = []
+    for row in rows:
+        role = "사용자" if row.get("role") == "user" else "assistant"
+        content = clean_chat_text(row.get("content"), 1200)
+        if content:
+            lines.append(f"{role}: {content}")
+    if not lines:
+        return existing_summary
+    prompt = (
+        "아래 대화에서 장기 기억으로 남길 사용자 선호, 결정, 반복 기준, 프로젝트 맥락만 한국어로 짧게 요약하세요. "
+        "일회성 잡담, 비밀값, 원문 토큰, 인증정보는 저장하지 마세요. 기존 요약과 합쳐 1200자 이내로 유지하세요.\n\n"
+        f"기존 요약:\n{existing_summary or '(없음)'}\n\n"
+        "새 대화:\n" + "\n".join(lines)
+    )
+    request_body = json.dumps(
+        {
+            "model": CLAUDE_MODEL,
+            "max_tokens": 500,
+            "system": "사용자의 장기 기억 메모리를 안전하고 간결하게 정리합니다.",
+            "messages": [{"role": "user", "content": prompt}],
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+    request = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=request_body,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=35) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    content = data.get("content") if isinstance(data, dict) else []
+    text = "\n".join(
+        str(part.get("text") or "")
+        for part in content
+        if isinstance(part, dict) and part.get("type") == "text" and part.get("text")
+    ).strip()
+    return clean_chat_text(text or existing_summary, CHAT_MEMORY_SUMMARY_CHAR_LIMIT)
+
+
+def maybe_update_chat_memory(owner_key, api_key):
+    if not api_key:
+        return
+    user_key, name = chat_user_identity(owner_key)
+    try:
+        memory = chat_memory_supabase(user_key)
+        rows = chat_unsummarized_supabase(user_key, memory.get("summarizedMessageId"), CHAT_SUMMARY_BATCH_LIMIT)
+        update_remote = True
+    except Exception:
+        memory = chat_memory_local(user_key)
+        rows = chat_unsummarized_local(user_key, memory.get("summarizedMessageId"), CHAT_SUMMARY_BATCH_LIMIT)
+        update_remote = False
+    if len(rows) < CHAT_SUMMARY_TRIGGER_MESSAGES:
+        return
+    try:
+        summary = summarize_chat_memory(memory.get("summary") or "", rows, api_key)
+    except Exception:
+        return
+    summarized_id = max(int(row.get("id") or 0) for row in rows)
+    try:
+        if update_remote:
+            chat_update_memory_supabase(user_key, name, summary, summarized_id)
+        else:
+            chat_update_memory_local(user_key, summary, summarized_id)
+    except Exception:
+        chat_update_memory_local(user_key, summary, summarized_id)
+
+
 def upload_profile_photo(owner_key, data_url):
     employee_id, state = profile_employee_id(owner_key)
     if not data_url:
@@ -526,14 +843,67 @@ def clean_chat_text(value, limit=CHAT_INPUT_CHAR_LIMIT):
     return str(value or "").strip()[:limit]
 
 
+def chat_reply_looks_incomplete(reply):
+    text = str(reply or "").strip()
+    if not text:
+        return False
+    if text.endswith((".", "!", "?", "。", "！", "？", "…", "다.", "요.", "함.", "음.", "습니다.")):
+        return False
+    incomplete_endings = (
+        "따르면",
+        "한편",
+        "그리고",
+        "또한",
+        "반면",
+        "이에",
+        "그러나",
+        "때문에",
+        "에서",
+        "으로",
+        "라고",
+        "하며",
+        "하고",
+        "따라",
+        "관련해",
+    )
+    return len(text) >= 500 or text.endswith(incomplete_endings)
+
+
 def kakao_chat_user_id(owner_key):
     scoped = hashlib.sha256(str(owner_key or "anonymous").encode("utf-8")).hexdigest()[:16]
     return f"fingerfruit-chat-{scoped}"
 
 
-def kakao_claude_chat(message, owner_key):
+def build_chat_system_prompt(memory_summary=""):
+    if not memory_summary:
+        return CHAT_REPLY_INSTRUCTION
+    return (
+        f"{CHAT_REPLY_INSTRUCTION}\n\n"
+        "아래는 DB에 저장된 장기 기억 요약입니다. 현재 질문과 관련 있을 때만 참고하고, 관련 없으면 억지로 언급하지 마세요.\n"
+        f"{memory_summary}"
+    )
+
+
+def format_recent_context_for_kakao(history):
+    lines = []
+    for item in history[-CHAT_CONTEXT_MESSAGE_LIMIT:]:
+        role = "사용자" if item.get("role") == "user" else "assistant"
+        content = clean_chat_text(item.get("content"), 1200)
+        if content:
+            lines.append(f"{role}: {content}")
+    return "\n".join(lines)
+
+
+def kakao_claude_chat(message, owner_key, history=None, memory_summary="", is_continuation=False):
     webhook_url = os.environ.get("KAKAO_CLAUDE_WEBHOOK_URL") or "https://kakao-skill-webhook-production.up.railway.app/kakao-skill-webhook"
-    utterance = f"{CHAT_REPLY_INSTRUCTION}\n\n사용자 질문:\n{message}"
+    prompt_label = "이어쓰기 요청" if is_continuation else "사용자 질문"
+    context = ""
+    if memory_summary:
+        context += f"\n\nDB 장기 기억 요약:\n{memory_summary}"
+    recent_context = "" if is_continuation else format_recent_context_for_kakao(history or [])
+    if recent_context:
+        context += f"\n\nDB 최근 대화:\n{recent_context}"
+    utterance = f"{CHAT_REPLY_INSTRUCTION}{context}\n\n{prompt_label}:\n{message}"
     request_body = json.dumps(
         {
             "userRequest": {
@@ -559,22 +929,25 @@ def kakao_claude_chat(message, owner_key):
     for output in outputs:
         text = output.get("simpleText", {}).get("text") if isinstance(output, dict) else ""
         if text:
-            return {"reply": str(text).strip(), "model": "claude-haiku-via-kakao"}
+            return {"reply": str(text).strip(), "model": "claude-haiku-via-kakao", "stopReason": "unknown"}
     raise fruit_auto.FruitAutoError("카카오 Claude 응답이 비어 있습니다.")
 
 
-def claude_chat(payload, owner_key):
-    api_key = claude_api_key()
-    message = clean_chat_text(payload.get("message"))
-    if not message:
-        raise fruit_auto.FruitAutoError("메시지를 입력하세요.")
-    if not api_key:
-        return kakao_claude_chat(message, owner_key)
+def chat_result_from_replies(replies, model, stop_reason=None):
+    return {
+        "reply": "\n\n".join(replies),
+        "replies": replies,
+        "model": model,
+        "continued": len(replies) > 1,
+        "stopReason": stop_reason or "",
+    }
+
+
+def build_anthropic_messages(message, history):
     messages = []
     remaining_input = max(0, CHAT_INPUT_CHAR_LIMIT - len(message))
-    history = payload.get("history")
     if isinstance(history, list):
-        for item in history[-CHAT_HISTORY_MESSAGE_LIMIT:]:
+        for item in history[-CHAT_CONTEXT_MESSAGE_LIMIT:]:
             if not isinstance(item, dict):
                 continue
             role = item.get("role")
@@ -585,41 +958,103 @@ def claude_chat(payload, owner_key):
             if remaining_input <= 0:
                 break
     messages.append({"role": "user", "content": message})
-    request_body = json.dumps(
-        {
-            "model": CLAUDE_MODEL,
-            "max_tokens": CHAT_OUTPUT_TOKEN_LIMIT,
-            "system": CHAT_REPLY_INSTRUCTION,
-            "messages": messages,
-        },
-        ensure_ascii=False,
-    ).encode("utf-8")
-    request = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=request_body,
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-        },
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=35) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:500]
-        raise fruit_auto.FruitAutoError(f"Claude API 오류: {exc.code} {detail}") from exc
-    content = data.get("content") if isinstance(data, dict) else []
-    text_parts = [
-        str(part.get("text") or "")
-        for part in content
-        if isinstance(part, dict) and part.get("type") == "text" and part.get("text")
-    ]
-    reply = "\n".join(text_parts).strip()
-    if not reply:
-        raise fruit_auto.FruitAutoError("Claude 응답이 비어 있습니다.")
-    return {"reply": reply, "model": data.get("model") or CLAUDE_MODEL}
+    return messages
+
+
+def anthropic_claude_chat(message, history, api_key, memory_summary=""):
+    messages = build_anthropic_messages(message, history)
+    replies = []
+    model = CLAUDE_MODEL
+    stop_reason = ""
+    system_prompt = build_chat_system_prompt(memory_summary)
+    for index in range(CHAT_MAX_CONTINUATIONS + 1):
+        request_body = json.dumps(
+            {
+                "model": CLAUDE_MODEL,
+                "max_tokens": CHAT_OUTPUT_TOKEN_LIMIT,
+                "system": system_prompt,
+                "messages": messages,
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=request_body,
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=35) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")[:500]
+            raise fruit_auto.FruitAutoError(f"Claude API 오류: {exc.code} {detail}") from exc
+        content = data.get("content") if isinstance(data, dict) else []
+        text_parts = [
+            str(part.get("text") or "")
+            for part in content
+            if isinstance(part, dict) and part.get("type") == "text" and part.get("text")
+        ]
+        reply = "\n".join(text_parts).strip()
+        if not reply:
+            raise fruit_auto.FruitAutoError("Claude 응답이 비어 있습니다.")
+        replies.append(reply)
+        model = data.get("model") or model
+        stop_reason = data.get("stop_reason") or ""
+        if stop_reason != "max_tokens" or index >= CHAT_MAX_CONTINUATIONS:
+            break
+        messages.append({"role": "assistant", "content": reply})
+        messages.append({"role": "user", "content": CHAT_CONTINUE_PROMPT})
+    return chat_result_from_replies(replies, model, stop_reason)
+
+
+def kakao_claude_chat_with_continuations(message, owner_key, history=None, memory_summary=""):
+    replies = []
+    prompt = message
+    for index in range(CHAT_MAX_CONTINUATIONS + 1):
+        result = kakao_claude_chat(
+            prompt,
+            owner_key,
+            history=history,
+            memory_summary=memory_summary,
+            is_continuation=index > 0,
+        )
+        reply = result.get("reply") or ""
+        if not reply:
+            break
+        replies.append(reply)
+        if index >= CHAT_MAX_CONTINUATIONS or not chat_reply_looks_incomplete(reply):
+            break
+        prompt = CHAT_CONTINUE_PROMPT
+    return chat_result_from_replies(replies, "claude-haiku-via-kakao", "unknown")
+
+
+def claude_chat(payload, owner_key):
+    api_key = claude_api_key()
+    message = clean_chat_text(payload.get("message"))
+    if not message:
+        raise fruit_auto.FruitAutoError("메시지를 입력하세요.")
+    context = load_chat_context(owner_key)
+    history = context["recent"] or payload.get("history")
+    memory_summary = context["memorySummary"]
+    save_chat_message(owner_key, "user", message, metadata={"source": "fingerfruit"})
+    if not api_key:
+        result = kakao_claude_chat_with_continuations(message, owner_key, history=history, memory_summary=memory_summary)
+    else:
+        result = anthropic_claude_chat(message, history, api_key, memory_summary=memory_summary)
+    for reply in result.get("replies") or [result.get("reply") or ""]:
+        save_chat_message(owner_key, "assistant", reply, model=result.get("model") or "", metadata={"source": "fingerfruit"})
+    if api_key:
+        maybe_update_chat_memory(owner_key, api_key)
+    result["memory"] = {
+        "recentMessageLimit": CHAT_CONTEXT_MESSAGE_LIMIT,
+        "summaryUsed": bool(memory_summary),
+    }
+    return result
 
 
 def daemon_running():
