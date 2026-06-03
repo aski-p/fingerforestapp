@@ -325,6 +325,123 @@ body.modal-open {
   overflow: hidden;
 }
 
+body.splash-active {
+  overflow: hidden;
+}
+
+.launch-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 247, 196, 0.9) 0 12%, rgba(255, 247, 196, 0) 34%),
+    linear-gradient(180deg, #f7fff2 0%, #dff5ca 42%, #90c66b 100%);
+  opacity: 1;
+  transition: opacity 440ms ease, visibility 440ms ease;
+}
+
+body:not(.splash-active) .launch-splash {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.launch-glow {
+  position: absolute;
+  width: min(78vw, 410px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.96) 0 17%, rgba(255, 235, 134, 0.62) 18% 38%, rgba(16, 185, 129, 0) 70%);
+  filter: blur(2px);
+  animation: launchGlow 2400ms ease-out both;
+}
+
+.launch-emblem {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(42vw, 188px);
+  aspect-ratio: 1;
+  transform: translateY(-40px) scale(0.82);
+  opacity: 0;
+  animation: launchEmblem 900ms cubic-bezier(.2, .82, .23, 1.2) 180ms both;
+}
+
+.launch-emblem img {
+  width: 100%;
+  height: 100%;
+  border-radius: 30%;
+  filter: drop-shadow(0 24px 22px rgba(41, 79, 32, 0.28));
+}
+
+.launch-wordmark {
+  position: absolute;
+  top: calc(50% + min(19vw, 92px));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1px, 0.7vw, 5px);
+  color: #fff7ca;
+  font-family: "Gugi", "Jua", "Pretendard", sans-serif;
+  font-size: clamp(30px, 10vw, 66px);
+  line-height: 1;
+  text-transform: lowercase;
+  text-shadow:
+    0 4px 0 #275315,
+    0 8px 0 #102c10,
+    0 14px 20px rgba(28, 64, 20, 0.38);
+}
+
+.launch-wordmark span {
+  display: inline-block;
+  transform: translateY(28px) rotate(-8deg) scale(0.72);
+  opacity: 0;
+  animation: launchLetter 620ms cubic-bezier(.18, .89, .32, 1.28) calc(520ms + var(--i) * 72ms) both;
+}
+
+.launch-streak {
+  position: absolute;
+  top: 45%;
+  left: -30%;
+  width: 28%;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow:
+    0 0 22px rgba(255, 247, 202, 0.92),
+    44px 13px 0 rgba(255, 255, 255, 0.46),
+    84px -16px 0 rgba(255, 255, 255, 0.34);
+  animation: launchStreak 880ms ease-out 980ms both;
+}
+
+@keyframes launchGlow {
+  0% { transform: scale(0.68); opacity: 0; }
+  45% { opacity: 1; }
+  100% { transform: scale(1.12); opacity: 0.74; }
+}
+
+@keyframes launchEmblem {
+  0% { transform: translateY(-48px) scale(0.72) rotate(-10deg); opacity: 0; }
+  72% { transform: translateY(-42px) scale(1.06) rotate(2deg); opacity: 1; }
+  100% { transform: translateY(-40px) scale(1) rotate(0); opacity: 1; }
+}
+
+@keyframes launchLetter {
+  0% { transform: translateY(28px) rotate(-8deg) scale(0.72); opacity: 0; }
+  68% { transform: translateY(-5px) rotate(2deg) scale(1.08); opacity: 1; }
+  100% { transform: translateY(0) rotate(0) scale(1); opacity: 1; }
+}
+
+@keyframes launchStreak {
+  0% { transform: translateX(0) rotate(-10deg); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateX(520%) rotate(-10deg); opacity: 0; }
+}
+
 button,
 input {
   font: inherit;

@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.5.8";
+const appVersion = "3.5.9";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -165,6 +165,8 @@ let pendingWorklogTarget = null;
 let worklogDraftDirty = false;
 let activeAppearanceSettings = { theme: "default", font: "pretendard" };
 let chatHistory = [];
+const launchStartedAt = Date.now();
+const launchMinimumMs = 2100;
 
 let koreanPublicHolidays = {
   "2025-01-01": "신정",
@@ -356,6 +358,13 @@ function syncModalOpenState() {
     "worklogSuccessModal",
   ].some(isModalVisible);
   document.body.classList.toggle("modal-open", visible);
+}
+
+function finishLaunchSplash() {
+  const elapsed = Date.now() - launchStartedAt;
+  window.setTimeout(() => {
+    document.body.classList.remove("splash-active");
+  }, Math.max(0, launchMinimumMs - elapsed));
 }
 
 function normalizeBaseUrl(value) {
@@ -3148,16 +3157,20 @@ $("chatInput").addEventListener("blur", () => {
 });
 
 async function initApp() {
-  initializeAppearanceSettings();
-  renderAppearanceOptions();
-  if (await checkAppVersion()) return;
-  await restoreSavedLoginIfNeeded();
-  updateProfileUi("fingerfruit", false);
-  renderState({});
-  renderCachedState();
-  await refresh({ silent: true, forceBalance: true });
-  await loadProfileSettings({ silent: true });
-  showReleaseNotesIfNeeded();
+  try {
+    initializeAppearanceSettings();
+    renderAppearanceOptions();
+    if (await checkAppVersion()) return;
+    await restoreSavedLoginIfNeeded();
+    updateProfileUi("fingerfruit", false);
+    renderState({});
+    renderCachedState();
+    await refresh({ silent: true, forceBalance: true });
+    await loadProfileSettings({ silent: true });
+    showReleaseNotesIfNeeded();
+  } finally {
+    finishLaunchSplash();
+  }
 }
 
 initApp();

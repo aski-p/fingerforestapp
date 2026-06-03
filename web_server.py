@@ -24,7 +24,7 @@ WEB_PID_PATH = DATA_DIR / "web_server.pid"
 CHAT_DB_PATH = DATA_DIR / "chat_memory.sqlite3"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.5.8"
+APP_VERSION = "3.5.9"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_CONTEXT_MESSAGE_LIMIT = 8
 CHAT_HISTORY_MESSAGE_LIMIT = CHAT_CONTEXT_MESSAGE_LIMIT
@@ -38,6 +38,8 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "앱 실행 시 fingerfruit 카툰 로고가 먼저 나오고 글자가 하나씩 완성된 뒤 로그인 화면으로 넘어가도록 시작 화면을 추가했습니다.",
+    "앱 아이콘과 설치 페이지 로고를 새 fingerfruit 카툰 렌더링 스타일로 변경했습니다.",
     "Claude 채팅을 DB 저장 기반으로 바꿔 최근 8개 대화와 장기 요약 메모리를 함께 참고하도록 개선했습니다.",
     "긴 답변은 800토큰 단위 말풍선으로 자연스럽게 이어서 표시되도록 보강했습니다.",
 ]
