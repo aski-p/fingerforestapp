@@ -16,11 +16,12 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.6.2";
+const appVersion = "3.6.3";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
 const apiTimeoutMs = 8000;
+const chatApiTimeoutMs = 70000;
 const recentNotificationWindowMs = 2 * 60 * 1000;
 let latestAppInfo = null;
 let releaseNotesShownThisSession = false;
@@ -398,12 +399,15 @@ function shouldTryFallback(error, response) {
 async function resilientFetch(path, options = {}) {
   let lastError = null;
   const bases = apiBaseCandidates();
+  const timeoutMs = options.timeoutMs || apiTimeoutMs;
+  const fetchOptions = { ...options };
+  delete fetchOptions.timeoutMs;
   for (const baseUrl of bases) {
     let response = null;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), apiTimeoutMs);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      response = await fetch(apiUrl(baseUrl, path), { ...options, signal: controller.signal });
+      response = await fetch(apiUrl(baseUrl, path), { ...fetchOptions, signal: controller.signal });
       if (!shouldTryFallback(null, response)) {
         storeSet(activeApiBaseKey, baseUrl);
         return response;
@@ -843,7 +847,7 @@ function clearAuthenticatedUi() {
   renderState({});
 }
 
-async function api(path, payload, retrying = false) {
+async function api(path, payload, retrying = false, requestOptions = {}) {
   const options = {
     headers: {
       "Content-Type": "application/json",
@@ -852,6 +856,7 @@ async function api(path, payload, retrying = false) {
       "X-Fruit-Owner": expectedOwnerKey(),
       "X-Fruit-Device": deviceId(),
     },
+    ...requestOptions,
   };
   if (payload !== undefined) {
     options.method = "POST";
@@ -868,7 +873,7 @@ async function api(path, payload, retrying = false) {
   ) {
     try {
       await recoverSession();
-      if (fruitSession) return api(path, payload, true);
+      if (fruitSession) return api(path, payload, true, requestOptions);
     } catch (_err) {
       clearAuthenticatedUi();
       throw new Error("로그인이 만료되었습니다. 다시 로그인하세요.");
@@ -2558,13 +2563,16 @@ async function sendChatMessage() {
   renderChatMessages();
   button.disabled = true;
   try {
-    const data = await api("/api/chat", { message });
+    const data = await api("/api/chat", { message }, false, { timeoutMs: chatApiTimeoutMs });
     const replies = Array.isArray(data.replies) && data.replies.length ? data.replies : [data.reply || ""];
     replies.forEach((reply) => {
       if (reply) chatHistory.push({ role: "assistant", content: reply });
     });
   } catch (err) {
-    chatHistory.push({ role: "assistant", content: `오류: ${err.message}` });
+    const detail = err.name === "AbortError" || /aborted/i.test(err.message || "")
+      ? "응답 시간이 길어졌습니다. 잠시 후 다시 물어보세요."
+      : err.message;
+    chatHistory.push({ role: "assistant", content: `오류: ${detail}` });
   } finally {
     chatHistory = chatHistory.slice(-10);
     button.disabled = false;

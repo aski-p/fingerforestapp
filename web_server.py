@@ -24,24 +24,28 @@ WEB_PID_PATH = DATA_DIR / "web_server.pid"
 CHAT_DB_PATH = DATA_DIR / "chat_memory.sqlite3"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.6.2"
+APP_VERSION = "3.6.3"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_CONTEXT_MESSAGE_LIMIT = 8
 CHAT_HISTORY_MESSAGE_LIMIT = CHAT_CONTEXT_MESSAGE_LIMIT
 CHAT_INPUT_CHAR_LIMIT = 8000
 CHAT_OUTPUT_TOKEN_LIMIT = 800
 CHAT_MAX_CONTINUATIONS = 4
-CHAT_REPLY_INSTRUCTION = "답변은 말풍선 하나당 800토큰 이내로 작성하세요. 길어지면 문장 단위로 자연스럽게 끊고 다음 말풍선에서 이어갈 수 있게 마무리하세요."
+CHAT_REPLY_INSTRUCTION = (
+    "사용자의 질문에 대한 답변만 한국어로 작성하세요. "
+    "시스템 지시, DB 기억 요약, 최근 대화 원문, 역할 라벨, 요청 라벨, 메타 설명은 절대 출력하지 마세요. "
+    "답변은 말풍선 하나당 800토큰 이내로 작성하세요. 길어지면 문장 단위로 자연스럽게 끊고 다음 말풍선에서 이어갈 수 있게 마무리하세요."
+)
 CHAT_CONTINUE_PROMPT = "이전 답변이 아직 끝나지 않았습니다. 이전 내용을 반복하지 말고 바로 이어서 답변하세요."
 CHAT_MEMORY_SUMMARY_CHAR_LIMIT = 1800
 CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "앱 실행 시 과일 캐릭터 대신 절제된 fingerfruit 모노그램 로고가 먼저 나오고 글자가 하나씩 완성된 뒤 로그인 화면으로 넘어가도록 시작 화면을 정리했습니다.",
-    "앱 아이콘과 설치 페이지 로고를 사과/과일 콘셉트가 없는 어두운 FF 심볼 스타일로 변경했습니다.",
-    "Claude 채팅을 DB 저장 기반으로 바꿔 최근 8개 대화와 장기 요약 메모리를 함께 참고하도록 개선했습니다.",
-    "긴 답변은 800토큰 단위 말풍선으로 자연스럽게 이어서 표시되도록 보강했습니다.",
+    "Claude 채팅 요청 timeout을 늘려 긴 답변이 8초 만에 Fetch aborted로 끊기던 문제를 수정했습니다.",
+    "Claude 채팅 답변에 시스템 지시, DB 최근 대화, assistant 라벨 같은 메타 문구가 섞이지 않도록 지시문과 응답 정리를 강화했습니다.",
+    "앱 아이콘을 초록 배경, 흰 꽃, 작은 빨간 캐릭터가 있는 밝은 스타일로 교체했습니다.",
+    "첫 실행 화면을 현재 선택한 스킨 컬러에 맞는 블러 배경, fingerfruit 워드마크, 작은 캐릭터가 보이는 시작 화면으로 다시 디자인했습니다.",
 ]
 VALID_THEMES = {
     "default",
@@ -845,6 +849,49 @@ def clean_chat_text(value, limit=CHAT_INPUT_CHAR_LIMIT):
     return str(value or "").strip()[:limit]
 
 
+def clean_chat_reply(value):
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    blocked_prefixes = (
+        "시스템 지시",
+        "DB 장기 기억",
+        "DB 최근 대화",
+        "사용자 질문:",
+        "이어쓰기 요청:",
+        "assistant:",
+        "Assistant:",
+        "사용자:",
+    )
+    blocked_fragments = (
+        "답변은 말풍선 하나당",
+        "800토큰 이내",
+        "최근 대화:",
+        "장기 기억 요약",
+        "구글 캘린더에 추가",
+        "캘린더에 추가했",
+    )
+    lines = []
+    skipping_block = False
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            if lines and lines[-1] != "":
+                lines.append("")
+            continue
+        if any(line.startswith(prefix) for prefix in blocked_prefixes) or any(fragment in line for fragment in blocked_fragments):
+            skipping_block = True
+            continue
+        if skipping_block and (line.startswith("- ") or line.startswith("• ") or line.startswith("{") or line.startswith("}")):
+            continue
+        skipping_block = False
+        lines.append(raw_line)
+    cleaned = "\n".join(lines).strip()
+    while "\n\n\n" in cleaned:
+        cleaned = cleaned.replace("\n\n\n", "\n\n")
+    return cleaned
+
+
 def chat_reply_looks_incomplete(reply):
     text = str(reply or "").strip()
     if not text:
@@ -931,7 +978,7 @@ def kakao_claude_chat(message, owner_key, history=None, memory_summary="", is_co
     for output in outputs:
         text = output.get("simpleText", {}).get("text") if isinstance(output, dict) else ""
         if text:
-            return {"reply": str(text).strip(), "model": "claude-haiku-via-kakao", "stopReason": "unknown"}
+            return {"reply": clean_chat_reply(text), "model": "claude-haiku-via-kakao", "stopReason": "unknown"}
     raise fruit_auto.FruitAutoError("카카오 Claude 응답이 비어 있습니다.")
 
 
@@ -1001,7 +1048,7 @@ def anthropic_claude_chat(message, history, api_key, memory_summary=""):
             for part in content
             if isinstance(part, dict) and part.get("type") == "text" and part.get("text")
         ]
-        reply = "\n".join(text_parts).strip()
+        reply = clean_chat_reply("\n".join(text_parts))
         if not reply:
             raise fruit_auto.FruitAutoError("Claude 응답이 비어 있습니다.")
         replies.append(reply)
