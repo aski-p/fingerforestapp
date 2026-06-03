@@ -213,21 +213,22 @@ body.theme-cyber {
 }
 
 body.theme-peach {
-  --bg: #fff4ec;
-  --surface: #fffaf7;
-  --surface-soft: #fff0e6;
-  --surface-tint: #ffe8d8;
-  --line: #ffd2bd;
-  --line-strong: #fb9f75;
-  --text: #3d1f16;
-  --text-strong: #24100b;
-  --muted: #8a5b4a;
-  --accent: #c75028;
-  --accent-bright: #fb8757;
-  --accent-soft: #ffe1d0;
-  --button: #9a3412;
-  --blue-soft: #fff1e8;
-  --gold-soft: #ffd9bd;
+  --bg: #ffe7db;
+  --surface: #fff2eb;
+  --surface-soft: #ffdccc;
+  --surface-tint: #ffcbb5;
+  --line: #f5a17c;
+  --line-strong: #e96f43;
+  --text: #35170f;
+  --text-strong: #1f0b06;
+  --muted: #7a3f2b;
+  --accent: #b9411e;
+  --accent-bright: #f06d45;
+  --accent-soft: #ffd0bc;
+  --button: #8f2f16;
+  --button-text: #ffffff;
+  --blue-soft: #ffeadf;
+  --gold-soft: #ffc59f;
 }
 
 body.theme-mono {
@@ -3202,6 +3203,36 @@ body.logged-out .chat-popup {
   font-weight: 900;
 }
 
+.special-theme-option {
+  overflow: hidden;
+  min-height: 74px;
+}
+
+.special-theme-option .option-swatch,
+.special-theme-option .option-title,
+.special-theme-option .option-meta {
+  position: relative;
+  z-index: 1;
+}
+
+.theme-option-getter {
+  border-color: rgba(255, 23, 56, 0.5);
+  background:
+    linear-gradient(90deg, rgba(18, 3, 6, 0.96), rgba(18, 3, 6, 0.58)),
+    url("/assets/getter/getter-shin.png") right -8px center / 88px auto no-repeat,
+    #120306;
+}
+
+.theme-option-getter .option-title {
+  color: #fff7f8;
+  text-shadow: 0 0 12px rgba(255, 23, 56, 0.48);
+}
+
+.theme-option-getter .option-meta {
+  background: rgba(57, 255, 136, 0.14);
+  color: #7dffad;
+}
+
 .font-grid .option-button {
   min-height: 48px;
 }
@@ -3593,6 +3624,18 @@ body.theme-getter .settings-button::before {
   inset: 4px;
   border-radius: 50%;
   background: url("/assets/getter/getter-shin.png") 51% 25% / 190% auto no-repeat;
+}
+
+body.theme-getter .settings-button::after {
+  content: "⚙";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #7dffad;
+  font-size: 18px;
+  font-weight: 900;
+  text-shadow: 0 0 10px rgba(57, 255, 136, 0.65), 0 0 16px rgba(255, 23, 56, 0.42);
 }
 
 body.theme-getter .profile-avatar {

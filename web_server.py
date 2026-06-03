@@ -22,7 +22,7 @@ TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.5.4"
+APP_VERSION = "3.5.5"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_HISTORY_MESSAGE_LIMIT = 10
 CHAT_INPUT_CHAR_LIMIT = 8000
@@ -30,8 +30,8 @@ CHAT_OUTPUT_TOKEN_LIMIT = 800
 CHAT_REPLY_INSTRUCTION = "답변은 800토큰 안에서 끝맺음까지 완결해 주세요. 길면 핵심만 요약하고 문장 중간에서 끊기지 않게 마무리하세요."
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "스와이프 렌더링을 프레임당 한 번으로 정리해 터치 중 끊김을 줄였습니다.",
-    "전환 easing과 마무리 시간을 조정해 손을 뗀 뒤 움직임이 더 자연스럽게 이어지도록 수정했습니다.",
+    "게타 스페셜 스킨에서 스킨 이름과 이미지가 빈 상태로 보이지 않도록 표시 fallback을 보강했습니다.",
+    "피치 스킨을 더 진한 복숭아 색감으로 전체 조정했습니다.",
 ]
 VALID_THEMES = {
     "default",

@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.5.4";
+const appVersion = "3.5.5";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -281,7 +281,7 @@ const themes = [
   { id: "graphite", label: "Graphite", swatch: ["#f8fafc", "#64748b", "#0f172a"] },
   { id: "cocoa", label: "Cocoa", swatch: ["#fff7ed", "#a16207", "#422006"] },
   { id: "cyber", label: "Cyber", swatch: ["#ecfeff", "#06b6d4", "#164e63"] },
-  { id: "peach", label: "Peach", swatch: ["#fff7ed", "#fb7185", "#7c2d12"] },
+  { id: "peach", label: "Peach", swatch: ["#ffd9c9", "#f06d45", "#8f2f16"] },
   { id: "mono", label: "Mono", swatch: ["#fafafa", "#525252", "#171717"] },
   { id: "royal", label: "Royal", swatch: ["#f8fafc", "#2563eb", "#1e1b4b"] },
   { id: "getter", label: "Getter Robo", category: "special", swatch: ["#120306", "#d90429", "#39ff88"] },
@@ -706,7 +706,7 @@ function renderAppearanceOptions() {
   themes.forEach((theme) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "option-button";
+    button.className = `option-button theme-option-${theme.id}${theme.category === "special" ? " special-theme-option" : ""}`;
     button.dataset.themeOption = theme.id;
     button.style.setProperty("--option-soft", theme.swatch[0]);
     button.style.setProperty("--option-accent", theme.swatch[1]);
