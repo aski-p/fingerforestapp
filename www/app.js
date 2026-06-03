@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.5.5";
+const appVersion = "3.5.7";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1170,7 +1170,7 @@ function fmtTime(value) {
 
 function fmtHistoryTime(item) {
   const label = item.timeLabel || (item.action === "received" ? "받음" : "보냄");
-  const timeValue = item.at || item.observedAt;
+  const timeValue = item.at;
   if (!timeValue) return label;
   const time = fmtTime(timeValue);
   return `${label} ${time}`;
@@ -1178,7 +1178,7 @@ function fmtHistoryTime(item) {
 
 function historyTimeMarkup(item) {
   const label = item.timeLabel || (item.action === "received" ? "받음" : "보냄");
-  const timeValue = item.at || item.observedAt;
+  const timeValue = item.at;
   if (!timeValue) return `<span class="history-time-label">${escapeHtml(label)}</span>`;
   return `<span class="history-time-label">${escapeHtml(label)}</span><span class="history-time-clock">${escapeHtml(fmtTime(timeValue))}</span>`;
 }

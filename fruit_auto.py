@@ -1944,14 +1944,20 @@ def pair_official_history_transfer_times(rows):
             received_at = parse_iso(received.get("at"))
             if not received_at:
                 continue
-            delta_seconds = (sent_at - received_at).total_seconds()
-            if delta_seconds < 0 or delta_seconds > get_run_interval_seconds() + 180:
+            delta_seconds = (received_at - sent_at).total_seconds()
+            if abs(delta_seconds) > get_run_interval_seconds() + 180:
                 continue
-            rank = (abs(sent_index - received_index), delta_seconds)
+            rank = (abs(sent_index - received_index), abs(delta_seconds))
             if best_rank is None or rank < best_rank:
                 best_index = received_index
                 best_rank = rank
         if best_index is not None:
+            received = rows[best_index]
+            received["observedAt"] = received.get("at")
+            inferred_at = sent_at - dt.timedelta(seconds=get_run_interval_seconds())
+            received["at"] = inferred_at.replace(microsecond=0).isoformat()
+            received["inferredFromSentAt"] = sent_at.replace(microsecond=0).isoformat()
+            received["timeSource"] = "paired_sent_log"
             paired_received_indexes.add(best_index)
     return rows
 
@@ -2159,7 +2165,6 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
             row["timeSource"] = "received_log"
         else:
             row["timeSource"] = "local_log"
-    rows = pair_official_history_transfer_times(rows)
     rows = [row for row in rows if not row.get("_dropUnpairedReceived")]
     rows = infer_official_history_times(remove_future_observed_history_times(sort_history_rows(rows))[:limit])
     for row in rows:
