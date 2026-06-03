@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.6.6";
+const appVersion = "3.6.9";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -166,8 +166,9 @@ let pendingWorklogTarget = null;
 let worklogDraftDirty = false;
 let activeAppearanceSettings = { theme: "default", font: "pretendard" };
 let chatHistory = [];
-const launchStartedAt = Date.now();
-const launchMinimumMs = 2100;
+let launchStartedAt = Date.now();
+const launchMinimumMs = 2700;
+const launchSplashElement = $("launchSplash");
 
 let koreanPublicHolidays = {
   "2025-01-01": "신정",
@@ -366,6 +367,16 @@ function finishLaunchSplash() {
   window.setTimeout(() => {
     document.body.classList.remove("splash-active");
   }, Math.max(0, launchMinimumMs - elapsed));
+}
+
+function startLaunchSplashAnimation() {
+  if (!launchSplashElement) return;
+  launchStartedAt = Date.now();
+  launchSplashElement.classList.remove("is-playing");
+  void launchSplashElement.offsetWidth;
+  window.requestAnimationFrame(() => {
+    launchSplashElement.classList.add("is-playing");
+  });
 }
 
 function normalizeBaseUrl(value) {
@@ -3184,6 +3195,7 @@ async function initApp() {
   }
 }
 
+startLaunchSplashAnimation();
 initApp();
 setInterval(() => refresh({ silent: true }), 30000);
 setInterval(() => checkReceivedNotifications({ silent: true }), 15000);

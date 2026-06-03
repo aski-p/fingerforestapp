@@ -402,7 +402,7 @@ body:not(.splash-active) .launch-splash {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0;
+  gap: .015em;
   color: var(--accent-bright);
   font-family: "Jua", "Gugi", "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: clamp(62px, 17vw, 122px);
@@ -413,22 +413,23 @@ body:not(.splash-active) .launch-splash {
   text-shadow:
     0 2px 0 rgba(255, 255, 255, .95),
     0 12px 34px rgba(21, 128, 61, .18);
-  animation: launchWordmarkSettle 900ms cubic-bezier(.2, .82, .22, 1) 260ms both;
+  transform: translateY(8px);
 }
 
 .launch-line {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: .88em;
+  gap: .025em;
+  min-height: .86em;
 }
 
 .launch-line span {
   display: inline-block;
-  min-width: .5em;
-  transform: translateY(22px) scale(.94);
+  min-width: 0;
+  transform: translate(var(--from-x, 0), var(--from-y, 18px)) scale(.82) rotate(var(--from-r, 0deg));
   opacity: 0;
-  animation: launchLetter 520ms cubic-bezier(.2, .82, .22, 1) calc(320ms + var(--i) * 58ms) both;
+  will-change: transform, opacity, filter;
 }
 
 .launch-flower {
@@ -444,10 +445,10 @@ body:not(.splash-active) .launch-splash {
     0 22px 0 4px #fff,
     -22px 0 0 4px #fff,
     0 10px 24px rgba(31, 41, 55, .12);
-  transform: scale(.78);
+  transform: scale(.42) rotate(-10deg);
   opacity: 0;
   pointer-events: none;
-  animation: launchPop 520ms cubic-bezier(.18, .82, .26, 1.18) 840ms both;
+  will-change: transform, opacity, filter;
 }
 
 .launch-flower.flower-a {
@@ -461,22 +462,85 @@ body:not(.splash-active) .launch-splash {
   width: 38px;
   height: 38px;
   background: color-mix(in srgb, var(--gold-soft) 72%, var(--accent-bright));
-  animation-delay: 980ms;
 }
+
+.launch-splash.is-playing .launch-wordmark {
+  animation: launchWordmarkSettle 920ms cubic-bezier(.2, .82, .22, 1) 140ms both;
+}
+
+.launch-splash.is-playing .launch-line span {
+  animation: launchLetterGather 620ms cubic-bezier(.16, .9, .2, 1) calc(220ms + var(--i) * 64ms) both;
+}
+
+.launch-splash.is-playing .launch-flower {
+  animation:
+    launchFlowerArrive 540ms cubic-bezier(.18, .82, .26, 1.18) 1080ms both,
+    launchFlowerSpark 620ms ease-out 1510ms both;
+}
+
+.launch-splash.is-playing .launch-flower.flower-b {
+  animation-delay: 1230ms, 1660ms;
+}
+
+.launch-line:first-child span:nth-child(1) { --from-x: -58px; --from-y: -42px; --from-r: -9deg; }
+.launch-line:first-child span:nth-child(2) { --from-x: -22px; --from-y: 52px; --from-r: 7deg; }
+.launch-line:first-child span:nth-child(3) { --from-x: -18px; --from-y: -58px; --from-r: -5deg; }
+.launch-line:first-child span:nth-child(4) { --from-x: 18px; --from-y: 54px; --from-r: 6deg; }
+.launch-line:first-child span:nth-child(5) { --from-x: 32px; --from-y: -46px; --from-r: -6deg; }
+.launch-line:first-child span:nth-child(6) { --from-x: 58px; --from-y: 34px; --from-r: 8deg; }
+.launch-line:nth-child(2) span:nth-child(1) { --from-x: -48px; --from-y: 46px; --from-r: 8deg; }
+.launch-line:nth-child(2) span:nth-child(2) { --from-x: -28px; --from-y: -50px; --from-r: -7deg; }
+.launch-line:nth-child(2) span:nth-child(3) { --from-x: 8px; --from-y: 56px; --from-r: 6deg; }
+.launch-line:nth-child(2) span:nth-child(4) { --from-x: 24px; --from-y: -46px; --from-r: -8deg; }
+.launch-line:nth-child(2) span:nth-child(5) { --from-x: 50px; --from-y: 44px; --from-r: 7deg; }
 
 @keyframes launchWordmarkSettle {
-  0% { transform: translateY(10px); }
-  100% { transform: translateY(0); }
+  0% { transform: translateY(8px) scale(.985); }
+  100% { transform: translateY(0) scale(1); }
 }
 
-@keyframes launchPop {
-  0% { opacity: 0; transform: scale(.42) rotate(-10deg); }
-  100% { opacity: 1; transform: scale(.78) rotate(0); }
+@keyframes launchFlowerArrive {
+  0% { opacity: 0; transform: translateY(18px) scale(.35) rotate(-14deg); filter: blur(4px); }
+  72% { opacity: 1; transform: translateY(0) scale(.88) rotate(3deg); filter: blur(0); }
+  100% { opacity: 1; transform: translateY(0) scale(.78) rotate(0); filter: blur(0); }
 }
 
-@keyframes launchLetter {
-  0% { transform: translateY(22px) scale(.94); opacity: 0; filter: blur(5px); }
-  100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0); }
+@keyframes launchFlowerSpark {
+  0% {
+    filter: brightness(1);
+    box-shadow:
+      0 -22px 0 4px #fff,
+      22px 0 0 4px #fff,
+      0 22px 0 4px #fff,
+      -22px 0 0 4px #fff,
+      0 10px 24px rgba(31, 41, 55, .12);
+  }
+  42% {
+    filter: brightness(1.32);
+    box-shadow:
+      0 -22px 0 4px #fff,
+      22px 0 0 4px #fff,
+      0 22px 0 4px #fff,
+      -22px 0 0 4px #fff,
+      0 0 0 10px rgba(255, 255, 255, .62),
+      0 0 34px 14px color-mix(in srgb, var(--gold-soft) 82%, transparent),
+      0 10px 24px rgba(31, 41, 55, .12);
+  }
+  100% {
+    filter: brightness(1);
+    box-shadow:
+      0 -22px 0 4px #fff,
+      22px 0 0 4px #fff,
+      0 22px 0 4px #fff,
+      -22px 0 0 4px #fff,
+      0 10px 24px rgba(31, 41, 55, .12);
+  }
+}
+
+@keyframes launchLetterGather {
+  0% { transform: translate(var(--from-x, 0), var(--from-y, 18px)) scale(.82) rotate(var(--from-r, 0deg)); opacity: 0; filter: blur(8px); }
+  72% { transform: translate(0, 0) scale(1.05) rotate(0); opacity: 1; filter: blur(0); }
+  100% { transform: translate(0, 0) scale(1) rotate(0); opacity: 1; filter: blur(0); }
 }
 
 button,
