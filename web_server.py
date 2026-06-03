@@ -24,7 +24,7 @@ WEB_PID_PATH = DATA_DIR / "web_server.pid"
 CHAT_DB_PATH = DATA_DIR / "chat_memory.sqlite3"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.6.3"
+APP_VERSION = "3.6.4"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_CONTEXT_MESSAGE_LIMIT = 8
 CHAT_HISTORY_MESSAGE_LIMIT = CHAT_CONTEXT_MESSAGE_LIMIT
@@ -42,10 +42,10 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "Claude 채팅 요청 timeout을 늘려 긴 답변이 8초 만에 Fetch aborted로 끊기던 문제를 수정했습니다.",
-    "Claude 채팅 답변에 시스템 지시, DB 최근 대화, assistant 라벨 같은 메타 문구가 섞이지 않도록 지시문과 응답 정리를 강화했습니다.",
-    "앱 아이콘을 초록 배경, 흰 꽃, 작은 빨간 캐릭터가 있는 밝은 스타일로 교체했습니다.",
-    "첫 실행 화면을 현재 선택한 스킨 컬러에 맞는 블러 배경, fingerfruit 워드마크, 작은 캐릭터가 보이는 시작 화면으로 다시 디자인했습니다.",
+    "FingerFruit 채팅에서 카카오 Claude 웹훅 fallback을 제거하고 Claude API 직결만 사용하도록 수정했습니다.",
+    "Claude API 키가 없을 때 일정/캘린더 라우터 답변이 섞이지 않도록 명확한 설정 오류를 반환합니다.",
+    "DB에 저장된 최근 대화와 장기 기억 요약은 Claude API 직결 컨텍스트로 계속 유지합니다.",
+    "앱 아이콘의 나무/캐릭터 뒷배경을 흰색 계열로 정리했습니다.",
 ]
 VALID_THEMES = {
     "default",
@@ -1087,18 +1087,16 @@ def claude_chat(payload, owner_key):
     message = clean_chat_text(payload.get("message"))
     if not message:
         raise fruit_auto.FruitAutoError("메시지를 입력하세요.")
+    if not api_key:
+        raise fruit_auto.FruitAutoError("Claude API 키가 설정되지 않았습니다. FingerFruit 채팅은 Claude API 직결만 사용합니다.")
     context = load_chat_context(owner_key)
     history = context["recent"] or payload.get("history")
     memory_summary = context["memorySummary"]
     save_chat_message(owner_key, "user", message, metadata={"source": "fingerfruit"})
-    if not api_key:
-        result = kakao_claude_chat_with_continuations(message, owner_key, history=history, memory_summary=memory_summary)
-    else:
-        result = anthropic_claude_chat(message, history, api_key, memory_summary=memory_summary)
+    result = anthropic_claude_chat(message, history, api_key, memory_summary=memory_summary)
     for reply in result.get("replies") or [result.get("reply") or ""]:
         save_chat_message(owner_key, "assistant", reply, model=result.get("model") or "", metadata={"source": "fingerfruit"})
-    if api_key:
-        maybe_update_chat_memory(owner_key, api_key)
+    maybe_update_chat_memory(owner_key, api_key)
     result["memory"] = {
         "recentMessageLimit": CHAT_CONTEXT_MESSAGE_LIMIT,
         "summaryUsed": bool(memory_summary),

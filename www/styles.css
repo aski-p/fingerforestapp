@@ -397,7 +397,7 @@ body:not(.splash-active) .launch-splash {
 
 .launch-wordmark {
   position: relative;
-  z-index: 2;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -414,6 +414,13 @@ body:not(.splash-active) .launch-splash {
     0 2px 0 rgba(255, 255, 255, .95),
     0 12px 34px rgba(21, 128, 61, .18);
   animation: launchWordmarkSettle 900ms cubic-bezier(.2, .82, .22, 1) 260ms both;
+}
+
+.launch-wordmark::after {
+  content: "";
+  display: block;
+  width: min(58vw, 310px);
+  height: clamp(74px, 15vh, 118px);
 }
 
 .launch-line {
@@ -433,7 +440,7 @@ body:not(.splash-active) .launch-splash {
 
 .launch-flower {
   position: absolute;
-  z-index: 3;
+  z-index: 1;
   width: 46px;
   height: 46px;
   border-radius: 50%;
@@ -446,109 +453,38 @@ body:not(.splash-active) .launch-splash {
     0 10px 24px rgba(31, 41, 55, .12);
   transform: scale(.78);
   opacity: 0;
+  pointer-events: none;
   animation: launchPop 520ms cubic-bezier(.18, .82, .26, 1.18) 840ms both;
 }
 
 .launch-flower.flower-a {
-  top: calc(50% - min(19vw, 116px));
-  left: calc(50% - min(38vw, 265px));
+  top: calc(50% - min(33vw, 205px));
+  left: calc(50% - min(43vw, 295px));
 }
 
 .launch-flower.flower-b {
-  top: calc(50% + min(3vw, 26px));
-  left: calc(50% + min(18vw, 152px));
+  top: calc(50% + min(16vw, 112px));
+  left: calc(50% + min(28vw, 198px));
   width: 38px;
   height: 38px;
   background: color-mix(in srgb, var(--gold-soft) 72%, var(--accent-bright));
   animation-delay: 980ms;
 }
 
-.launch-mascot {
+.launch-icon {
   position: absolute;
   z-index: 4;
-  left: calc(50% + min(31vw, 230px));
-  top: calc(50% + min(5vw, 42px));
-  width: 76px;
-  height: 104px;
-  color: var(--button);
+  left: 50%;
+  top: calc(50% + clamp(118px, 22vh, 178px));
+  width: clamp(82px, 20vw, 128px);
+  height: clamp(82px, 20vw, 128px);
+  border-radius: 28%;
+  box-shadow:
+    0 18px 38px color-mix(in srgb, var(--shadow) 50%, transparent),
+    0 0 0 7px color-mix(in srgb, var(--surface) 80%, transparent);
   opacity: 0;
-  transform: translate(18px, 24px) rotate(8deg) scale(.86);
+  transform: translate(-50%, 18px) rotate(0) scale(.88);
   animation: launchMascot 680ms cubic-bezier(.2, .82, .22, 1.08) 1080ms both;
-}
-
-.mascot-head,
-.mascot-body,
-.mascot-arm,
-.mascot-leg {
-  position: absolute;
-  display: block;
-  background: currentColor;
-}
-
-.mascot-head {
-  top: 6px;
-  left: 27px;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-}
-
-.mascot-head::before {
-  content: "";
-  position: absolute;
-  right: 6px;
-  top: 9px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #111827;
-  box-shadow: 1px 0 0 2px #fff;
-}
-
-.mascot-head::after {
-  content: "";
-  position: absolute;
-  left: -14px;
-  top: -20px;
-  width: 44px;
-  height: 24px;
-  border-radius: 50%;
-  border-top: 8px solid currentColor;
-  transform: rotate(22deg);
-}
-
-.mascot-body {
-  top: 34px;
-  left: 21px;
-  width: 36px;
-  height: 52px;
-  border-radius: 56% 46% 42% 54%;
-}
-
-.mascot-arm {
-  top: 51px;
-  right: 6px;
-  width: 25px;
-  height: 6px;
-  border-radius: 999px;
-  transform: rotate(-34deg);
-}
-
-.mascot-leg {
-  bottom: 10px;
-  width: 28px;
-  height: 6px;
-  border-radius: 999px;
-}
-
-.mascot-leg.leg-a {
-  left: 18px;
-  transform: rotate(34deg);
-}
-
-.mascot-leg.leg-b {
-  right: 10px;
-  transform: rotate(-28deg);
 }
 
 @keyframes launchWordmarkSettle {
@@ -567,8 +503,8 @@ body:not(.splash-active) .launch-splash {
 }
 
 @keyframes launchMascot {
-  0% { opacity: 0; transform: translate(18px, 24px) rotate(8deg) scale(.86); }
-  100% { opacity: 1; transform: translate(0, 0) rotate(8deg) scale(1); }
+  0% { opacity: 0; transform: translate(-50%, 18px) scale(.88); }
+  100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
 
 button,
@@ -1090,6 +1026,20 @@ h2 {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
+}
+
+.login-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.login-app-icon {
+  display: block;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, .1);
 }
 
 .section-title > div {

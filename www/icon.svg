@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="fingerfruit">
   <defs>
-    <linearGradient id="bg" x1="72" y1="72" x2="920" y2="980" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#f9fff5"/>
-      <stop offset=".56" stop-color="#58d64d"/>
-      <stop offset="1" stop-color="#101a3b"/>
+    <linearGradient id="bg" x1="104" y1="40" x2="848" y2="940" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".62" stop-color="#fffaf3"/>
+      <stop offset="1" stop-color="#f2f6ee"/>
     </linearGradient>
     <linearGradient id="leaf" x1="118" y1="150" x2="780" y2="722" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#64df5e"/>
@@ -16,11 +16,15 @@
       <stop offset="1" stop-color="#bf1d26"/>
     </linearGradient>
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
-      <feDropShadow dx="0" dy="24" stdDeviation="22" flood-color="#123015" flood-opacity=".22"/>
+      <feDropShadow dx="0" dy="24" stdDeviation="22" flood-color="#123015" flood-opacity=".18"/>
+    </filter>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#d7bca7" flood-opacity=".24"/>
     </filter>
   </defs>
   <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
-  <path d="M816 95c84 29 126 91 126 187v422c0 130-66 200-196 200H268c-95 0-157-34-186-102 69 30 156 45 260 45 226 0 383-77 472-230 78-134 80-330 2-522z" fill="#071233" opacity=".9"/>
+  <path d="M142 782c96 40 209 60 340 60 220 0 378-72 474-216v74c0 133-72 205-205 205H272c-70 0-124-17-162-52-31-29-13-69 32-71z" fill="#ecf5e5" opacity=".72"/>
+  <path d="M132 172c74-54 166-82 278-82h286c124 0 199 67 214 181-92-50-200-75-325-75-221 0-392 63-513 190v-88c0-52 18-94 60-126z" fill="#ffffff" opacity=".86"/>
   <g filter="url(#shadow)">
     <path d="M136 422c-32-84-11-170 55-227 58-50 144-59 221-25 55-82 148-119 238-88 96 33 151 123 141 235 80 32 125 100 118 174-8 84-77 147-174 157-42 85-129 137-233 131-87-5-162-49-204-115-107 4-188-43-222-124-24-58-15-110 60-118z" fill="url(#leaf)"/>
     <path d="M168 416c53-20 108-18 163 6 3-75 31-133 84-174 50 35 82 86 95 152 62-47 129-61 199-42 3 77-25 139-85 187 65 18 115 54 149 109-47 42-104 61-171 57-55 58-126 86-213 82-59-3-111-21-156-54 24-60 73-102 146-126-78-18-139-58-181-119-22-32-32-61-30-78z" fill="#4dd84d" opacity=".72"/>
