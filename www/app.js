@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.6.4";
+const appVersion = "3.6.5";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -398,6 +398,7 @@ function shouldTryFallback(error, response) {
 
 async function resilientFetch(path, options = {}) {
   let lastError = null;
+  let lastResponse = null;
   const bases = apiBaseCandidates();
   const timeoutMs = options.timeoutMs || apiTimeoutMs;
   const fetchOptions = { ...options };
@@ -412,6 +413,7 @@ async function resilientFetch(path, options = {}) {
         storeSet(activeApiBaseKey, baseUrl);
         return response;
       }
+      lastResponse = response;
       lastError = new Error(`HTTP ${response.status}`);
     } catch (err) {
       lastError = err;
@@ -420,6 +422,7 @@ async function resilientFetch(path, options = {}) {
     }
     if (shouldTryFallback(lastError, response)) continue;
   }
+  if (lastResponse) return lastResponse;
   throw lastError || new Error("서버 연결 실패");
 }
 

@@ -24,7 +24,7 @@ WEB_PID_PATH = DATA_DIR / "web_server.pid"
 CHAT_DB_PATH = DATA_DIR / "chat_memory.sqlite3"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.6.4"
+APP_VERSION = "3.6.5"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-3-haiku-20240307"
 CHAT_CONTEXT_MESSAGE_LIMIT = 8
 CHAT_HISTORY_MESSAGE_LIMIT = CHAT_CONTEXT_MESSAGE_LIMIT
@@ -42,10 +42,10 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "FingerFruit 채팅에서 카카오 Claude 웹훅 fallback을 제거하고 Claude API 직결만 사용하도록 수정했습니다.",
-    "Claude API 키가 없을 때 일정/캘린더 라우터 답변이 섞이지 않도록 명확한 설정 오류를 반환합니다.",
-    "DB에 저장된 최근 대화와 장기 기억 요약은 Claude API 직결 컨텍스트로 계속 유지합니다.",
-    "앱 아이콘의 나무/캐릭터 뒷배경을 흰색 계열로 정리했습니다.",
+    "iPhone 설치용 mobileconfig 아이콘을 설치 페이지와 같은 FingerFruit 아이콘으로 교체했습니다.",
+    "첫 실행 화면의 하단 앱 아이콘 이미지를 제거하고 fingerfruit 워드마크만 남겼습니다.",
+    "첫 실행 화면 fingerfruit 워드마크를 플레이풀 폰트 스타일로 변경했습니다.",
+    "채팅 서버 오류가 HTTP 500으로만 보이지 않도록 실제 오류 메시지 표시 흐름을 개선했습니다.",
 ]
 VALID_THEMES = {
     "default",
