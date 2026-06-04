@@ -1,1 +1,1 @@
-web: python3 start_fingerfruit.py 0.0.0.0 $PORT
+web: python3 web_server.py 0.0.0.0 $PORT

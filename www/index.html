@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#f7f9fc">
     <link rel="manifest" href="/manifest.webmanifest">
-    <link rel="apple-touch-icon" href="/icons/app-touch-icon.png">
-    <link rel="icon" href="/icons/app-icon-192.png" type="image/png">
-    <link rel="stylesheet" href="/styles.css?v=3.7.9">
+    <link rel="apple-touch-icon" href="/icons/app-touch-icon.png?v=3.8.1">
+    <link rel="icon" href="/icons/app-icon-192.png?v=3.8.1" type="image/png">
+    <link rel="stylesheet" href="/styles.css?v=3.8.1">
     <title>fingerfruit</title>
   </head>
   <body class="logged-out splash-active">
@@ -35,6 +35,7 @@
         <span class="red-character-flower"></span>
         <span class="red-character-body"></span>
         <span class="red-character-eye"></span>
+        <span class="red-character-eye eye-right"></span>
         <span class="red-character-nose"></span>
         <span class="red-character-arm arm-left"></span>
         <span class="red-character-arm arm-right"></span>
@@ -68,7 +69,7 @@
       <section class="card login-card">
         <div class="section-title">
           <div class="login-heading">
-            <img class="login-app-icon" src="/icons/app-icon-192.png" alt="" aria-hidden="true">
+            <img class="login-app-icon" src="/icons/app-icon-192.png?v=3.8.1" alt="" aria-hidden="true">
             <h2>로그인</h2>
           </div>
         </div>
@@ -234,11 +235,11 @@
                   <div id="worklogTarget" class="selected-person">선택된 직원 없음</div>
                   <label>
                     <span>보낼 씨앗 수</span>
-                    <input id="worklogSeedCount" type="number" min="0" max="3" step="1" inputmode="numeric" placeholder="0">
+                    <input id="worklogSeedCount" type="number" min="1" max="3" step="1" inputmode="numeric" value="3" placeholder="3">
                   </label>
                   <label>
                     <span>메시지</span>
-                    <input id="worklogSeedMessage" placeholder="씨앗 선물 메시지">
+                    <input id="worklogSeedMessage" value="감사합니다" placeholder="감사합니다">
                   </label>
                 </div>
                 <div class="worklog-block">
@@ -447,7 +448,7 @@
 
       <p id="toast" class="toast" role="status"></p>
       <footer class="app-footer">
-        <span>v3.7.9 정식버전 · by aski</span>
+        <span>v3.8.1 정식버전 · by aski</span>
         <a id="supportLink" class="support-link" href="https://qr.kakaopay.com/Ej7ruxJDq" target="_blank" rel="noopener" aria-label="카카오페이로 후원하기">후원하기</a>
       </footer>
     </main>
@@ -470,6 +471,6 @@
     <button id="chatOpenBtn" class="chat-fab" type="button" aria-label="채팅 열기">
       <span class="chat-fab-mark" aria-hidden="true"></span>
     </button>
-    <script src="/app.js?v=3.7.9"></script>
+    <script src="/app.js?v=3.8.1"></script>
   </body>
 </html>

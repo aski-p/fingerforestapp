@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.7.9";
+const appVersion = "3.8.1";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -985,8 +985,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png",
-        badge: "/icons/app-icon-192.png",
+        icon: "/icons/app-icon-192.png?v=3.8.1",
+        badge: "/icons/app-icon-192.png?v=3.8.1",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1924,8 +1924,8 @@ function renderWorklogState(state) {
   if (!hasWorklogDraft()) {
     selectedWorklogDays = [];
     selectedWorklogDates = Array.isArray(state.worklogScheduleDates) ? [...state.worklogScheduleDates] : [];
-    $("worklogSeedCount").value = state.worklogSeedCount ?? 0;
-    $("worklogSeedMessage").value = state.worklogSeedMessage || "";
+    $("worklogSeedCount").value = state.worklogSeedCount || 3;
+    $("worklogSeedMessage").value = state.worklogSeedMessage || "감사합니다";
     $("worklogContent").value = state.worklogContent || "";
     $("worklogTimeInput").value = state.worklogScheduleTime || "09:05";
     $("worklogEnabled").checked = !!state.worklogEnabled;
@@ -2800,7 +2800,7 @@ function availableWorklogSeedCount() {
 
 function worklogPayload(enabledOverride) {
   const project = selectedWorklogProject();
-  const seedCount = Math.max(0, Math.min(3, Math.floor(Number($("worklogSeedCount").value || 0))));
+  const seedCount = Math.max(1, Math.min(3, Math.floor(Number($("worklogSeedCount").value || 3))));
   const target = pendingWorklogTarget || {
     emp_id: currentState.worklogTargetEmployeeId,
     emp_nm: currentState.worklogTargetEmployeeName,
@@ -2989,7 +2989,7 @@ window.addEventListener("resize", () => {
 window.requestAnimationFrame(syncWorkspacePagerHeight);
 
 $("worklogSeedCount").addEventListener("input", () => {
-  const value = Math.max(0, Math.min(3, Math.floor(Number($("worklogSeedCount").value || 0))));
+  const value = Math.max(1, Math.min(3, Math.floor(Number($("worklogSeedCount").value || 3))));
   $("worklogSeedCount").value = value;
   markWorklogDraftDirty();
 });

@@ -81,8 +81,8 @@ DEFAULT_STATE = {
     "worklogTargetDutyId": None,
     "worklogTargetDeptName": None,
     "worklogTargetPositionName": None,
-    "worklogSeedCount": 0,
-    "worklogSeedMessage": "",
+    "worklogSeedCount": 3,
+    "worklogSeedMessage": "감사합니다",
     "worklogProjectId": None,
     "worklogProjectName": None,
     "worklogContent": "",
@@ -1757,7 +1757,7 @@ def record_received_history_from_official(
     employee_name,
     employee_position,
     observed_at,
-    window_seconds=120,
+    window_seconds=330,
 ):
     local_observed_at = observed_at.astimezone(KST)
     history_date = local_observed_at.date().isoformat()
