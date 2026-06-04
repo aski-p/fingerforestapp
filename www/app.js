@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.11.5";
+const appVersion = "3.11.6";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -101,6 +101,23 @@ function deviceId() {
 
 function expectedOwnerKey() {
   return currentOwnerKey || "";
+}
+
+function hydrateStoredSession() {
+  if (storeGet(loggedOutKey) === "1") return;
+  let storedSession = storeGet(fruitSessionKey);
+  if (!storedSession) {
+    try {
+      storedSession = window.FruitAndroid?.getSession?.() || "";
+    } catch (_err) {
+      storedSession = "";
+    }
+  }
+  const storedOwner = storeGet(fruitOwnerKey);
+  if (!storedSession) return;
+  fruitSession = storedSession;
+  currentOwnerKey = storedOwner || currentOwnerKey || "";
+  authValidated = true;
 }
 
 const params = new URLSearchParams(location.search);
@@ -858,16 +875,23 @@ function clearRememberedLogin() {
   storeRemove(rememberedLoginPwKey);
 }
 
-function saveFruitSession(sessionToken) {
+function saveFruitSession(sessionToken, ownerKey = currentOwnerKey) {
   fruitSession = sessionToken || "";
   if (fruitSession) {
+    currentOwnerKey = ownerKey || currentOwnerKey || "";
     authValidated = true;
+    storeSet(fruitSessionKey, fruitSession);
+    if (currentOwnerKey) storeSet(fruitOwnerKey, currentOwnerKey);
     storeRemove(loggedOutKey);
     try {
-      if (window.FruitAndroid?.saveSession) window.FruitAndroid.saveSession("");
+      if (window.FruitAndroid?.saveSession) window.FruitAndroid.saveSession(fruitSession);
     } catch (_err) {
-      // Native session clearing is best-effort. Login sessions are not persisted.
+      // Native session mirroring is best-effort.
     }
+  } else {
+    authValidated = false;
+    storeRemove(fruitSessionKey);
+    storeRemove(fruitOwnerKey);
   }
 }
 
@@ -886,7 +910,7 @@ async function recoverSession() {
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "세션 복구 실패");
-      saveFruitSession((data.result || {}).sessionToken || "");
+      saveFruitSession((data.result || {}).sessionToken || "", (data.result || {}).ownerKey || currentOwnerKey);
       return fruitSession;
     })().finally(() => {
       recoveringSession = null;
@@ -1039,8 +1063,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.11.5",
-        badge: "/icons/app-icon-192.png?v=3.11.5",
+        icon: "/icons/app-icon-192.png?v=3.11.6",
+        badge: "/icons/app-icon-192.png?v=3.11.6",
         data: { url: item.url || "/" },
       });
       return true;
@@ -2595,7 +2619,7 @@ $("loginBtn").addEventListener("click", async () => {
     const result = await api("/api/login", { id, password });
     saveRememberedLogin(id, password);
     currentOwnerKey = result.ownerKey || "";
-    saveFruitSession(result.sessionToken || "");
+    saveFruitSession(result.sessionToken || "", result.ownerKey || "");
     sessionStorage.setItem(sessionKey, "1");
     if (!$("rememberLogin").checked) $("loginPw").value = "";
     toast(`${result.user || "사용자"} 로그인 완료`);
@@ -2611,6 +2635,7 @@ $("loginBtn").addEventListener("click", async () => {
 });
 
 $("resumeBtn").addEventListener("click", async () => {
+  hydrateStoredSession();
   sessionStorage.setItem(sessionKey, "1");
   storeRemove(loggedOutKey);
   renderState(currentState);
@@ -3457,6 +3482,7 @@ async function initApp() {
     updateMainBackground();
     initializeAppearanceSettings();
     renderAppearanceOptions();
+    hydrateStoredSession();
     if (await checkAppVersion()) return;
     await restoreSavedLoginIfNeeded();
     updateProfileUi("FingerForest", false);
