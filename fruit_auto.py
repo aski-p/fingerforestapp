@@ -1214,7 +1214,7 @@ def parse_int(value, default=0):
 
 
 def normalize_history_message(value):
-    return str(value or "").replace("[열매선물]", "").strip()
+    return str(value or "").replace("[열매선물]", "").replace("[씨앗선물]", "").strip()
 
 
 def history_date_from_month_day(month, day):
@@ -1868,7 +1868,7 @@ def local_history_hints_by_name(local_events):
     return hints
 
 
-def match_official_history_event(local_events, used_indexes, action, counterpart, berries, message, remaining=None):
+def match_official_history_event(local_events, used_indexes, action, counterpart, berries, message, remaining=None, is_seed_history=False):
     normalized_message = normalize_history_message(message)
     for index, event in enumerate(local_events):
         if event.get("timeSource") == "official_observed":
@@ -1896,7 +1896,8 @@ def match_official_history_event(local_events, used_indexes, action, counterpart
             receiver_name = event.get("targetEmployeeName") or event.get("target")
             if str(receiver_name or "") != str(counterpart or ""):
                 continue
-        if parse_int(event.get("berries"), None) != berries:
+        event_amount = parse_int(event.get("seedDelta"), None) if is_seed_history else parse_int(event.get("berries"), None)
+        if event_amount != berries:
             continue
         event_message = normalize_history_message(event.get("message"))
         if normalized_message and event_message and normalized_message != event_message:
@@ -2019,6 +2020,7 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
             abs(delta),
             content_message,
             fruit_count if action == "sent" else None,
+            is_seed_history=is_seed_history,
         )
         if action == "received" and matched_event:
             counterpart = matched_event.get("senderEmployeeName") or matched_event.get("sender") or counterpart
@@ -2193,7 +2195,8 @@ def history(limit=40, owner_key=None, date=None, timezone_offset_minutes=0):
     rows = []
     scan_limit = 5000 if date else limit * 5
     for event in reversed(read_jsonl(HISTORY_PATH, scan_limit)):
-        if not is_transfer_history_event(event):
+        is_seed_event = is_seed_transfer_history_event(event)
+        if not is_transfer_history_event(event) and not is_seed_event:
             continue
         if date and event_local_date(event, timezone_offset_minutes) != date:
             continue
@@ -2201,7 +2204,7 @@ def history(limit=40, owner_key=None, date=None, timezone_offset_minutes=0):
         received_by_me = my_employee_id and str(event.get("targetEmployeeId") or "") == my_employee_id
         if not sent_by_me and not received_by_me:
             continue
-        berries = int(event.get("berries") or 0)
+        amount = int(event.get("seedDelta") if is_seed_event else event.get("berries") or 0)
         if sent_by_me:
             action = "sent"
             counterpart = display_employee(
@@ -2218,7 +2221,7 @@ def history(limit=40, owner_key=None, date=None, timezone_offset_minutes=0):
                 event.get("senderPositionName") or state.get("senderPositionName"),
                 "나",
             )
-            delta = -berries
+            delta = -amount
         else:
             action = "received"
             counterpart_name = (
@@ -2231,7 +2234,7 @@ def history(limit=40, owner_key=None, date=None, timezone_offset_minutes=0):
             avatar_employee_id = sender_employee_id
             avatar_name = counterpart_name
             sender_name = counterpart or "보낸사람"
-            delta = berries
+            delta = amount
         my_display_name = display_employee(
             state.get("senderEmployeeName") or state.get("loginUser") or event.get("targetEmployeeName"),
             state.get("senderPositionName") or event.get("targetPositionName"),
@@ -2255,7 +2258,7 @@ def history(limit=40, owner_key=None, date=None, timezone_offset_minutes=0):
             display_seeds = state.get("lastSeedCount")
             display_remaining = event.get("receiverRemaining")
             if display_remaining is None:
-                display_remaining = berries
+                display_remaining = amount
         else:
             display_seeds = event.get("seeds")
             display_remaining = event.get("remaining")
@@ -2278,10 +2281,11 @@ def history(limit=40, owner_key=None, date=None, timezone_offset_minutes=0):
             "toAvatarName": to_avatar_name,
             "senderIsMe": sent_by_me,
             "seeds": display_seeds,
-            "berries": event.get("berries"),
+            "berries": 0 if is_seed_event else event.get("berries"),
             "remaining": display_remaining,
             "delta": delta,
-            "content": "[열매선물]" + (event.get("message") or "자동 전달"),
+            "content": ("[씨앗선물]" if is_seed_event else "[열매선물]") + (event.get("message") or "자동 전달"),
+            "historyKind": "seed" if is_seed_event else "berry",
         }
         rows.append(item)
         if len(rows) >= limit:
