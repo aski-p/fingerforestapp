@@ -411,7 +411,7 @@ body.splash-active {
   transition: opacity 440ms ease, visibility 440ms ease;
 }
 
-body.logged-out.main-bg-scene .launch-splash {
+body.main-bg-scene .launch-splash {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(248, 251, 253, 0.04)),
     var(--season-bg) center top / cover no-repeat,
@@ -438,7 +438,7 @@ body:not(.splash-active) .launch-splash {
   transform: scale(1.04);
 }
 
-body.logged-out.main-bg-scene .launch-splash::before {
+body.main-bg-scene .launch-splash::before {
   inset: 0;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .20)),
