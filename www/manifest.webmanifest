@@ -1,6 +1,6 @@
 {
-  "name": "fingerfruit",
-  "short_name": "fingerfruit",
+  "name": "FingerMin",
+  "short_name": "FingerMin",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#101725",

@@ -13,6 +13,7 @@
 			
 			
 			
+			
 			iVBORw0KGgoAAAANSUhEUgAAAMAAAADAEAYAAAACTLBEAAAABGdBTUEAALGPC/xh
 			BQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAA
 			BmJLR0QAAAAAAAD5Q7t/AAAAB3RJTUUH6gYEAjo5AgFyrAAAgABJREFUeNrsnXec
@@ -1267,11 +1268,11 @@
 			<key>IsRemovable</key>
 			<true/>
 			<key>Label</key>
-			<string>fingerfruit</string>
+			<string>FingerMin</string>
 			<key>PayloadDescription</key>
-			<string>fingerfruit 웹앱 바로가기</string>
+			<string>FingerMin 웹앱 바로가기</string>
 			<key>PayloadDisplayName</key>
-			<string>fingerfruit</string>
+			<string>FingerMin</string>
 			<key>PayloadIdentifier</key>
 			<string>com.openclaw.fruitauto.webclip</string>
 			<key>PayloadType</key>
@@ -1287,9 +1288,9 @@
 		</dict>
 	</array>
 	<key>PayloadDescription</key>
-	<string>iPhone 홈 화면에 fingerfruit 앱을 추가합니다.</string>
+	<string>iPhone 홈 화면에 FingerMin 앱을 추가합니다.</string>
 	<key>PayloadDisplayName</key>
-	<string>fingerfruit</string>
+	<string>FingerMin</string>
 	<key>PayloadIdentifier</key>
 	<string>com.openclaw.fruitauto.profile</string>
 	<key>PayloadOrganization</key>

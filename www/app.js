@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.8.4";
+const appVersion = "3.8.5";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -592,11 +592,11 @@ function applyAvatar(button, initialEl, label, photoUrl = getProfilePhoto()) {
 }
 
 function currentProfileLabel() {
-  return $("profileUserName")?.textContent || currentState.senderEmployeeName || currentState.loginUser || "fingerfruit";
+  return $("profileUserName")?.textContent || currentState.senderEmployeeName || currentState.loginUser || "FingerMin";
 }
 
 function updateProfileUi(label, unlocked = isUnlocked(), photoUrl = getProfilePhoto()) {
-  const displayLabel = unlocked ? label || "사용자" : "fingerfruit";
+  const displayLabel = unlocked ? label || "사용자" : "FingerMin";
   const displayPhoto = unlocked ? photoUrl : "";
   document.body.classList.toggle("logged-out", !unlocked);
   const heroTitleText = $("heroTitleText");
@@ -968,7 +968,7 @@ async function ensureWebPushSubscription() {
 
 async function showDeviceNotification(item) {
   if (!item || !item.id) return false;
-  const title = item.title || "fingerfruit";
+  const title = item.title || "FingerMin";
   const body = item.body || "새 열매 수신 내역이 있습니다.";
   try {
     if (window.FruitAndroid?.showNotification) {
@@ -985,8 +985,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.8.4",
-        badge: "/icons/app-icon-192.png?v=3.8.4",
+        icon: "/icons/app-icon-192.png?v=3.8.5",
+        badge: "/icons/app-icon-192.png?v=3.8.5",
         data: { url: item.url || "/" },
       });
       return true;
@@ -2495,7 +2495,7 @@ function closeProfileModal() {
   if (isUnlocked()) {
     renderState(currentState);
   } else {
-    updateProfileUi("fingerfruit", false, "");
+    updateProfileUi("FingerMin", false, "");
   }
   syncModalOpenState();
 }
@@ -3236,7 +3236,7 @@ async function initApp() {
     renderAppearanceOptions();
     if (await checkAppVersion()) return;
     await restoreSavedLoginIfNeeded();
-    updateProfileUi("fingerfruit", false);
+    updateProfileUi("FingerMin", false);
     renderState({});
     renderCachedState();
     await refresh({ silent: true, forceBalance: true });
