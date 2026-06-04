@@ -331,23 +331,23 @@ body.logged-out.main-bg-scene {
 }
 
 body.main-bg-forest-spring {
-  --season-bg: url("/assets/seasons/forest-spring.jpg?v=3.9.4");
+  --season-bg: url("/assets/seasons/forest-spring.jpg?v=3.9.5");
 }
 
 body.main-bg-forest-summer {
-  --season-bg: url("/assets/seasons/forest-summer.jpg?v=3.9.4");
+  --season-bg: url("/assets/seasons/forest-summer.jpg?v=3.9.5");
 }
 
 body.main-bg-forest-autumn {
-  --season-bg: url("/assets/seasons/forest-autumn.jpg?v=3.9.4");
+  --season-bg: url("/assets/seasons/forest-autumn.jpg?v=3.9.5");
 }
 
 body.main-bg-forest-winter {
-  --season-bg: url("/assets/seasons/forest-winter.jpg?v=3.9.4");
+  --season-bg: url("/assets/seasons/forest-winter.jpg?v=3.9.5");
 }
 
 body.main-bg-forest-night {
-  --season-bg: url("/assets/seasons/forest-night.jpg?v=3.9.4");
+  --season-bg: url("/assets/seasons/forest-night.jpg?v=3.9.5");
 }
 
 body.main-bg-forest-sleep {
@@ -411,6 +411,13 @@ body.splash-active {
   transition: opacity 440ms ease, visibility 440ms ease;
 }
 
+body.logged-out.main-bg-scene .launch-splash {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(248, 251, 253, 0.04)),
+    var(--season-bg) center top / cover no-repeat,
+    #eef7ef;
+}
+
 body:not(.splash-active) .launch-splash {
   visibility: hidden;
   opacity: 0;
@@ -429,6 +436,16 @@ body:not(.splash-active) .launch-splash {
   filter: blur(24px);
   opacity: .86;
   transform: scale(1.04);
+}
+
+body.logged-out.main-bg-scene .launch-splash::before {
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .20)),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, .04), rgba(255, 255, 255, .18) 72%, rgba(255, 255, 255, .24));
+  filter: none;
+  opacity: 1;
+  transform: none;
 }
 
 .launch-bg-card {
