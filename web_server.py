@@ -50,10 +50,10 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "앱 아이콘에 레드 캐릭터를 나무 앞 주인공으로 반영했습니다.",
-    "시작 화면은 FingerForest 글자 표시 후 레드 캐릭터가 떨어져 앉고, 꽃이 반짝이는 순서로 재구성했습니다.",
-    "보유 씨앗이 0개이면 업무일지 예약을 막고 안내 팝업을 띄웁니다.",
-    "Claude가 외부/최신 정보가 필요하다고 판단하면 검색 결과를 함께 참고해 답변합니다.",
+    "씨앗선물 수신 내역은 열매 증가가 5분 체크에서 새로 잡힌 시각을 우선 표시합니다.",
+    "기존 씨앗선물 내역은 확실한 관측 시간이 없으면 받음/보냄만 표시합니다.",
+    "당일 날짜 선택과 오늘 예약 시간 보정 로직을 안정화했습니다.",
+    "시작 화면 FingerForest 표기와 캐릭터 첫 프레임 표시를 반영했습니다.",
 ]
 VALID_THEMES = {
     "default",
