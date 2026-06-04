@@ -321,6 +321,117 @@ body.theme-getter {
     #100205;
 }
 
+body.main-bg-scene {
+  --forest-sky-top: #fff9dc;
+  --forest-sky-mid: #eaf8d7;
+  --forest-water: rgba(137, 201, 201, 0.58);
+  --forest-water-line: rgba(255, 255, 255, 0.54);
+  --forest-grass: rgba(176, 218, 112, 0.64);
+  --forest-grass-deep: rgba(85, 154, 89, 0.48);
+  --forest-tree: rgba(105, 159, 75, 0.50);
+  --forest-tree-light: rgba(205, 228, 118, 0.56);
+  --forest-flower: rgba(255, 244, 163, 0.68);
+  --forest-glow: rgba(255, 226, 96, 0.42);
+  background:
+    radial-gradient(circle at 12% 11%, rgba(255, 244, 154, 0.82) 0 4.8rem, transparent 7.5rem),
+    radial-gradient(circle at 18% 36%, var(--forest-tree-light) 0 2.8rem, transparent 3.7rem),
+    radial-gradient(circle at 33% 29%, var(--forest-tree) 0 3.4rem, transparent 4.6rem),
+    radial-gradient(circle at 72% 23%, var(--forest-tree-light) 0 3.1rem, transparent 4.2rem),
+    radial-gradient(circle at 88% 34%, var(--forest-tree) 0 3.5rem, transparent 4.8rem),
+    radial-gradient(ellipse at 55% 79%, var(--forest-water-line) 0 5%, transparent 5.4% 100%),
+    radial-gradient(ellipse at 53% 78%, var(--forest-water) 0 18%, transparent 18.5% 100%),
+    radial-gradient(circle at 18% 77%, var(--forest-flower) 0 0.42rem, transparent 0.62rem),
+    radial-gradient(circle at 30% 71%, rgba(255, 255, 255, 0.74) 0 0.5rem, transparent 0.72rem),
+    radial-gradient(circle at 82% 72%, var(--forest-flower) 0 0.46rem, transparent 0.7rem),
+    radial-gradient(ellipse at 50% 100%, var(--forest-grass) 0 42%, transparent 42.5%),
+    linear-gradient(180deg, var(--forest-sky-top) 0%, var(--forest-sky-mid) 48%, var(--forest-grass-deep) 100%);
+  background-attachment: fixed;
+  background-size: cover;
+}
+
+body.main-bg-forest-summer {
+  --forest-sky-top: #fff8cc;
+  --forest-sky-mid: #dff5bd;
+  --forest-water: rgba(121, 199, 196, 0.64);
+  --forest-grass: rgba(153, 212, 87, 0.68);
+  --forest-grass-deep: rgba(67, 148, 83, 0.54);
+  --forest-tree: rgba(83, 152, 70, 0.58);
+  --forest-tree-light: rgba(188, 224, 89, 0.62);
+  --forest-flower: rgba(255, 238, 102, 0.74);
+  --forest-glow: rgba(255, 213, 69, 0.46);
+}
+
+body.main-bg-forest-autumn {
+  --forest-sky-top: #fff3c2;
+  --forest-sky-mid: #ffe3aa;
+  --forest-water: rgba(151, 197, 195, 0.58);
+  --forest-grass: rgba(218, 174, 80, 0.62);
+  --forest-grass-deep: rgba(177, 104, 45, 0.44);
+  --forest-tree: rgba(226, 151, 50, 0.60);
+  --forest-tree-light: rgba(255, 196, 73, 0.62);
+  --forest-flower: rgba(255, 219, 118, 0.72);
+  --forest-glow: rgba(255, 180, 56, 0.45);
+}
+
+body.main-bg-forest-winter {
+  --forest-sky-top: #f8fbff;
+  --forest-sky-mid: #e8f2f8;
+  --forest-water: rgba(190, 217, 226, 0.62);
+  --forest-grass: rgba(229, 235, 230, 0.72);
+  --forest-grass-deep: rgba(177, 198, 204, 0.50);
+  --forest-tree: rgba(205, 217, 210, 0.58);
+  --forest-tree-light: rgba(255, 255, 255, 0.72);
+  --forest-flower: rgba(255, 255, 255, 0.86);
+  --forest-glow: rgba(214, 233, 255, 0.48);
+}
+
+body.main-bg-forest-sleep {
+  --forest-sky-top: #e8d7cd;
+  --forest-sky-mid: #b9c7b9;
+  --forest-water: rgba(117, 157, 166, 0.48);
+  --forest-water-line: rgba(255, 244, 193, 0.38);
+  --forest-grass: rgba(96, 140, 110, 0.48);
+  --forest-grass-deep: rgba(61, 96, 89, 0.58);
+  --forest-tree: rgba(64, 112, 92, 0.50);
+  --forest-tree-light: rgba(119, 151, 118, 0.44);
+  --forest-flower: rgba(255, 238, 130, 0.68);
+  --forest-glow: rgba(255, 235, 124, 0.44);
+  background:
+    radial-gradient(circle at 19% 14%, rgba(255, 240, 131, 0.9) 0 1.6rem, transparent 2rem),
+    radial-gradient(circle at 25% 12%, #e8d7cd 0 1.1rem, transparent 1.2rem),
+    radial-gradient(circle at 78% 18%, rgba(255, 231, 117, 0.86) 0 0.32rem, transparent 0.58rem),
+    radial-gradient(circle at 88% 28%, rgba(255, 231, 117, 0.70) 0 0.28rem, transparent 0.52rem),
+    radial-gradient(circle at 18% 36%, var(--forest-tree-light) 0 2.8rem, transparent 3.7rem),
+    radial-gradient(circle at 35% 29%, var(--forest-tree) 0 3.4rem, transparent 4.6rem),
+    radial-gradient(circle at 74% 25%, var(--forest-tree-light) 0 3.1rem, transparent 4.2rem),
+    radial-gradient(circle at 90% 35%, var(--forest-tree) 0 3.5rem, transparent 4.8rem),
+    radial-gradient(ellipse at 55% 79%, var(--forest-water-line) 0 5%, transparent 5.4% 100%),
+    radial-gradient(ellipse at 53% 78%, var(--forest-water) 0 18%, transparent 18.5% 100%),
+    radial-gradient(circle at 18% 77%, var(--forest-flower) 0 0.42rem, transparent 0.62rem),
+    radial-gradient(circle at 82% 72%, var(--forest-flower) 0 0.46rem, transparent 0.7rem),
+    radial-gradient(ellipse at 50% 100%, var(--forest-grass) 0 42%, transparent 42.5%),
+    linear-gradient(180deg, #5b637f 0%, var(--forest-sky-top) 18%, var(--forest-sky-mid) 58%, var(--forest-grass-deep) 100%);
+  background-attachment: fixed;
+  background-size: cover;
+}
+
+body.main-bg-scene .app {
+  position: relative;
+}
+
+body.main-bg-scene .app::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 22% 70%, var(--forest-glow) 0 0.38rem, transparent 0.72rem),
+    radial-gradient(circle at 76% 66%, var(--forest-glow) 0 0.32rem, transparent 0.68rem),
+    radial-gradient(circle at 69% 42%, rgba(255, 255, 255, 0.50) 0 0.22rem, transparent 0.52rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.16) 52%, rgba(255, 255, 255, 0.32));
+}
+
 body.modal-open {
   overflow: hidden;
 }
@@ -406,7 +517,6 @@ body:not(.splash-active) .launch-splash {
   font-size: clamp(48px, 14.8vw, 86px);
   font-weight: 400;
   line-height: 1;
-  text-transform: lowercase;
   letter-spacing: 0;
   text-shadow:
     0 2px 0 rgba(255, 255, 255, .95),
@@ -438,11 +548,19 @@ body:not(.splash-active) .launch-splash {
   left: 50%;
   width: clamp(82px, 20vw, 118px);
   height: clamp(126px, 31vw, 178px);
-  opacity: 0;
-  transform: translate(-135%, -278%) rotate(-7deg) scale(.92);
+  opacity: 1;
+  transform: translate(-113%, -103%) rotate(0) scale(1);
   transform-origin: 50% 82%;
   pointer-events: none;
   will-change: transform, opacity, filter;
+}
+
+.launch-red-character img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 16px 22px rgba(93, 28, 26, .2));
 }
 
 .red-character-body {
@@ -624,7 +742,7 @@ body:not(.splash-active) .launch-splash {
 }
 
 .launch-splash.is-playing .launch-red-character {
-  animation: launchRedCharacterDrop 1180ms cubic-bezier(.17, .84, .19, 1.05) 1540ms both;
+  animation: launchRedCharacterDrop 980ms cubic-bezier(.17, .84, .19, 1.05) 120ms both;
 }
 
 .launch-splash.is-playing .launch-line span {
@@ -654,6 +772,7 @@ body:not(.splash-active) .launch-splash {
 .launch-line span:nth-child(9) { --from-x: 70px; --from-y: -50px; --from-r: -7deg; }
 .launch-line span:nth-child(10) { --from-x: 82px; --from-y: 56px; --from-r: 6deg; }
 .launch-line span:nth-child(11) { --from-x: 96px; --from-y: -46px; --from-r: -8deg; }
+.launch-line span:nth-child(12) { --from-x: 108px; --from-y: 46px; --from-r: 7deg; }
 
 @keyframes launchWordmarkSettle {
   0% { transform: translateY(8px) scale(.985); }
@@ -762,7 +881,7 @@ body:not(.splash-active) .launch-splash {
 
 @keyframes launchRedCharacterDrop {
   0% {
-    opacity: 0;
+    opacity: 1;
     transform: translate(-128%, -292%) rotate(-10deg) scale(.86);
     filter: blur(6px);
   }
@@ -1298,12 +1417,36 @@ h2 {
 }
 
 .login-card {
+  position: relative;
   overflow: hidden;
   border-color: #dfe8f2;
+  padding-top: 132px;
+}
+
+.login-card::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  width: 112px;
+  height: 112px;
+  background: url("/assets/launch/red-curious.png?v=3.8.7") center / contain no-repeat;
+  filter: drop-shadow(0 16px 20px rgba(15, 23, 42, .16));
+  transform: translateX(-50%) rotate(-5deg);
+  pointer-events: none;
+}
+
+.login-card > * {
+  position: relative;
+  z-index: 1;
 }
 
 .authenticated .login-card {
   padding: 12px;
+}
+
+.authenticated .login-card::before {
+  content: none;
 }
 
 .section-title {
@@ -2268,6 +2411,17 @@ textarea:focus {
   color: #fff;
 }
 
+.calendar-day.approved {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  color: #1d4ed8;
+  cursor: pointer;
+}
+
+.calendar-day.approved small {
+  color: #2563eb;
+}
+
 .calendar-day.blocked {
   background: #fff1f2;
   border-color: #fecdd3;
@@ -3209,6 +3363,17 @@ body.logged-out .chat-popup {
   line-height: 1.35;
 }
 
+.history-row.approved {
+  border-color: #93c5fd;
+  background: linear-gradient(135deg, #eff6ff, #ffffff 70%);
+}
+
+.history-row.approved .history-main strong,
+.history-row.approved .history-time-clock,
+.history-row.approved .history-flow-arrow {
+  color: #1d4ed8;
+}
+
 .history-date {
   position: sticky;
   top: 0;
@@ -3374,6 +3539,46 @@ body.logged-out .chat-popup {
   color: #98a2b3;
   font-size: 13px;
   font-weight: 900;
+}
+
+.worklog-approval-panel {
+  width: min(420px, 100%);
+  max-height: min(78vh, 620px);
+}
+
+.worklog-approval-body {
+  padding: 0 16px 16px;
+  overflow: auto;
+}
+
+.worklog-approval-body dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.worklog-approval-body div {
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  padding: 10px;
+  background: #eff6ff;
+}
+
+.worklog-approval-body dt {
+  margin: 0 0 4px;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 1000;
+}
+
+.worklog-approval-body dd {
+  margin: 0;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: keep-all;
 }
 
 .switch {
@@ -4034,12 +4239,12 @@ body.theme-getter .fruit-send-card::before {
   right: var(--getter-bot-right);
   width: var(--getter-bot-width);
   height: var(--getter-bot-height);
-  opacity: 0.88;
+  opacity: 1;
   filter: drop-shadow(0 14px 20px rgba(0, 0, 0, 0.52));
 }
 
 body.theme-getter .fruit-send-card .fruit-card-section {
-  padding: 12px;
+  padding: 136px 12px 12px;
 }
 
 body.theme-getter .workspace-tabs {
@@ -4079,20 +4284,20 @@ body.theme-getter .fruit-send-card .fruit-send-unified {
 }
 
 body.theme-getter .fruit-send-card .fruit-send-title {
-  padding-right: 82px;
+  padding-right: 0;
 }
 
 body.theme-getter .fruit-send-title::after {
   content: "";
   position: absolute;
-  top: -32px;
-  right: 6px;
+  top: -126px;
+  right: 50%;
   z-index: 1;
-  width: 92px;
-  height: 92px;
+  width: 168px;
+  height: 168px;
   background: url("/assets/getter/getter-ledge.png") center / contain no-repeat;
-  filter: drop-shadow(0 12px 16px rgba(0, 0, 0, 0.5));
-  transform: rotate(-7deg);
+  filter: drop-shadow(0 18px 22px rgba(0, 0, 0, 0.54));
+  transform: translateX(50%) rotate(-7deg);
   pointer-events: none;
 }
 

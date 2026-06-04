@@ -53,7 +53,7 @@ public class FruitNotificationReceiver extends BroadcastReceiver {
                 if (id.isEmpty() || id.equals(lastShownId)) return;
 
                 prefs.edit().putString("lastShownNotificationId", id).apply();
-                showNotification(context, latest.optString("title", "FingerMin"), latest.optString("body", "열매 전송 내역이 있습니다."));
+                showNotification(context, latest.optString("title", "FingerSnap"), latest.optString("body", "열매 전송 내역이 있습니다."));
             } catch (Exception ignored) {
             } finally {
                 MainActivity.scheduleNotificationChecks(context);

@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#f7f9fc">
     <link rel="manifest" href="/manifest.webmanifest">
-    <link rel="apple-touch-icon" href="/icons/app-touch-icon.png?v=3.8.5">
-    <link rel="icon" href="/icons/app-icon-192.png?v=3.8.5" type="image/png">
-    <link rel="stylesheet" href="/styles.css?v=3.8.5">
-    <title>FingerMin</title>
+    <link rel="apple-touch-icon" href="/icons/app-touch-icon.png?v=3.8.7">
+    <link rel="icon" href="/icons/app-icon-192.png?v=3.8.7" type="image/png">
+    <link rel="stylesheet" href="/styles.css?v=3.8.7">
+    <title>FingerForest</title>
   </head>
   <body class="logged-out splash-active">
-    <div id="launchSplash" class="launch-splash" aria-label="FingerMin 시작 화면">
+    <div id="launchSplash" class="launch-splash" aria-label="FingerForest 시작 화면">
       <div class="launch-bg-card card-a" aria-hidden="true"></div>
       <div class="launch-bg-card card-b" aria-hidden="true"></div>
       <div class="launch-bg-card card-c" aria-hidden="true"></div>
@@ -23,13 +23,16 @@
           <span style="--i: 3">g</span>
           <span style="--i: 4">e</span>
           <span style="--i: 5">r</span>
-          <span style="--i: 6">M</span>
-          <span style="--i: 7">i</span>
-          <span style="--i: 8">n</span>
+          <span style="--i: 6">F</span>
+          <span style="--i: 7">o</span>
+          <span style="--i: 8">r</span>
+          <span style="--i: 9">e</span>
+          <span style="--i: 10">s</span>
+          <span style="--i: 11">t</span>
         </span>
       </div>
       <div class="launch-red-character" aria-hidden="true">
-        <img src="/assets/launch/red-curious.png?v=3.8.5" alt="">
+        <img src="/assets/launch/red-curious.png?v=3.8.7" alt="">
       </div>
       <div class="launch-flower flower-a" aria-hidden="true"></div>
       <div class="launch-flower flower-b" aria-hidden="true"></div>
@@ -58,7 +61,7 @@
       <section class="card login-card">
         <div class="section-title">
           <div class="login-heading">
-            <img class="login-app-icon" src="/icons/app-icon-192.png?v=3.8.5" alt="" aria-hidden="true">
+            <img class="login-app-icon" src="/icons/app-icon-192.png?v=3.8.7" alt="" aria-hidden="true">
             <h2>로그인</h2>
           </div>
         </div>
@@ -366,7 +369,7 @@
             </button>
             <div class="profile-summary">
               <span>접속자</span>
-              <strong id="profileUserName">FingerMin</strong>
+              <strong id="profileUserName">FingerForest</strong>
             </div>
             <input id="profilePhotoInput" class="profile-file-input" type="file" accept="image/*">
             <div class="profile-actions">
@@ -435,9 +438,45 @@
         </div>
       </div>
 
+      <div id="worklogApprovalModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="worklogApprovalTitle">
+        <div class="modal-panel worklog-approval-panel">
+          <div class="modal-head">
+            <div>
+              <p class="label">APPROVED</p>
+              <h2 id="worklogApprovalTitle">승인된 업무일지</h2>
+            </div>
+            <button id="worklogApprovalCloseBtn" class="icon-button" type="button" aria-label="승인 내역 닫기">닫기</button>
+          </div>
+          <div class="worklog-approval-body">
+            <dl>
+              <div>
+                <dt>날짜</dt>
+                <dd id="worklogApprovalDate">-</dd>
+              </div>
+              <div>
+                <dt>프로젝트</dt>
+                <dd id="worklogApprovalProject">-</dd>
+              </div>
+              <div>
+                <dt>업무 내용</dt>
+                <dd id="worklogApprovalContent">-</dd>
+              </div>
+              <div>
+                <dt>전달 정보</dt>
+                <dd id="worklogApprovalSeed">-</dd>
+              </div>
+              <div>
+                <dt>공식 내역</dt>
+                <dd id="worklogApprovalOfficial">-</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </div>
+
       <p id="toast" class="toast" role="status"></p>
       <footer class="app-footer">
-        <span>v3.8.5 정식버전 · by aski</span>
+        <span>v3.8.7 정식버전 · by aski</span>
         <a id="supportLink" class="support-link" href="https://qr.kakaopay.com/Ej7ruxJDq" target="_blank" rel="noopener" aria-label="카카오페이로 후원하기">후원하기</a>
       </footer>
     </main>
@@ -460,6 +499,6 @@
     <button id="chatOpenBtn" class="chat-fab" type="button" aria-label="채팅 열기">
       <span class="chat-fab-mark" aria-hidden="true"></span>
     </button>
-    <script src="/app.js?v=3.8.5"></script>
+    <script src="/app.js?v=3.8.7"></script>
   </body>
 </html>

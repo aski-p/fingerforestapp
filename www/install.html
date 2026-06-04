@@ -4,9 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#10b981">
-    <link rel="apple-touch-icon" href="/icons/app-touch-icon.png?v=3.8.5">
-    <link rel="icon" href="/icons/app-icon-192.png?v=3.8.5" type="image/png">
-    <title>FingerMin 앱 설치</title>
+    <link rel="apple-touch-icon" href="/icons/app-touch-icon.png?v=3.8.7">
+    <link rel="icon" href="/icons/app-icon-192.png?v=3.8.7" type="image/png">
+    <title>FingerForest 앱 설치</title>
     <style>
       @font-face {
         font-family: "Pretendard";
@@ -113,30 +113,30 @@
   </head>
   <body>
     <main>
-      <img class="app-icon" src="/icons/app-icon-192.png?v=3.8.5" alt="">
-      <h1>FingerMin 앱 설치</h1>
-      <div id="versionBadge" class="version">v3.8.5 정식버전 · by aski</div>
-      <p>FingerMin 자동화 앱입니다. 휴대폰에서 아래 버튼을 눌러 설치 파일을 내려받으세요.</p>
+      <img class="app-icon" src="/icons/app-icon-192.png?v=3.8.7" alt="">
+      <h1>FingerForest 앱 설치</h1>
+      <div id="versionBadge" class="version">v3.8.7 정식버전 · by aski</div>
+      <p>FingerForest 자동화 앱입니다. 휴대폰에서 아래 버튼을 눌러 설치 파일을 내려받으세요.</p>
 
       <section class="card">
         <h2>Android</h2>
         <p>APK를 다운로드한 뒤 설치를 허용하면 앱으로 실행됩니다.</p>
-        <a id="androidDownloadLink" href="/downloads/fingerfruit-android-v3.8.5.apk" download>FingerMin Android APK v3.8.5 다운로드</a>
+        <a id="androidDownloadLink" href="/downloads/fingerfruit-android-v3.8.7.apk" download>FingerForest Android APK v3.8.7 다운로드</a>
       </section>
 
       <section class="card">
         <h2>iPhone</h2>
         <p>Push 알림은 Safari에서 앱을 열고 공유 버튼의 홈 화면에 추가로 설치한 뒤 앱 안의 PUSH를 켜야 동작합니다.</p>
-        <a id="iosDownloadLink" class="secondary" href="/downloads/fingerfruit-ios-v3.8.5.mobileconfig">FingerMin iPhone 설치 파일 v3.8.5 다운로드</a>
+        <a id="iosDownloadLink" class="secondary" href="/downloads/fingerfruit-ios-v3.8.7.mobileconfig">FingerForest iPhone 설치 파일 v3.8.7 다운로드</a>
         <ol class="setup-steps" aria-label="아이폰 Push 설정법">
-          <li>설치 파일을 받은 뒤 Safari에서 FingerMin을 엽니다.</li>
+          <li>설치 파일을 받은 뒤 Safari에서 FingerForest을 엽니다.</li>
           <li>공유 버튼을 눌러 홈 화면에 추가합니다.</li>
-          <li>홈 화면의 FingerMin 앱을 실행합니다.</li>
+          <li>홈 화면의 FingerForest 앱을 실행합니다.</li>
           <li>앱 안에서 PUSH를 켜고 iPhone 알림 허용을 누릅니다.</li>
         </ol>
       </section>
 
-      <p class="note">설치 파일은 현재 열려 있는 최신 FingerMin URL로 연결됩니다.</p>
+      <p class="note">설치 파일은 현재 열려 있는 최신 FingerForest URL로 연결됩니다.</p>
     </main>
     <script>
       const versionBadge = document.getElementById("versionBadge");
@@ -149,7 +149,7 @@
         return url.toString();
       };
 
-      const iosProfilePath = "/downloads/fingerfruit-ios-v3.8.5.mobileconfig";
+      const iosProfilePath = "/downloads/fingerfruit-ios-v3.8.7.mobileconfig";
 
       androidLink.href = withFreshParam(androidLink.getAttribute("href"));
       iosLink.href = withFreshParam(iosProfilePath);

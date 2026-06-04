@@ -30,7 +30,7 @@ TICK_WAKE_PATH = DATA_DIR / "tick_worker.wake"
 TICK_HEARTBEAT_PATH = DATA_DIR / "tick_worker.heartbeat.json"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.8.5"
+APP_VERSION = "3.8.7"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
 CHAT_CONTEXT_MESSAGE_LIMIT = 8
 CHAT_HISTORY_MESSAGE_LIMIT = CHAT_CONTEXT_MESSAGE_LIMIT
@@ -51,7 +51,7 @@ CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
     "앱 아이콘에 레드 캐릭터를 나무 앞 주인공으로 반영했습니다.",
-    "시작 화면은 FingerMin 글자 표시 후 레드 캐릭터가 떨어져 앉고, 꽃이 반짝이는 순서로 재구성했습니다.",
+    "시작 화면은 FingerForest 글자 표시 후 레드 캐릭터가 떨어져 앉고, 꽃이 반짝이는 순서로 재구성했습니다.",
     "보유 씨앗이 0개이면 업무일지 예약을 막고 안내 팝업을 띄웁니다.",
     "Claude가 외부/최신 정보가 필요하다고 판단하면 검색 결과를 함께 참고해 답변합니다.",
 ]
@@ -947,7 +947,7 @@ def google_news_search(query, limit=CHAT_SEARCH_RESULT_LIMIT):
     params = urllib.parse.urlencode({"q": query, "hl": "ko", "gl": "KR", "ceid": "KR:ko"})
     request = urllib.request.Request(
         f"https://news.google.com/rss/search?{params}",
-        headers={"User-Agent": "Mozilla/5.0 FingerMin/1.0"},
+        headers={"User-Agent": "Mozilla/5.0 FingerForest/1.0"},
     )
     with urllib.request.urlopen(request, timeout=12) as response:
         root = ET.fromstring(response.read())
@@ -974,7 +974,7 @@ def bing_web_search(query, limit=CHAT_SEARCH_RESULT_LIMIT):
     params = urllib.parse.urlencode({"q": query, "setlang": "ko-KR", "cc": "KR"})
     request = urllib.request.Request(
         f"https://www.bing.com/search?{params}",
-        headers={"User-Agent": "Mozilla/5.0 FingerMin/1.0"},
+        headers={"User-Agent": "Mozilla/5.0 FingerForest/1.0"},
     )
     with urllib.request.urlopen(request, timeout=12) as response:
         page = response.read().decode("utf-8", errors="replace")
@@ -1188,7 +1188,7 @@ def claude_chat(payload, owner_key):
     context = load_chat_context(owner_key)
     history = context["recent"] or payload.get("history")
     memory_summary = context["memorySummary"]
-    save_chat_message(owner_key, "user", message, metadata={"source": "FingerMin"})
+    save_chat_message(owner_key, "user", message, metadata={"source": "FingerForest"})
     result = None
     search_data = None
     search_context = ""
@@ -1470,6 +1470,11 @@ class Handler(BaseHTTPRequestHandler):
                 elif parsed.path == "/api/worklog-projects":
                     owner_key, _session_token = self.require_session_owner()
                     self.send_json(200, {"ok": True, "result": {"projects": fruit_auto.list_worklog_projects(owner_key=owner_key)}})
+                elif parsed.path == "/api/worklog-approvals":
+                    owner_key, _session_token = self.require_session_owner()
+                    params = urllib.parse.parse_qs(parsed.query)
+                    selected_month = (params.get("month") or [""])[0]
+                    self.send_json(200, {"ok": True, "result": fruit_auto.worklog_approvals(owner_key=owner_key, month=selected_month)})
                 elif parsed.path == "/api/notifications":
                     owner_key, _session_token = self.require_session_owner()
                     self.send_json(200, {"ok": True, "result": {"items": fruit_auto.notification_items(owner_key=owner_key)}})

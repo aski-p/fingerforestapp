@@ -5,6 +5,7 @@ import hashlib
 import http.cookiejar
 import json
 import os
+import re
 import signal
 import sqlite3
 import subprocess
@@ -1230,6 +1231,14 @@ def history_date_from_month_day(month, day):
         return None
 
 
+def normalize_history_month(value=None):
+    if value:
+        text = re.sub(r"\D", "", str(value or ""))
+        if len(text) >= 6:
+            return text[:6]
+    return dt.datetime.now(KST).strftime("%Y%m")
+
+
 def observed_time_matches_history_date(value, history_date):
     observed = parse_iso(value)
     if not observed or not history_date:
@@ -1395,6 +1404,16 @@ def sync_official_seed_history_observations(owner_key, employee_id, history_date
 
     now = observed_at or now_iso()
     with history_observation_db() as conn:
+        scope_row = conn.execute(
+            """
+            SELECT bootstrapped_at
+            FROM official_seed_history_observation_scopes
+            WHERE owner_key = ? AND employee_id = ? AND history_date = ?
+            """,
+            (owner_key, employee_id, history_date),
+        ).fetchone()
+        bootstrapped_at = scope_row["bootstrapped_at"] if scope_row else None
+        bootstrap_existing_date = scope_row is None
         existing_by_fingerprint = {}
         for row in conn.execute(
             """
@@ -1436,7 +1455,7 @@ def sync_official_seed_history_observations(owner_key, employee_id, history_date
                         parse_int(sample.get("seeds"), 0),
                         parse_int(sample.get("remaining"), 0),
                         sample.get("content") or "",
-                        now,
+                        "" if bootstrap_existing_date else now,
                         now,
                     ),
                 )
@@ -1464,7 +1483,14 @@ def sync_official_seed_history_observations(owner_key, employee_id, history_date
             refreshed.setdefault(row["row_fingerprint"], []).append(row)
         for fingerprint, observed_rows in refreshed.items():
             for index, row in enumerate(observed_rows, start=1):
-                lookup[(fingerprint, index)] = row["first_seen_at"]
+                first_seen_at = row["first_seen_at"]
+                if (
+                    bootstrapped_at
+                    and first_seen_at == bootstrapped_at
+                    and row["created_at"] == bootstrapped_at
+                ):
+                    first_seen_at = ""
+                lookup[(fingerprint, index)] = first_seen_at
         return lookup
 
 
@@ -2308,6 +2334,56 @@ def history(limit=40, owner_key=None, date=None, timezone_offset_minutes=0):
         if len(rows) >= limit:
             break
     return rows
+
+
+def local_worklog_events_by_date(owner_key, month=None, limit=20000):
+    owner_key = str(owner_key or "")
+    month = normalize_history_month(month)
+    events_by_date = {}
+    for event in reversed(read_jsonl(HISTORY_PATH, limit)):
+        if event.get("action") != "worklog_sent":
+            continue
+        if str(event.get("ownerKey") or "") != owner_key:
+            continue
+        std_dt = re.sub(r"\D", "", str(event.get("stdDt") or ""))
+        if len(std_dt) != 8 or not std_dt.startswith(month):
+            continue
+        history_date = f"{std_dt[:4]}-{std_dt[4:6]}-{std_dt[6:8]}"
+        events_by_date.setdefault(history_date, event)
+    return events_by_date
+
+
+def worklog_approvals(owner_key=None, month=None):
+    owner_key = require_owner(owner_key)
+    client, _employee_info, _login_dataset, _employee, sender_employee_id, _sender_employee_name = account_login(owner_key)
+    selected_month = normalize_history_month(month)
+    content = client.post_json(f"{FOREST_API}/dwBerySeed", {"stdMt": selected_month, "empId": sender_employee_id})
+    if not isinstance(content, list):
+        raise FruitAutoError("FOREST history did not return a list")
+    local_events = local_worklog_events_by_date(owner_key, selected_month)
+    approvals = {}
+    for row in content:
+        message = row.get("tgtMsg") or ""
+        if berry_history_reward_kind(message) != "work_approval":
+            continue
+        day = parse_int(str(row.get("stdDt") or "").replace("일", ""), None)
+        history_date = history_date_from_month_day(selected_month, day)
+        if not history_date:
+            continue
+        local = local_events.get(history_date, {})
+        approvals[history_date] = {
+            "date": history_date,
+            "approved": True,
+            "projectName": local.get("projectName") or "",
+            "content": local.get("workDesc") or "",
+            "seedMessage": local.get("seedMessage") or message,
+            "seedCount": local.get("seedCount"),
+            "targetEmployeeName": local.get("targetEmployeeName") or row.get("tgtEmpNm") or "",
+            "targetEmployeeId": local.get("targetEmployeeId") or "",
+            "completedAt": local.get("completedAt") or local.get("at") or "",
+            "officialMessage": message,
+        }
+    return {"month": selected_month, "items": sorted(approvals.values(), key=lambda item: item["date"])}
 
 
 def notification_items(limit=20, owner_key=None):
@@ -3615,8 +3691,6 @@ def prune_expired_schedule_dates(dates, schedule_time, account=None, now=None):
         scheduled = dt.datetime.combine(day, dt.time(hour, minute), tzinfo=KST)
         if scheduled <= local_now:
             continue
-        if worklog_already_completed_for_day(account, day):
-            continue
         if text not in result:
             result.append(text)
     return result
@@ -3949,8 +4023,11 @@ def save_worklog_once(owner_key=None, run_date=None, force=False):
             "completedAt": now_iso(),
             "projectId": state.get("worklogProjectId"),
             "projectName": state.get("worklogProjectName"),
+            "workDesc": state.get("worklogContent"),
             "seedCount": seed_count,
+            "seedMessage": state.get("worklogSeedMessage") or "",
             "targetEmployeeId": state.get("worklogTargetEmployeeId"),
+            "targetEmployeeName": state.get("worklogTargetEmployeeName"),
         }
         log_event(event)
         append_jsonl(HISTORY_PATH, event)

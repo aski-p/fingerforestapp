@@ -16,13 +16,20 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.8.5";
+const appVersion = "3.8.7";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
 const apiTimeoutMs = 8000;
 const chatApiTimeoutMs = 70000;
 const recentNotificationWindowMs = 2 * 60 * 1000;
+const mainBackgroundClasses = [
+  "main-bg-forest-spring",
+  "main-bg-forest-summer",
+  "main-bg-forest-autumn",
+  "main-bg-forest-winter",
+  "main-bg-forest-sleep",
+];
 let latestAppInfo = null;
 let releaseNotesShownThisSession = false;
 let rankingKind = "berry";
@@ -161,6 +168,7 @@ let worklogProjects = [];
 let selectedWorklogDates = [];
 let selectedWorklogDays = [];
 let calendarDraftDates = [];
+let worklogApprovalsByDate = {};
 let worklogCalendarMonth = new Date();
 let pendingWorklogTarget = null;
 let worklogDraftDirty = false;
@@ -379,6 +387,41 @@ function startLaunchSplashAnimation() {
   });
 }
 
+function koreanDateParts(date = new Date()) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Seoul",
+      month: "numeric",
+      hour: "numeric",
+      hourCycle: "h23",
+    }).formatToParts(date);
+    return {
+      month: Number(parts.find((part) => part.type === "month")?.value || date.getMonth() + 1),
+      hour: Number(parts.find((part) => part.type === "hour")?.value || date.getHours()),
+    };
+  } catch (_err) {
+    return {
+      month: date.getMonth() + 1,
+      hour: date.getHours(),
+    };
+  }
+}
+
+function currentMainBackgroundClass(date = new Date()) {
+  const { month, hour } = koreanDateParts(date);
+  if (hour >= 0 && hour < 9) return "main-bg-forest-sleep";
+  if (month >= 3 && month <= 5) return "main-bg-forest-spring";
+  if (month >= 6 && month <= 8) return "main-bg-forest-summer";
+  if (month >= 9 && month <= 11) return "main-bg-forest-autumn";
+  return "main-bg-forest-winter";
+}
+
+function updateMainBackground() {
+  document.body.classList.add("main-bg-scene");
+  document.body.classList.remove(...mainBackgroundClasses);
+  document.body.classList.add(currentMainBackgroundClass());
+}
+
 function normalizeBaseUrl(value) {
   return String(value || "").trim().replace(/\/+$/, "");
 }
@@ -592,11 +635,11 @@ function applyAvatar(button, initialEl, label, photoUrl = getProfilePhoto()) {
 }
 
 function currentProfileLabel() {
-  return $("profileUserName")?.textContent || currentState.senderEmployeeName || currentState.loginUser || "FingerMin";
+  return $("profileUserName")?.textContent || currentState.senderEmployeeName || currentState.loginUser || "FingerForest";
 }
 
 function updateProfileUi(label, unlocked = isUnlocked(), photoUrl = getProfilePhoto()) {
-  const displayLabel = unlocked ? label || "사용자" : "FingerMin";
+  const displayLabel = unlocked ? label || "사용자" : "FingerForest";
   const displayPhoto = unlocked ? photoUrl : "";
   document.body.classList.toggle("logged-out", !unlocked);
   const heroTitleText = $("heroTitleText");
@@ -968,7 +1011,7 @@ async function ensureWebPushSubscription() {
 
 async function showDeviceNotification(item) {
   if (!item || !item.id) return false;
-  const title = item.title || "FingerMin";
+  const title = item.title || "FingerForest";
   const body = item.body || "새 열매 수신 내역이 있습니다.";
   try {
     if (window.FruitAndroid?.showNotification) {
@@ -985,8 +1028,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.8.5",
-        badge: "/icons/app-icon-192.png?v=3.8.5",
+        icon: "/icons/app-icon-192.png?v=3.8.7",
+        badge: "/icons/app-icon-192.png?v=3.8.7",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1141,8 +1184,6 @@ function parseLocalDateValue(value) {
 function worklogBlockedDateReason(value) {
   const date = parseLocalDateValue(value);
   if (!date) return "날짜 오류";
-  const completedDate = String(currentState.worklogLastRunKey || "").split("T", 1)[0];
-  if (completedDate && completedDate === value) return "이미 전송 완료";
   const day = date.getDay();
   if (day === 0) return "주말";
   if (day === 6) return "주말";
@@ -1151,6 +1192,25 @@ function worklogBlockedDateReason(value) {
 
 function isWorklogAllowedDate(value) {
   return !worklogBlockedDateReason(value);
+}
+
+function worklogApprovalForDate(value) {
+  return worklogApprovalsByDate?.[value] || null;
+}
+
+async function refreshWorklogApprovalsForMonth(date = worklogCalendarMonth) {
+  if (!isUnlocked()) return;
+  try {
+    const query = new URLSearchParams({ month: monthValue(date) });
+    const data = await api(`/api/worklog-approvals?${query.toString()}`);
+    worklogApprovalsByDate = {};
+    (data.items || []).forEach((item) => {
+      if (item.date) worklogApprovalsByDate[item.date] = item;
+    });
+  } catch (err) {
+    worklogApprovalsByDate = {};
+    toast(`승인 내역 조회 실패: ${err.message}`);
+  }
 }
 
 function scheduledWorklogDateTime(dateValue, timeValue) {
@@ -1168,6 +1228,23 @@ function scheduledWorklogDateTime(dateValue, timeValue) {
   );
 }
 
+function nextWorklogScheduleTimeValue(now = new Date()) {
+  const next = new Date(now.getTime() + 5 * 60 * 1000);
+  next.setSeconds(0, 0);
+  const roundedMinutes = Math.ceil(next.getMinutes() / 5) * 5;
+  next.setMinutes(roundedMinutes);
+  return `${String(next.getHours()).padStart(2, "0")}:${String(next.getMinutes()).padStart(2, "0")}`;
+}
+
+function ensureWorklogTimeAllowsSelectedToday() {
+  const today = localDateValue(new Date());
+  if (!calendarDraftDates.includes(today)) return false;
+  const scheduled = scheduledWorklogDateTime(today, $("worklogTimeInput").value || "09:05");
+  if (!scheduled || scheduled > new Date()) return false;
+  $("worklogTimeInput").value = nextWorklogScheduleTimeValue();
+  return true;
+}
+
 function fmtHistorySelectedDate(value) {
   if (!value) return "날짜 선택";
   const [year, month, day] = String(value).split("-").map((part) => Number(part));
@@ -1179,6 +1256,10 @@ function fmtHistorySelectedDate(value) {
     day: "numeric",
     weekday: "short",
   });
+}
+
+function monthValue(date) {
+  return `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function syncHistoryDateControls() {
@@ -1212,6 +1293,10 @@ function historyTimeMarkup(item) {
   const timeValue = item.at;
   if (!timeValue) return `<span class="history-time-label">${escapeHtml(label)}</span>`;
   return `<span class="history-time-label">${escapeHtml(label)}</span><span class="history-time-clock">${escapeHtml(fmtTime(timeValue))}</span>`;
+}
+
+function isApprovedHistory(item) {
+  return item?.rewardKind === "work_approval" || String(item?.content || "").includes("업무 승인");
 }
 
 function fmtNumber(value) {
@@ -1460,29 +1545,35 @@ function renderWorklogCalendar() {
     const parsedDate = parseLocalDateValue(date);
     const isWeekend = parsedDate ? parsedDate.getDay() === 0 || parsedDate.getDay() === 6 : false;
     const holidayName = koreanPublicHolidays[date] || "";
+    const approval = worklogApprovalForDate(date);
     const blockedReason = worklogBlockedDateReason(date);
     const button = document.createElement("button");
     button.type = "button";
     button.className = [
       "calendar-day",
       calendarDraftDates.includes(date) ? "selected" : "",
+      approval ? "approved" : "",
       date === todayValue ? "today" : "",
       blockedReason ? "blocked" : "",
       isWeekend ? "weekend" : "",
       holidayName ? "holiday" : "",
     ].filter(Boolean).join(" ");
-    const label = holidayName || (isWeekend ? "휴무" : "");
+    const label = approval ? "승인" : holidayName || (isWeekend ? "휴무" : "");
     button.innerHTML = `
       <span class="calendar-day-number">${day}</span>
       ${label ? `<small>${escapeHtml(label)}</small>` : ""}
     `;
     button.setAttribute("aria-pressed", calendarDraftDates.includes(date) ? "true" : "false");
-    if (blockedReason) {
+    if (blockedReason && !approval) {
       button.disabled = true;
       button.title = blockedReason;
       button.setAttribute("aria-label", `${date} ${blockedReason} 업무일지 작성 불가`);
     }
     button.addEventListener("click", () => {
+      if (approval) {
+        openWorklogApprovalModal(approval);
+        return;
+      }
       if (blockedReason) {
         toast(`${date}은(는) ${blockedReason}이라 업무일지를 예약할 수 없습니다.`);
         return;
@@ -1496,13 +1587,14 @@ function renderWorklogCalendar() {
   }
 }
 
-function openWorklogCalendar() {
+async function openWorklogCalendar() {
   calendarDraftDates = selectedWorklogDates.filter(isWorklogAllowedDate);
   selectedWorklogDates = calendarDraftDates;
   renderWorklogDates();
   const anchor = calendarDraftDates[0] || localDateValue(new Date());
   const [year, month] = anchor.split("-").map(Number);
   worklogCalendarMonth = new Date(year || new Date().getFullYear(), (month || new Date().getMonth() + 1) - 1, 1);
+  await refreshWorklogApprovalsForMonth(worklogCalendarMonth);
   renderWorklogCalendar();
   $("worklogCalendarModal").classList.remove("hidden");
   document.body.classList.add("modal-open");
@@ -1519,6 +1611,25 @@ function openSuccessModal(title, message, ok = true) {
   $("worklogSuccessModal").classList.toggle("is-warn", !ok);
   $("worklogSuccessModal").classList.remove("hidden");
   document.body.classList.add("modal-open");
+}
+
+function openWorklogApprovalModal(approval) {
+  $("worklogApprovalDate").textContent = fmtHistorySelectedDate(approval.date);
+  $("worklogApprovalProject").textContent = approval.projectName || "-";
+  $("worklogApprovalContent").textContent = approval.content || "저장된 업무일지 본문이 없습니다.";
+  $("worklogApprovalSeed").textContent = [
+    approval.seedCount ? `씨앗 ${fmtNumber(approval.seedCount)}개` : "",
+    approval.targetEmployeeName ? `수신 ${approval.targetEmployeeName}` : "",
+    approval.seedMessage ? `메시지: ${approval.seedMessage}` : "",
+  ].filter(Boolean).join(" · ") || "-";
+  $("worklogApprovalOfficial").textContent = approval.officialMessage || "승인 완료";
+  $("worklogApprovalModal").classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+
+function closeWorklogApprovalModal() {
+  $("worklogApprovalModal").classList.add("hidden");
+  syncModalOpenState();
 }
 
 function openWorklogSuccessModal(projectName = "") {
@@ -2067,7 +2178,7 @@ function renderHistory(items) {
       lastDate = itemDate;
     }
     const row = document.createElement("div");
-    row.className = `history-row ${item.action === "received" ? "received" : "sent"}`;
+    row.className = `history-row ${item.action === "received" ? "received" : "sent"}${isApprovedHistory(item) ? " approved" : ""}`;
     const berryText = item.remaining !== null && item.remaining !== undefined
       ? `${fmtNumber(item.seeds)}/${fmtNumber(item.remaining)}`
       : item.berries !== null && item.berries !== undefined
@@ -2495,7 +2606,7 @@ function closeProfileModal() {
   if (isUnlocked()) {
     renderState(currentState);
   } else {
-    updateProfileUi("FingerMin", false, "");
+    updateProfileUi("FingerForest", false, "");
   }
   syncModalOpenState();
 }
@@ -2630,6 +2741,10 @@ function closeTopModal() {
   }
   if (isModalVisible("worklogSuccessModal")) {
     closeWorklogSuccessModal();
+    return true;
+  }
+  if (isModalVisible("worklogApprovalModal")) {
+    closeWorklogApprovalModal();
     return true;
   }
   if (isModalVisible("profileModal")) {
@@ -2952,11 +3067,15 @@ $("worklogCalendarModal").addEventListener("click", (event) => {
 });
 $("worklogCalendarPrevBtn").addEventListener("click", () => {
   worklogCalendarMonth = new Date(worklogCalendarMonth.getFullYear(), worklogCalendarMonth.getMonth() - 1, 1);
-  renderWorklogCalendar();
+  refreshWorklogApprovalsForMonth(worklogCalendarMonth).finally(renderWorklogCalendar);
 });
 $("worklogCalendarNextBtn").addEventListener("click", () => {
   worklogCalendarMonth = new Date(worklogCalendarMonth.getFullYear(), worklogCalendarMonth.getMonth() + 1, 1);
-  renderWorklogCalendar();
+  refreshWorklogApprovalsForMonth(worklogCalendarMonth).finally(renderWorklogCalendar);
+});
+$("worklogApprovalCloseBtn").addEventListener("click", closeWorklogApprovalModal);
+$("worklogApprovalModal").addEventListener("click", (event) => {
+  if (event.target === $("worklogApprovalModal")) closeWorklogApprovalModal();
 });
 $("worklogCalendarResetBtn").addEventListener("click", () => {
   calendarDraftDates = [];
@@ -2965,9 +3084,13 @@ $("worklogCalendarResetBtn").addEventListener("click", () => {
 });
 $("worklogCalendarApplyBtn").addEventListener("click", () => {
   selectedWorklogDates = calendarDraftDates.filter(isWorklogAllowedDate).sort();
+  const adjustedTodayTime = ensureWorklogTimeAllowsSelectedToday();
   markWorklogDraftDirty();
   renderWorklogDates();
   closeWorklogCalendar();
+  if (adjustedTodayTime) {
+    toast(`오늘 예약 시간이 지나서 ${$("worklogTimeInput").value}로 맞췄습니다.`);
+  }
 });
 
 document.querySelectorAll("[data-workspace-slide]").forEach((button) => {
@@ -3232,11 +3355,12 @@ $("chatInput").addEventListener("blur", () => {
 
 async function initApp() {
   try {
+    updateMainBackground();
     initializeAppearanceSettings();
     renderAppearanceOptions();
     if (await checkAppVersion()) return;
     await restoreSavedLoginIfNeeded();
-    updateProfileUi("FingerMin", false);
+    updateProfileUi("FingerForest", false);
     renderState({});
     renderCachedState();
     await refresh({ silent: true, forceBalance: true });
@@ -3249,6 +3373,7 @@ async function initApp() {
 
 startLaunchSplashAnimation();
 initApp();
+setInterval(updateMainBackground, 60 * 1000);
 setInterval(() => refresh({ silent: true }), 30000);
 setInterval(() => checkReceivedNotifications({ silent: true }), 15000);
 setTimeout(() => checkReceivedNotifications({ silent: true }), 2500);

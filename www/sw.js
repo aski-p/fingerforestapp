@@ -5,13 +5,13 @@ self.addEventListener("push", (event) => {
   } catch (_error) {
     data = {};
   }
-  const title = data.title || "FingerMin";
+  const title = data.title || "FingerForest";
   const options = {
     body: data.body || "새 알림이 있습니다.",
     tag: data.tag || "fruit-auto",
     renotify: false,
-    icon: "/icons/app-icon-192.png?v=3.8.5",
-    badge: "/icons/app-icon-192.png?v=3.8.5",
+    icon: "/icons/app-icon-192.png?v=3.8.7",
+    badge: "/icons/app-icon-192.png?v=3.8.7",
     data: {
       url: data.url || "/",
     },

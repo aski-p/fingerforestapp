@@ -23,7 +23,7 @@ import android.webkit.WebViewClient;
 
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST_CODE = 20260529;
-    private static final String APP_VERSION = "3.8.5";
+    private static final String APP_VERSION = "3.8.7";
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
     private static final String APP_URL = "https://web-production-011c4.up.railway.app/?token=IV2d0ecXO9X50cJvmOHb-lI7wCSRiFji";
@@ -293,7 +293,7 @@ public class MainActivity extends Activity {
         public void showNotification(String title, String body) {
             FruitNotificationReceiver.showNotification(
                 context,
-                title == null ? "FingerMin" : title,
+                title == null ? "FingerSnap" : title,
                 body == null ? "열매 수신 내역이 있습니다." : body
             );
         }
