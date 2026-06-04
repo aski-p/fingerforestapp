@@ -30,7 +30,7 @@ TICK_WAKE_PATH = DATA_DIR / "tick_worker.wake"
 TICK_HEARTBEAT_PATH = DATA_DIR / "tick_worker.heartbeat.json"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.10.3"
+APP_VERSION = "3.10.4"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
 CHAT_CONTEXT_MESSAGE_LIMIT = 8
 CHAT_HISTORY_MESSAGE_LIMIT = CHAT_CONTEXT_MESSAGE_LIMIT
@@ -50,6 +50,7 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "로그인 화면 상단에 FingerForest 로고를 추가하고 로그인 카드를 아래로 내려 배경 여백을 정리했습니다.",
     "열매 자동전송 대상을 여러 명 추가해 순서대로 순환 전송할 수 있게 했고, 사이클 카드에서 X 버튼으로 개별 제외할 수 있습니다.",
     "씨앗선물 받은 내역은 5분 체크에서 잡힌 열매 +3 관측 시각을 기준으로 실제 선물 시각을 보정합니다.",
     "로그인 화면 제목 옆 마스코트 아이콘을 제거하고 시작 캐릭터 낙하 애니메이션을 더 부드럽게 조정했습니다.",
