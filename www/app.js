@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.12.3";
+const appVersion = "3.12.4";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1065,8 +1065,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.12.3",
-        badge: "/icons/app-icon-192.png?v=3.12.3",
+        icon: "/icons/app-icon-192.png?v=3.12.4",
+        badge: "/icons/app-icon-192.png?v=3.12.4",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1590,14 +1590,31 @@ function renderTargetCycle(state) {
     const ring = document.createElement("div");
     ring.className = "cycle-ring";
     ring.setAttribute("aria-hidden", "true");
+    const segmentSize = 360 / cycle.length;
+    const activeStartAngle = -90 + segmentSize * currentIndex;
+    const activeEndAngle = activeStartAngle + segmentSize;
+    const cycleArcPoint = (angleDeg) => {
+      const rad = angleDeg * (Math.PI / 180);
+      return {
+        x: 100 + Math.cos(rad) * 82,
+        y: 100 + Math.sin(rad) * 82,
+      };
+    };
+    const activeStart = cycleArcPoint(activeStartAngle);
+    const activeEnd = cycleArcPoint(activeEndAngle);
+    const activePath = `M${activeStart.x.toFixed(2)} ${activeStart.y.toFixed(2)} A82 82 0 0 1 ${activeEnd.x.toFixed(2)} ${activeEnd.y.toFixed(2)}`;
     ring.innerHTML = `
       <svg viewBox="0 0 200 200" focusable="false">
         <defs>
           <marker id="cycleArrowHead" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto">
             <path d="M1,1 L7,4 L1,7 Z"></path>
           </marker>
+          <marker id="cycleActiveArrowHead" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto">
+            <path d="M1,1 L7,4 L1,7 Z"></path>
+          </marker>
         </defs>
         <path class="cycle-ring-path" d="M100 18 A82 82 0 1 1 99.9 18" marker-end="url(#cycleArrowHead)"></path>
+        <path class="cycle-ring-active-path" d="${activePath}" marker-end="url(#cycleActiveArrowHead)"></path>
       </svg>
     `;
     flow.appendChild(ring);

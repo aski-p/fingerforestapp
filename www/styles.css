@@ -335,7 +335,7 @@ body.main-bg-forest-spring {
 }
 
 body.main-bg-forest-summer {
-  --season-bg: url("/assets/seasons/forest-summer.jpg?v=3.12.3");
+  --season-bg: url("/assets/seasons/forest-summer.jpg?v=3.12.4");
 }
 
 body.main-bg-forest-autumn {
@@ -1775,6 +1775,19 @@ textarea:focus {
 
 .cycle-ring marker path {
   fill: #d99a00;
+}
+
+.cycle-ring-active-path {
+  fill: none;
+  stroke: #ef4444;
+  stroke-width: 9;
+  stroke-linecap: round;
+  stroke-dasharray: 16 11;
+  filter: drop-shadow(0 6px 10px rgba(185, 28, 28, 0.28));
+}
+
+#cycleActiveArrowHead path {
+  fill: #ef4444;
 }
 
 .cycle-empty {
