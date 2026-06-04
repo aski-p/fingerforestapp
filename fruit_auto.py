@@ -34,6 +34,7 @@ DEFAULT_TICK_MAX_OWNERS = 50
 DEFAULT_RUN_INTERVAL_MINUTES = 5
 MIN_RUN_INTERVAL_MINUTES = 5
 MAX_RUN_INTERVAL_MINUTES = 60
+COMMON_OBSERVE_INTERVAL_SECONDS = 5 * 60
 WAKE_REQUESTED = False
 QUIET_LOG_ACTIONS = {"balance", "check"}
 SESSION_SCHEMA_VERSION = 4
@@ -60,6 +61,8 @@ DEFAULT_STATE = {
     "lastAttemptResult": None,
     "lastNoBerriesAt": None,
     "lastNoBerriesLogAt": None,
+    "lastCommonObservedAt": None,
+    "lastCommonObserveResult": None,
     "pendingReceivedAt": None,
     "pendingBerryCount": None,
     "pendingTargetEmployeeId": None,
@@ -1284,6 +1287,17 @@ def is_seed_history_message(value):
     return "씨앗" in str(value or "")
 
 
+def berry_history_reward_kind(value):
+    text = str(value or "")
+    if "칭찬" in text:
+        return "praise"
+    if "업무" in text and "승인" in text:
+        return "work_approval"
+    if "승인" in text:
+        return "approval"
+    return "gift"
+
+
 def parse_seed_berry_counts(value):
     parts = str(value or "0/0").split("/")
     berries = parse_int(parts[0] if len(parts) > 0 else 0)
@@ -1522,7 +1536,7 @@ def sync_official_history_observations(owner_key, employee_id, history_date, row
                         parse_int(sample.get("remaining"), 0),
                         parse_int(sample.get("seeds"), 0),
                         sample.get("content") or "",
-                        bootstrap_first_seen_at if bootstrap_existing_date else now,
+                        None if bootstrap_existing_date else now,
                         now,
                     ),
                 )
@@ -1736,7 +1750,7 @@ def official_received_history_rows(client, owner_key, employee_id, employee_name
             "remaining": fruit_count,
             "delta": delta,
             "content": row.get("tgtMsg") or "[열매선물]",
-            "source": "forest",
+            "source": f"forest_{berry_history_reward_kind(row.get('tgtMsg'))}",
         }
         item["_officialFingerprint"] = official_history_fingerprint(item)
         rows.append(item)
@@ -2095,7 +2109,8 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
                 "remaining": fruit_count,
                 "delta": delta,
                 "content": content_message,
-                "source": "forest_seed" if is_seed_history else "forest",
+                "source": "forest_seed" if is_seed_history else f"forest_{berry_history_reward_kind(content_message)}",
+                "rewardKind": "seed" if is_seed_history else berry_history_reward_kind(content_message),
                 "historyKind": "seed" if is_seed_history else "berry",
         }
         if is_seed_history:
@@ -2124,6 +2139,7 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
             first_seen_at = lookup.get((fingerprint, occurrence_by_fingerprint[fingerprint]))
             if first_seen_at and observed_time_matches_history_date(first_seen_at, row.get("historyDate")):
                 row["observedAt"] = first_seen_at
+                row["at"] = first_seen_at
                 row["_matchedTimeSource"] = "seed_observed"
     berry_rows_by_date = {}
     for row in rows:
@@ -2141,8 +2157,9 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
             fingerprint = row.get("_officialFingerprint")
             occurrence_by_fingerprint[fingerprint] = occurrence_by_fingerprint.get(fingerprint, 0) + 1
             first_seen_at = lookup.get((fingerprint, occurrence_by_fingerprint[fingerprint]))
-            if first_seen_at:
+            if first_seen_at and observed_time_matches_history_date(first_seen_at, row.get("historyDate")):
                 row["observedAt"] = first_seen_at
+                row["at"] = first_seen_at
                 row["_matchedTimeSource"] = "observed_db"
     for row in rows:
         if not row.get("at"):
@@ -2489,6 +2506,8 @@ def check_once(dry_run=False, force=False):
                 "lastSeedCount": seeds,
                 "lastBerryCount": berries,
                 "balanceCheckedAt": now_iso(),
+                "lastCommonObservedAt": attempt_at.isoformat(),
+                "lastCommonObserveResult": "transfer_check",
             }
         )
 
@@ -3200,6 +3219,70 @@ def logout(owner_key=None, session_token=None):
     return state
 
 
+def common_observe_delay(account, now=None):
+    now = now or dt.datetime.now(dt.timezone.utc)
+    last_observed = parse_iso(account.get("lastCommonObservedAt"))
+    if last_observed is None:
+        return 0
+    return max(0, int((last_observed + dt.timedelta(seconds=COMMON_OBSERVE_INTERVAL_SECONDS) - now).total_seconds()))
+
+
+def common_observe_due(account, now=None):
+    return common_observe_delay(account, now) <= 0
+
+
+def observe_received_history(owner_key=None, force=False):
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+    if not force and not common_observe_due(state, now):
+        return {
+            "action": "skipped",
+            "reason": "common_observe_not_due",
+            "ownerKey": owner_key,
+            "remainingSeconds": common_observe_delay(state, now),
+        }
+
+    client, _employee_info, _login_dataset, employee, sender_employee_id, sender_employee_name = account_login(owner_key)
+    seeds, berries = current_seed_fruit(client, employee)
+    received_events = record_received_history_from_official(
+        client,
+        owner_key,
+        sender_employee_id,
+        sender_employee_name,
+        employee_position(employee),
+        now,
+        window_seconds=COMMON_OBSERVE_INTERVAL_SECONDS + 120,
+    )
+    state.update(
+        {
+            "senderEmployeeId": sender_employee_id,
+            "senderEmployeeName": sender_employee_name,
+            "senderPositionName": employee_position(employee),
+            "lastSeedCount": seeds,
+            "lastBerryCount": berries,
+            "balanceCheckedAt": now.isoformat(),
+            "lastCommonObservedAt": now.isoformat(),
+            "lastCommonObserveResult": f"received_{len(received_events)}",
+            "updatedAt": now.isoformat(),
+        }
+    )
+    if received_events:
+        state["lastReceivedHistoryAt"] = received_events[0].get("at")
+        state["lastReceivedHistoryCount"] = len(received_events)
+    save_account_state(owner_key, state)
+    for received_event in received_events:
+        notify_web_push(received_notification_payload(received_event), [owner_key])
+    return {
+        "action": "observed",
+        "ownerKey": owner_key,
+        "seeds": seeds,
+        "berries": berries,
+        "receivedEvents": len(received_events),
+        "observedAt": now.isoformat(),
+    }
+
+
 def check_once(dry_run=False, force=False, owner_key=None):
     owner_key = require_owner(owner_key)
     state = get_account_state(owner_key)
@@ -3326,8 +3409,8 @@ def check_once(dry_run=False, force=False, owner_key=None):
             sender_employee_id,
             sender_employee_name,
             employee_position(employee),
-            pending_received_at,
-            window_seconds=interval_seconds + 120,
+            attempt_at,
+            window_seconds=COMMON_OBSERVE_INTERVAL_SECONDS + 120,
         )
         balance_received_event = None
         if not received_events:
@@ -3992,6 +4075,11 @@ def scheduled_owner_keys():
         if owner_key not in secrets.get("accounts", {}):
             continue
         account_due = False
+        delay = common_observe_delay(account, now)
+        if delay <= 0:
+            account_due = True
+        elif next_delay is None or delay < next_delay:
+            next_delay = delay
         if account.get("enabled"):
             delay = account_next_run_delay(account, now)
             if delay <= 0:
@@ -4048,7 +4136,11 @@ def run_daemon():
             for owner_key in owners:
                 try:
                     account = get_account_state(owner_key)
-                    if account.get("enabled") and account_next_run_delay(account) <= 0:
+                    transfer_due = account.get("enabled") and account_next_run_delay(account) <= 0
+                    if common_observe_due(account) and not transfer_due:
+                        result = observe_received_history(owner_key=owner_key)
+                        log_event({"action": "daemon_common_observe", "ownerKey": owner_key, "result": result})
+                    if transfer_due:
                         result = check_once(owner_key=owner_key)
                         if result.get("reason") != "already_attempted_this_interval":
                             log_event({"action": "daemon_tick", "ownerKey": owner_key, "result": result})
@@ -4092,7 +4184,12 @@ def run_tick():
             processed_owners.append(owner_key)
             try:
                 account = get_account_state(owner_key)
-                if account.get("enabled") and account_next_run_delay(account) <= 0:
+                transfer_due = account.get("enabled") and account_next_run_delay(account) <= 0
+                if common_observe_due(account) and not transfer_due:
+                    result = observe_received_history(owner_key=owner_key)
+                    results.append(result)
+                    log_event({"action": "tick_common_observe", "ownerKey": owner_key, "result": result})
+                if transfer_due:
                     result = check_once(owner_key=owner_key)
                     results.append(result)
                     if result.get("reason") != "already_attempted_this_interval":
