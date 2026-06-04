@@ -1975,10 +1975,10 @@ def employee_hint_from_event(event, action):
     }
 
 
-def reliable_history_event_time(event):
+def reliable_history_event_time(event, is_seed_history=False):
     if not event or not event.get("at"):
         return None
-    if event.get("timeSource") in {"official_observed"}:
+    if event.get("timeSource") in {"official_observed"} and not is_seed_history:
         return None
     return event.get("at")
 
@@ -2023,6 +2023,14 @@ def match_official_history_event(local_events, used_indexes, action, counterpart
             event_counterpart = event.get("senderEmployeeName") or event.get("sender")
             if str(event.get("targetEmployeeId") or "") != str(event.get("_historyEmployeeId") or ""):
                 continue
+        if is_seed_history and not sent_by_me and event.get("timeSource") in {"balance_detected", "official_observed"}:
+            event_amount = parse_int(event.get("seedDelta"), None)
+            if event_amount is None:
+                event_amount = parse_int(event.get("berries"), None)
+            if event_amount != berries:
+                continue
+            used_indexes.add(used_key)
+            return event
         if str(event_counterpart or "") != str(counterpart or ""):
             if sent_by_me:
                 continue
@@ -2219,7 +2227,7 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
             to_avatar_name = counterpart
         history_date = history_date_from_month_day(month, day)
         item = {
-                "at": reliable_history_event_time(matched_event),
+                "at": reliable_history_event_time(matched_event, is_seed_history=is_seed_history),
                 "_matchedTimeSource": matched_event.get("timeSource") if matched_event else None,
                 "_apiIndex": api_index,
                 "displayTime": row.get("stdDt") or "",
@@ -2281,7 +2289,7 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
             fingerprint = row.get("_officialSeedFingerprint")
             occurrence_by_fingerprint[fingerprint] = occurrence_by_fingerprint.get(fingerprint, 0) + 1
             first_seen_at = lookup.get((fingerprint, occurrence_by_fingerprint[fingerprint]))
-            if first_seen_at and observed_time_matches_history_date(first_seen_at, row.get("historyDate")):
+            if row.get("action") != "received" and first_seen_at and observed_time_matches_history_date(first_seen_at, row.get("historyDate")):
                 row["observedAt"] = first_seen_at
                 row["_matchedTimeSource"] = "seed_observed"
     berry_rows_by_date = {}

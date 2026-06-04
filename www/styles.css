@@ -335,7 +335,7 @@ body.main-bg-forest-spring {
 }
 
 body.main-bg-forest-summer {
-  --season-bg: url("/assets/seasons/forest-summer.jpg?v=3.11.3");
+  --season-bg: url("/assets/seasons/forest-summer.jpg?v=3.11.5");
 }
 
 body.main-bg-forest-autumn {
@@ -446,37 +446,6 @@ body.main-bg-scene .launch-splash::before {
   filter: none;
   opacity: 1;
   transform: none;
-}
-
-.launch-bg-card {
-  position: absolute;
-  border: 1px solid rgba(14, 148, 99, .12);
-  border-radius: 24px;
-  background: color-mix(in srgb, var(--surface) 58%, transparent);
-  box-shadow: 0 18px 44px color-mix(in srgb, var(--shadow) 75%, transparent);
-  filter: blur(8px);
-  opacity: .55;
-}
-
-.launch-bg-card.card-a {
-  top: 17%;
-  left: 11%;
-  width: min(56vw, 300px);
-  height: 118px;
-}
-
-.launch-bg-card.card-b {
-  right: 8%;
-  top: 39%;
-  width: min(48vw, 260px);
-  height: 172px;
-}
-
-.launch-bg-card.card-c {
-  left: 16%;
-  bottom: 17%;
-  width: min(62vw, 340px);
-  height: 136px;
 }
 
 .launch-wordmark {
