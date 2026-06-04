@@ -2093,7 +2093,6 @@ def pair_official_history_transfer_times(rows):
 
 
 def infer_official_history_times(rows):
-    observe_interval = get_history_observe_interval_seconds()
     for seed in rows:
         if seed.get("historyKind") != "seed":
             continue
@@ -2104,10 +2103,10 @@ def infer_official_history_times(rows):
         observed_at = parse_iso(seed.get("observedAt"))
         if not observed_at:
             continue
-        inferred_at = (observed_at - dt.timedelta(seconds=observe_interval)).replace(microsecond=0)
-        seed["at"] = inferred_at.isoformat()
+        detected_at = observed_at.replace(microsecond=0)
+        seed["at"] = detected_at.isoformat()
         seed["inferredFromSeedObservedAt"] = observed_at.replace(microsecond=0).isoformat()
-        seed["timeSource"] = "seed_inferred_from_observed_seed"
+        seed["timeSource"] = "seed_detected_from_observed_seed"
     return rows
 
 
