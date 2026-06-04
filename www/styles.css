@@ -399,15 +399,13 @@ body:not(.splash-active) .launch-splash {
   position: relative;
   z-index: 3;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: .015em;
   color: var(--accent-bright);
   font-family: "Jua", "Gugi", "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: clamp(62px, 17vw, 122px);
+  font-size: clamp(48px, 14.8vw, 86px);
   font-weight: 400;
-  line-height: .86;
+  line-height: 1;
   text-transform: lowercase;
   letter-spacing: 0;
   text-shadow:
@@ -420,8 +418,9 @@ body:not(.splash-active) .launch-splash {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: .025em;
-  min-height: .86em;
+  gap: 0;
+  min-height: 1em;
+  white-space: nowrap;
 }
 
 .launch-line span {
@@ -482,17 +481,17 @@ body:not(.splash-active) .launch-splash {
   animation-delay: 1230ms, 1660ms;
 }
 
-.launch-line:first-child span:nth-child(1) { --from-x: -58px; --from-y: -42px; --from-r: -9deg; }
-.launch-line:first-child span:nth-child(2) { --from-x: -22px; --from-y: 52px; --from-r: 7deg; }
-.launch-line:first-child span:nth-child(3) { --from-x: -18px; --from-y: -58px; --from-r: -5deg; }
-.launch-line:first-child span:nth-child(4) { --from-x: 18px; --from-y: 54px; --from-r: 6deg; }
-.launch-line:first-child span:nth-child(5) { --from-x: 32px; --from-y: -46px; --from-r: -6deg; }
-.launch-line:first-child span:nth-child(6) { --from-x: 58px; --from-y: 34px; --from-r: 8deg; }
-.launch-line:nth-child(2) span:nth-child(1) { --from-x: -48px; --from-y: 46px; --from-r: 8deg; }
-.launch-line:nth-child(2) span:nth-child(2) { --from-x: -28px; --from-y: -50px; --from-r: -7deg; }
-.launch-line:nth-child(2) span:nth-child(3) { --from-x: 8px; --from-y: 56px; --from-r: 6deg; }
-.launch-line:nth-child(2) span:nth-child(4) { --from-x: 24px; --from-y: -46px; --from-r: -8deg; }
-.launch-line:nth-child(2) span:nth-child(5) { --from-x: 50px; --from-y: 44px; --from-r: 7deg; }
+.launch-line span:nth-child(1) { --from-x: -88px; --from-y: -42px; --from-r: -9deg; }
+.launch-line span:nth-child(2) { --from-x: -62px; --from-y: 52px; --from-r: 7deg; }
+.launch-line span:nth-child(3) { --from-x: -45px; --from-y: -58px; --from-r: -5deg; }
+.launch-line span:nth-child(4) { --from-x: -20px; --from-y: 54px; --from-r: 6deg; }
+.launch-line span:nth-child(5) { --from-x: 0; --from-y: -46px; --from-r: -6deg; }
+.launch-line span:nth-child(6) { --from-x: 18px; --from-y: 34px; --from-r: 8deg; }
+.launch-line span:nth-child(7) { --from-x: 36px; --from-y: -48px; --from-r: -8deg; }
+.launch-line span:nth-child(8) { --from-x: 54px; --from-y: 46px; --from-r: 8deg; }
+.launch-line span:nth-child(9) { --from-x: 70px; --from-y: -50px; --from-r: -7deg; }
+.launch-line span:nth-child(10) { --from-x: 82px; --from-y: 56px; --from-r: 6deg; }
+.launch-line span:nth-child(11) { --from-x: 96px; --from-y: -46px; --from-r: -8deg; }
 
 @keyframes launchWordmarkSettle {
   0% { transform: translateY(8px) scale(.985); }
