@@ -636,7 +636,7 @@ body:not(.splash-active) .launch-splash {
 .launch-splash.is-playing .launch-flower {
   animation:
     launchFlowerArrive 720ms cubic-bezier(.18, .82, .26, 1.18) 2920ms both,
-    launchFlowerSpark 720ms ease-out 3520ms both;
+    launchFlowerSpark 2000ms ease-in-out 3520ms both;
 }
 
 .launch-splash.is-playing .launch-flower.flower-b {
@@ -669,6 +669,7 @@ body:not(.splash-active) .launch-splash {
 @keyframes launchFlowerSpark {
   0% {
     filter: brightness(1);
+    transform: translate(0, 0) scale(.78) rotate(0);
     box-shadow:
       0 -22px 0 4px #fff,
       22px 0 0 4px #fff,
@@ -676,8 +677,9 @@ body:not(.splash-active) .launch-splash {
       -22px 0 0 4px #fff,
       0 10px 24px rgba(31, 41, 55, .12);
   }
-  42% {
-    filter: brightness(1.32);
+  18% {
+    filter: brightness(1.38);
+    transform: translate(0, 0) scale(.83) rotate(2deg);
     box-shadow:
       0 -22px 0 4px #fff,
       22px 0 0 4px #fff,
@@ -687,8 +689,53 @@ body:not(.splash-active) .launch-splash {
       0 0 34px 14px color-mix(in srgb, var(--gold-soft) 82%, transparent),
       0 10px 24px rgba(31, 41, 55, .12);
   }
+  34% {
+    filter: brightness(1);
+    transform: translate(0, 0) scale(.78) rotate(0);
+    box-shadow:
+      0 -22px 0 4px #fff,
+      22px 0 0 4px #fff,
+      0 22px 0 4px #fff,
+      -22px 0 0 4px #fff,
+      0 10px 24px rgba(31, 41, 55, .12);
+  }
+  52% {
+    filter: brightness(1.36);
+    transform: translate(0, 0) scale(.84) rotate(-2deg);
+    box-shadow:
+      0 -22px 0 4px #fff,
+      22px 0 0 4px #fff,
+      0 22px 0 4px #fff,
+      -22px 0 0 4px #fff,
+      0 0 0 12px rgba(255, 255, 255, .58),
+      0 0 38px 16px color-mix(in srgb, var(--gold-soft) 88%, transparent),
+      0 10px 24px rgba(31, 41, 55, .12);
+  }
+  70% {
+    filter: brightness(1.04);
+    transform: translate(0, 0) scale(.79) rotate(0);
+    box-shadow:
+      0 -22px 0 4px #fff,
+      22px 0 0 4px #fff,
+      0 22px 0 4px #fff,
+      -22px 0 0 4px #fff,
+      0 10px 24px rgba(31, 41, 55, .12);
+  }
+  86% {
+    filter: brightness(1.28);
+    transform: translate(0, 0) scale(.82) rotate(1deg);
+    box-shadow:
+      0 -22px 0 4px #fff,
+      22px 0 0 4px #fff,
+      0 22px 0 4px #fff,
+      -22px 0 0 4px #fff,
+      0 0 0 9px rgba(255, 255, 255, .5),
+      0 0 30px 12px color-mix(in srgb, var(--gold-soft) 76%, transparent),
+      0 10px 24px rgba(31, 41, 55, .12);
+  }
   100% {
     filter: brightness(1);
+    transform: translate(0, 0) scale(.78) rotate(0);
     box-shadow:
       0 -22px 0 4px #fff,
       22px 0 0 4px #fff,
