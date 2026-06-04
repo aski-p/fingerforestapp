@@ -48,10 +48,10 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "채팅은 카카오 경유 없이 Anthropic Claude API 직접 호출만 사용합니다.",
-    "Claude가 외부/최신 정보가 필요하다고 판단하면 서버 검색 결과를 Claude에 함께 전달해 요약합니다.",
-    "Claude 직접 호출이 실패하면 로컬/카카오 대체 답변을 만들지 않습니다.",
-    "직접 연결 상태를 사용자에게 짧게 안내해 가짜 Claude 답변이 보이지 않게 했습니다.",
+    "앱 아이콘에 레드 캐릭터를 나무 앞 주인공으로 반영했습니다.",
+    "시작 화면은 fingerfruit 글자 표시 후 레드 캐릭터가 떨어져 앉고, 꽃이 반짝이는 순서로 재구성했습니다.",
+    "보유 씨앗이 0개이면 업무일지 예약을 막고 안내 팝업을 띄웁니다.",
+    "Claude가 외부/최신 정보가 필요하다고 판단하면 검색 결과를 함께 참고해 답변합니다.",
 ]
 VALID_THEMES = {
     "default",
