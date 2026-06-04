@@ -3751,6 +3751,21 @@ body.theme-getter .fruit-send-card {
   min-height: 0;
   margin-top: 0;
   overflow: hidden;
+  --getter-bot-width: 132px;
+  --getter-bot-height: 132px;
+  --getter-bot-top: -18px;
+  --getter-bot-right: -12px;
+  --getter-bot-rotate: -7deg;
+  --getter-arm-angle: -6deg;
+}
+
+body.theme-getter .fruit-send-card::before {
+  top: var(--getter-bot-top);
+  right: var(--getter-bot-right);
+  width: var(--getter-bot-width);
+  height: var(--getter-bot-height);
+  opacity: 0.88;
+  filter: drop-shadow(0 14px 20px rgba(0, 0, 0, 0.52));
 }
 
 body.theme-getter .fruit-send-card .fruit-card-section {
@@ -3797,6 +3812,20 @@ body.theme-getter .fruit-send-card .fruit-send-title {
   padding-right: 82px;
 }
 
+body.theme-getter .fruit-send-title::after {
+  content: "";
+  position: absolute;
+  top: -32px;
+  right: 6px;
+  z-index: 1;
+  width: 92px;
+  height: 92px;
+  background: url("/assets/getter/getter-ledge.png") center / contain no-repeat;
+  filter: drop-shadow(0 12px 16px rgba(0, 0, 0, 0.5));
+  transform: rotate(-7deg);
+  pointer-events: none;
+}
+
 body.theme-getter .fruit-send-card .searchrow {
   grid-template-columns: minmax(0, 1fr) 62px;
 }
@@ -3823,12 +3852,49 @@ body.theme-getter .fruit-send-card .control-card::before {
 }
 
 body.theme-getter .fruit-unified-block {
+  position: relative;
+  overflow: hidden;
   border-color: rgba(255, 23, 56, 0.42);
   background:
     linear-gradient(145deg, rgba(255, 244, 238, 0.08), transparent 42%),
     rgba(28, 5, 10, 0.82);
   color: #fff5f6;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+body.theme-getter .fruit-unified-block > * {
+  position: relative;
+  z-index: 2;
+}
+
+body.theme-getter .fruit-unified-block::after {
+  content: "";
+  position: absolute;
+  top: -22px;
+  right: -18px;
+  z-index: 1;
+  width: 118px;
+  height: 118px;
+  opacity: 0.2;
+  background: var(--getter-panel-bot, url("/assets/getter/getter-arc.png")) center / contain no-repeat;
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.42));
+  transform: rotate(var(--getter-panel-rotate, 5deg));
+  pointer-events: none;
+}
+
+body.theme-getter .fruit-unified-block.getter-card-target {
+  --getter-panel-bot: url("/assets/getter/getter-ledge.png");
+  --getter-panel-rotate: -8deg;
+}
+
+body.theme-getter .fruit-unified-block.getter-card-transfer {
+  --getter-panel-bot: url("/assets/getter/getter-arc.png");
+  --getter-panel-rotate: 6deg;
+}
+
+body.theme-getter .fruit-unified-block.getter-card-auto {
+  --getter-panel-bot: url("/assets/getter/getter-shin.png");
+  --getter-panel-rotate: -10deg;
 }
 
 body.theme-getter .fruit-unified-block h3,
