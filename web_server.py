@@ -26,9 +26,11 @@ DATA_DIR = fruit_auto.DATA_DIR
 TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 CHAT_DB_PATH = DATA_DIR / "chat_memory.sqlite3"
+TICK_WAKE_PATH = DATA_DIR / "tick_worker.wake"
+TICK_HEARTBEAT_PATH = DATA_DIR / "tick_worker.heartbeat.json"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.7.5"
+APP_VERSION = "3.7.7"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
 CHAT_CONTEXT_MESSAGE_LIMIT = 8
 CHAT_HISTORY_MESSAGE_LIMIT = CHAT_CONTEXT_MESSAGE_LIMIT
@@ -764,7 +766,7 @@ def public_state(owner_key=None, refresh_balance=False):
         state = dict(fruit_auto.DEFAULT_STATE)
         state["credentialsSaved"] = False
     state["hasTarget"] = bool(state.get("targetEmployeeId"))
-    state["daemonRunning"] = daemon_running()
+    state["daemonRunning"] = ensure_daemon_running()
     state["activeAccountCount"] = len(fruit_auto.active_owner_keys())
     return attach_state_profile_photos(state)
 
@@ -1263,6 +1265,28 @@ def daemon_running():
     return fruit_auto.is_process_alive(pid)
 
 
+def tick_worker_running():
+    try:
+        data = json.loads(TICK_HEARTBEAT_PATH.read_text(encoding="utf-8"))
+        pid = int(data.get("pid"))
+        interval = int(data.get("intervalSeconds") or 60)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return False
+    try:
+        age = datetime.now(timezone.utc).timestamp() - TICK_HEARTBEAT_PATH.stat().st_mtime
+    except OSError:
+        return False
+    return age <= max(180, interval * 3) and fruit_auto.is_process_alive(pid)
+
+
+def request_scheduler_wake():
+    try:
+        TICK_WAKE_PATH.write_text(datetime.now(timezone.utc).isoformat() + "\n", encoding="utf-8")
+    except OSError:
+        return wake_daemon()
+    return True
+
+
 def wake_daemon():
     if not fruit_auto.PID_PATH.exists():
         return False
@@ -1280,7 +1304,7 @@ def wake_daemon():
 
 
 def ensure_daemon_running():
-    return False
+    return tick_worker_running() or daemon_running()
 
 
 def run_check_once(owner_key, force=False):
@@ -1525,6 +1549,7 @@ class Handler(BaseHTTPRequestHandler):
                 result = state_response(owner_key)
             elif parsed.path == "/api/worklog-settings":
                 fruit_auto.set_worklog_settings(payload, owner_key=owner_key)
+                request_scheduler_wake()
                 result = state_response(owner_key)
             elif parsed.path == "/api/worklog-run-now":
                 result = fruit_auto.save_worklog_once(owner_key=owner_key, force=True)
@@ -1532,6 +1557,7 @@ class Handler(BaseHTTPRequestHandler):
                 result = {**result, "state": state_response(owner_key)}
             elif parsed.path == "/api/interval":
                 fruit_auto.set_run_interval(payload.get("minutes"), owner_key=owner_key)
+                request_scheduler_wake()
                 result = state_response(owner_key)
             elif parsed.path == "/api/refresh":
                 fruit_auto.refresh_balance(force=True, owner_key=owner_key)
@@ -1540,9 +1566,11 @@ class Handler(BaseHTTPRequestHandler):
                 if payload.get("target_name"):
                     fruit_auto.set_target_by_name(payload.get("target_name"))
                 fruit_auto.set_enabled(True, owner_key=owner_key)
+                request_scheduler_wake()
                 result = state_response(owner_key)
             elif parsed.path == "/api/off":
                 fruit_auto.set_enabled(False, owner_key=owner_key)
+                request_scheduler_wake()
                 result = state_response(owner_key)
             elif parsed.path == "/api/run-now":
                 try:

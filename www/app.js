@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.7.5";
+const appVersion = "3.7.7";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1551,6 +1551,8 @@ function closeWorklogSuccessModal() {
 
 let workspaceTransitionTimer = 0;
 let workspaceDragState = null;
+let currentWorkspaceTabName = "fruit";
+let workspaceTabLocked = false;
 const workspaceSlideEase = "cubic-bezier(.25, .8, .25, 1)";
 
 function workspacePanelName(panel) {
@@ -1562,12 +1564,13 @@ function setWorkspaceTab(name, options = {}) {
   const pager = $("workspacePager");
   const fruitPanel = $("fruitSendPanel");
   const worklogPanel = $("worklogPanel");
-  const currentPanel = document.querySelector(".workspace-slide.is-active");
+  const currentPanel = currentWorkspaceTabName === "worklog" ? worklogPanel : fruitPanel;
   const nextPanel = nextName === "worklog" ? worklogPanel : fruitPanel;
-  const currentName = workspacePanelName(currentPanel);
+  const currentName = currentWorkspaceTabName;
 
   document.querySelectorAll("[data-workspace-slide]").forEach((button) => {
     button.classList.toggle("active", button.dataset.workspaceSlide === nextName);
+    button.disabled = Boolean(options.animate && currentName !== nextName);
   });
 
   if (!fruitPanel || !worklogPanel || !nextPanel || !pager) return;
@@ -1582,13 +1585,21 @@ function setWorkspaceTab(name, options = {}) {
 
   const shouldAnimate = options.animate && currentPanel && currentPanel !== nextPanel;
   if (!shouldAnimate) {
+    currentWorkspaceTabName = nextName;
+    workspaceTabLocked = false;
     fruitPanel.classList.toggle("is-active", nextName !== "worklog");
     worklogPanel.classList.toggle("is-active", nextName === "worklog");
     pager.classList.remove("is-animating");
+    document.querySelectorAll("[data-workspace-slide]").forEach((button) => {
+      button.disabled = false;
+    });
     syncWorkspacePagerHeight();
     return;
   }
 
+  workspaceTabLocked = true;
+  currentPanel.classList.add("is-active");
+  (nextName === "worklog" ? fruitPanel : worklogPanel).classList.toggle("is-active", currentPanel !== (nextName === "worklog" ? fruitPanel : worklogPanel));
   const forward = currentName !== "worklog" && nextName === "worklog";
   const width = Math.max(1, pager.clientWidth || nextPanel.clientWidth || window.innerWidth);
   const enterOffset = forward ? `${width}px` : `${-width}px`;
@@ -1617,6 +1628,8 @@ function setWorkspaceTab(name, options = {}) {
   currentPanel.style.opacity = "0";
 
   workspaceTransitionTimer = window.setTimeout(() => {
+    currentWorkspaceTabName = nextName;
+    workspaceTabLocked = false;
     fruitPanel.classList.toggle("is-active", nextName !== "worklog");
     worklogPanel.classList.toggle("is-active", nextName === "worklog");
     [fruitPanel, worklogPanel].forEach((panel) => {
@@ -1627,6 +1640,9 @@ function setWorkspaceTab(name, options = {}) {
     });
     pager.classList.remove("is-animating");
     pager.style.height = "";
+    document.querySelectorAll("[data-workspace-slide]").forEach((button) => {
+      button.disabled = false;
+    });
     syncWorkspacePagerHeight();
   }, duration + 40);
 }
@@ -1640,7 +1656,7 @@ function workspacePanels() {
   const pager = $("workspacePager");
   const fruitPanel = $("fruitSendPanel");
   const worklogPanel = $("worklogPanel");
-  const currentPanel = document.querySelector(".workspace-slide.is-active");
+  const currentPanel = currentWorkspaceTabName === "worklog" ? worklogPanel : fruitPanel;
   return { pager, fruitPanel, worklogPanel, currentPanel };
 }
 
@@ -1662,9 +1678,11 @@ function resetWorkspaceDragStyles() {
     pager.style.height = "";
   }
   workspaceDragState = null;
+  workspaceTabLocked = false;
 }
 
 function prepareWorkspaceDrag(dx) {
+  if (workspaceTabLocked) return null;
   const { pager, fruitPanel, worklogPanel, currentPanel } = workspacePanels();
   if (!pager || !fruitPanel || !worklogPanel || !currentPanel) return null;
   const currentName = workspacePanelName(currentPanel);
@@ -1773,6 +1791,9 @@ function finishWorkspaceDrag(nextName, commit) {
 }
 
 function scrollWorkspacePanel(name) {
+  const nextName = name === "worklog" ? "worklog" : "fruit";
+  if (workspaceTabLocked || $("workspacePager")?.classList.contains("is-animating")) return;
+  if (nextName === currentWorkspaceTabName) return;
   setWorkspaceTab(name, { animate: true });
 }
 
@@ -1783,7 +1804,7 @@ function syncWorkspaceTabFromScroll() {
 
 function activeWorkspacePanel() {
   const active = document.querySelector("[data-workspace-slide].active");
-  return active?.dataset.workspaceSlide || "fruit";
+  return active?.dataset.workspaceSlide || currentWorkspaceTabName || "fruit";
 }
 
 function bindWorkspaceSwipeZone() {
@@ -1801,6 +1822,7 @@ function bindWorkspaceSwipeZone() {
     let horizontal = false;
 
     zone.addEventListener("touchstart", (event) => {
+      if (workspaceTabLocked || $("workspacePager")?.classList.contains("is-animating")) return;
       const touch = event.touches && event.touches[0];
       if (!touch) return;
       startX = touch.clientX;
@@ -2940,7 +2962,8 @@ document.querySelectorAll("[data-workspace-slide]").forEach((button) => {
 });
 
 bindWorkspaceSwipeZone();
-setWorkspaceTab(activeWorkspacePanel());
+currentWorkspaceTabName = activeWorkspacePanel();
+setWorkspaceTab(currentWorkspaceTabName);
 
 $("workspacePager").addEventListener("scroll", () => {
   window.clearTimeout(syncWorkspaceTabFromScroll.timer);

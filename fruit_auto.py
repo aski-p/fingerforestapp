@@ -825,27 +825,17 @@ def notify_result(result):
     owner_key = result.get("ownerKey")
     action = result.get("action")
     if action == "sent":
-        target_owner_key = owner_key_for_employee_id(result.get("targetEmployeeId"))
-        push_owner_keys = [target_owner_key] if target_owner_key else []
-        if push_owner_keys and not is_push_enabled(target_owner_key):
-            log_event(
-                {
-                    "action": "push_notify_skipped",
-                    "reason": "push_disabled",
-                    "ownerKey": owner_key,
-                    "targetOwnerKey": target_owner_key,
-                }
-            )
+        if owner_key and not is_push_enabled(owner_key):
+            log_event({"action": "push_notify_skipped", "reason": "push_disabled", "ownerKey": owner_key})
             return False
-        web_pushed = notify_web_push(received_notification_payload(result), push_owner_keys)
+        web_pushed = notify_web_push(sent_notification_payload(result), [owner_key] if owner_key else [])
         if web_pushed:
             return True
         log_event(
             {
                 "action": "push_notify_skipped",
-                "reason": "no_receiver_subscription",
+                "reason": "no_sender_subscription",
                 "ownerKey": owner_key,
-                "targetOwnerKey": target_owner_key,
             }
         )
         return False
