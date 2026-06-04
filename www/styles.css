@@ -431,6 +431,152 @@ body:not(.splash-active) .launch-splash {
   will-change: transform, opacity, filter;
 }
 
+.launch-red-character {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  left: 50%;
+  width: clamp(76px, 19vw, 112px);
+  height: clamp(124px, 30vw, 174px);
+  opacity: 0;
+  transform: translate(-135%, -260%) rotate(-8deg) scale(.92);
+  transform-origin: 52% 78%;
+  pointer-events: none;
+  will-change: transform, opacity, filter;
+}
+
+.red-character-body {
+  position: absolute;
+  left: 18%;
+  bottom: 11%;
+  width: 58%;
+  height: 63%;
+  border-radius: 50% 52% 44% 45% / 50% 50% 44% 44%;
+  background:
+    radial-gradient(circle at 34% 22%, rgba(255, 155, 125, .72), transparent 24%),
+    linear-gradient(150deg, #ff704f 0%, #ef3631 58%, #c9202b 100%);
+  box-shadow:
+    inset -10px -13px 18px rgba(128, 24, 30, .14),
+    0 14px 24px rgba(93, 28, 26, .18);
+}
+
+.red-character-stem {
+  position: absolute;
+  left: 44%;
+  top: 3%;
+  width: 15%;
+  height: 50%;
+  border-radius: 999px 999px 22px 22px;
+  background: linear-gradient(180deg, #ff6f51 0%, #ef322d 78%, #cf2430 100%);
+  transform: rotate(13deg);
+  transform-origin: 50% 100%;
+}
+
+.red-character-flower,
+.red-character-flower::before,
+.red-character-flower::after {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff;
+  content: "";
+}
+
+.red-character-flower {
+  left: 41%;
+  top: -2%;
+  width: 20%;
+  height: 13%;
+  background: #ffd22f;
+  box-shadow: 0 2px 0 rgba(238, 178, 16, .2);
+}
+
+.red-character-flower::before {
+  inset: -70% -118%;
+  background:
+    radial-gradient(circle at 50% 8%, #fff 0 24%, transparent 25%),
+    radial-gradient(circle at 90% 50%, #fff 0 24%, transparent 25%),
+    radial-gradient(circle at 50% 92%, #fff 0 24%, transparent 25%),
+    radial-gradient(circle at 10% 50%, #fff 0 24%, transparent 25%);
+}
+
+.red-character-flower::after {
+  inset: 12%;
+  background: #ffd22f;
+}
+
+.red-character-eye {
+  position: absolute;
+  left: 48%;
+  top: 41%;
+  width: 17%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, .08);
+}
+
+.red-character-eye::after {
+  content: "";
+  position: absolute;
+  left: 40%;
+  top: 31%;
+  width: 38%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #111827;
+}
+
+.red-character-nose {
+  position: absolute;
+  left: 62%;
+  top: 47%;
+  width: 42%;
+  height: 10%;
+  border-radius: 999px 70% 70% 999px;
+  background: linear-gradient(90deg, #fff 0%, #fff 72%, #f1f5f9 100%);
+  clip-path: polygon(0 16%, 100% 50%, 0 84%);
+  filter: drop-shadow(0 2px 1px rgba(15, 23, 42, .08));
+}
+
+.red-character-arm,
+.red-character-leg {
+  position: absolute;
+  border-radius: 999px;
+  background: #d92b30;
+}
+
+.red-character-arm {
+  top: 65%;
+  width: 9%;
+  height: 26%;
+}
+
+.red-character-arm.arm-left {
+  left: 12%;
+  transform: rotate(29deg);
+}
+
+.red-character-arm.arm-right {
+  right: 23%;
+  transform: rotate(-24deg);
+}
+
+.red-character-leg {
+  bottom: 2%;
+  width: 10%;
+  height: 24%;
+}
+
+.red-character-leg.leg-left {
+  left: 35%;
+  transform: rotate(11deg);
+}
+
+.red-character-leg.leg-right {
+  left: 55%;
+  transform: rotate(-8deg);
+}
+
 .launch-flower {
   position: absolute;
   z-index: 1;
@@ -451,13 +597,13 @@ body:not(.splash-active) .launch-splash {
 }
 
 .launch-flower.flower-a {
-  top: calc(50% - min(33vw, 205px));
-  left: calc(50% - min(43vw, 295px));
+  top: calc(50% - min(17vw, 112px));
+  left: calc(50% + min(35vw, 230px));
 }
 
 .launch-flower.flower-b {
-  top: calc(50% + min(16vw, 112px));
-  left: calc(50% + min(28vw, 198px));
+  top: calc(50% + min(10vw, 74px));
+  left: calc(50% + min(28vw, 190px));
   width: 38px;
   height: 38px;
   background: color-mix(in srgb, var(--gold-soft) 72%, var(--accent-bright));
@@ -471,14 +617,18 @@ body:not(.splash-active) .launch-splash {
   animation: launchLetterGather 620ms cubic-bezier(.16, .9, .2, 1) calc(220ms + var(--i) * 64ms) both;
 }
 
+.launch-splash.is-playing .launch-red-character {
+  animation: launchRedCharacterDrop 760ms cubic-bezier(.18, .84, .2, 1.12) 1540ms both;
+}
+
 .launch-splash.is-playing .launch-flower {
   animation:
-    launchFlowerArrive 540ms cubic-bezier(.18, .82, .26, 1.18) 1080ms both,
-    launchFlowerSpark 620ms ease-out 1510ms both;
+    launchFlowerArrive 520ms cubic-bezier(.18, .82, .26, 1.18) 2320ms both,
+    launchFlowerSpark 620ms ease-out 2730ms both;
 }
 
 .launch-splash.is-playing .launch-flower.flower-b {
-  animation-delay: 1230ms, 1660ms;
+  animation-delay: 2460ms, 2860ms;
 }
 
 .launch-line span:nth-child(1) { --from-x: -88px; --from-y: -42px; --from-r: -9deg; }
@@ -499,9 +649,9 @@ body:not(.splash-active) .launch-splash {
 }
 
 @keyframes launchFlowerArrive {
-  0% { opacity: 0; transform: translateY(18px) scale(.35) rotate(-14deg); filter: blur(4px); }
-  72% { opacity: 1; transform: translateY(0) scale(.88) rotate(3deg); filter: blur(0); }
-  100% { opacity: 1; transform: translateY(0) scale(.78) rotate(0); filter: blur(0); }
+  0% { opacity: 0; transform: translate(58px, 14px) scale(.35) rotate(-18deg); filter: blur(4px); }
+  72% { opacity: 1; transform: translate(0, 0) scale(.88) rotate(3deg); filter: blur(0); }
+  100% { opacity: 1; transform: translate(0, 0) scale(.78) rotate(0); filter: blur(0); }
 }
 
 @keyframes launchFlowerSpark {
@@ -540,6 +690,29 @@ body:not(.splash-active) .launch-splash {
   0% { transform: translate(var(--from-x, 0), var(--from-y, 18px)) scale(.82) rotate(var(--from-r, 0deg)); opacity: 0; filter: blur(8px); }
   72% { transform: translate(0, 0) scale(1.05) rotate(0); opacity: 1; filter: blur(0); }
   100% { transform: translate(0, 0) scale(1) rotate(0); opacity: 1; filter: blur(0); }
+}
+
+@keyframes launchRedCharacterDrop {
+  0% {
+    opacity: 0;
+    transform: translate(-142%, -270%) rotate(-10deg) scale(.9);
+    filter: blur(5px);
+  }
+  62% {
+    opacity: 1;
+    transform: translate(-118%, -93%) rotate(6deg) scale(1.02);
+    filter: blur(0);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(-118%, -108%) rotate(-3deg) scale(.98);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-118%, -101%) rotate(0) scale(1);
+    filter: blur(0);
+  }
 }
 
 button,

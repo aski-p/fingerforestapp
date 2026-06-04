@@ -3556,6 +3556,17 @@ def normalize_schedule_time(value):
     return f"{hour:02d}:{minute:02d}"
 
 
+def validate_worklog_available_seeds(seed_count, available_seeds):
+    try:
+        available = int(available_seeds or 0)
+    except (TypeError, ValueError):
+        available = 0
+    if available <= 0:
+        raise FruitAutoError("보유 씨앗이 0개라 업무일지를 예약할 수 없습니다. 씨앗을 받은 뒤 다시 예약해 주세요.")
+    if seed_count > available:
+        raise FruitAutoError(f"보유 씨앗이 {available}개라 {seed_count}개를 예약할 수 없습니다.")
+
+
 def set_worklog_settings(payload, owner_key=None):
     owner_key = require_owner(owner_key)
     state = get_account_state(owner_key)
@@ -3586,6 +3597,16 @@ def set_worklog_settings(payload, owner_key=None):
         raise FruitAutoError("일지내용을 작성해주세요.")
     if not target_employee_id or not target_employee_name:
         raise FruitAutoError("업무씨앗 받을 직원을 선택해 주세요.")
+    verified_balance = {}
+    if enabled:
+        client, _employee_info, _login_dataset, employee, _sender_employee_id, _sender_employee_name = account_login(owner_key)
+        available_seeds, available_berries = current_seed_fruit(client, employee)
+        validate_worklog_available_seeds(seed_count, available_seeds)
+        verified_balance = {
+            "lastSeedCount": available_seeds,
+            "lastBerryCount": available_berries,
+            "balanceCheckedAt": now_iso(),
+        }
     saved_at = now_iso()
     schedule_time = normalize_schedule_time(payload.get("scheduleTime", state.get("worklogScheduleTime")))
     schedule_dates = prune_expired_schedule_dates(
@@ -3609,6 +3630,7 @@ def set_worklog_settings(payload, owner_key=None):
         "worklogProjectName": project_name,
         "worklogContent": content,
         "worklogScheduleUpdatedAt": saved_at,
+        **verified_balance,
         "updatedAt": saved_at,
     }
     next_values["worklogNextRunAt"] = next_worklog_run_at({**state, **next_values})
@@ -3736,6 +3758,11 @@ def save_worklog_once(owner_key=None, run_date=None, force=False):
             raise FruitAutoError("씨앗 선물 대상 직원을 선택하세요.")
 
         client, employee_info, _login_dataset, employee, sender_employee_id, sender_employee_name = account_login(owner_key)
+        available_seeds = None
+        available_berries = None
+        if seed_count:
+            available_seeds, available_berries = current_seed_fruit(client, employee)
+            validate_worklog_available_seeds(seed_count, available_seeds)
         local_now = dt.datetime.now(KST)
         scheduled_for = parse_iso(state.get("worklogNextRunAt")) if not force else None
         if run_date:
@@ -3778,8 +3805,8 @@ def save_worklog_once(owner_key=None, run_date=None, force=False):
             )
         api_called_at = now_iso()
         client.post_json(f"{FOREST_API}/saveDw", {"dwInsList": [data]})
-        remaining_seeds = None
-        remaining_berries = None
+        remaining_seeds = available_seeds
+        remaining_berries = available_berries
         if seed_count:
             remaining_seeds, remaining_berries = current_seed_fruit(client, employee)
         schedule_time = normalize_schedule_time(state.get("worklogScheduleTime"))

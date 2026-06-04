@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.7.4";
+const appVersion = "3.7.5";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -167,7 +167,7 @@ let worklogDraftDirty = false;
 let activeAppearanceSettings = { theme: "default", font: "pretendard" };
 let chatHistory = [];
 let launchStartedAt = Date.now();
-const launchMinimumMs = 2700;
+const launchMinimumMs = 3600;
 const launchSplashElement = $("launchSplash");
 
 let koreanPublicHolidays = {
@@ -2768,6 +2768,11 @@ function selectedWorklogProject() {
   return worklogProjects.find((project) => String(project.id) === String(id)) || null;
 }
 
+function availableWorklogSeedCount() {
+  const value = Number(currentState.lastSeedCount);
+  return Number.isFinite(value) ? value : null;
+}
+
 function worklogPayload(enabledOverride) {
   const project = selectedWorklogProject();
   const seedCount = Math.max(0, Math.min(3, Math.floor(Number($("worklogSeedCount").value || 0))));
@@ -2797,7 +2802,7 @@ function worklogPayload(enabledOverride) {
   };
 }
 
-function validateWorklogPayload(payload) {
+function validateWorklogPayload(payload, options = {}) {
   if (!payload.projectId || !payload.projectName) {
     return "프로젝트를 선택해주세요.";
   }
@@ -2813,12 +2818,23 @@ function validateWorklogPayload(payload) {
   if (!payload.targetEmployeeId || !payload.targetEmployeeName) {
     return "업무씨앗 받을 직원을 선택해 주세요.";
   }
+  if (options.requireAvailableSeeds) {
+    const availableSeeds = availableWorklogSeedCount();
+    if (availableSeeds !== null && availableSeeds <= 0) {
+      return "보유 씨앗이 0개라 업무일지를 예약할 수 없습니다. 씨앗을 받은 뒤 다시 예약해 주세요.";
+    }
+    if (availableSeeds !== null && payload.seedCount > availableSeeds) {
+      return `보유 씨앗이 ${fmtNumber(availableSeeds)}개라 ${fmtNumber(payload.seedCount)}개를 예약할 수 없습니다.`;
+    }
+  }
   return "";
 }
 
 function requireValidWorklogPayload(enabledOverride) {
   const payload = worklogPayload(enabledOverride);
-  const message = validateWorklogPayload(payload);
+  const message = validateWorklogPayload(payload, {
+    requireAvailableSeeds: payload.enabled || enabledOverride === false,
+  });
   if (message) {
     openSuccessModal("입력 확인", message, false);
     return null;

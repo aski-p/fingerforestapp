@@ -1,58 +1,68 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="fingerfruit">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="fingerfruit" style="stroke:none">
   <defs>
-    <linearGradient id="bg" x1="104" y1="40" x2="848" y2="940" gradientUnits="userSpaceOnUse">
+    <linearGradient id="bg" x1="116" y1="42" x2="860" y2="956" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#ffffff"/>
-      <stop offset=".62" stop-color="#fffaf3"/>
-      <stop offset="1" stop-color="#f2f6ee"/>
+      <stop offset=".58" stop-color="#fffaf1"/>
+      <stop offset="1" stop-color="#eef7ee"/>
     </linearGradient>
-    <linearGradient id="leaf" x1="118" y1="150" x2="780" y2="722" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#64df5e"/>
-      <stop offset=".52" stop-color="#43cf4f"/>
-      <stop offset="1" stop-color="#22a840"/>
+    <linearGradient id="tree" x1="198" y1="134" x2="820" y2="824" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#70e260"/>
+      <stop offset=".52" stop-color="#3ccb49"/>
+      <stop offset="1" stop-color="#15933a"/>
     </linearGradient>
-    <linearGradient id="mascot" x1="288" y1="348" x2="672" y2="806" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#ff6b4a"/>
-      <stop offset=".58" stop-color="#ee352d"/>
-      <stop offset="1" stop-color="#bf1d26"/>
+    <linearGradient id="treeShade" x1="222" y1="248" x2="744" y2="742" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#63dc5a"/>
+      <stop offset="1" stop-color="#20a43e"/>
+    </linearGradient>
+    <linearGradient id="redBody" x1="330" y1="278" x2="662" y2="828" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff7a52"/>
+      <stop offset=".55" stop-color="#ef3530"/>
+      <stop offset="1" stop-color="#bb1e29"/>
     </linearGradient>
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
-      <feDropShadow dx="0" dy="24" stdDeviation="22" flood-color="#123015" flood-opacity=".18"/>
+      <feDropShadow dx="0" dy="25" stdDeviation="23" flood-color="#153018" flood-opacity=".18"/>
     </filter>
-    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="150%">
-      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#d7bca7" flood-opacity=".24"/>
+    <filter id="characterShadow" x="-24%" y="-22%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="22" stdDeviation="18" flood-color="#6c1719" flood-opacity=".24"/>
+    </filter>
+    <filter id="petalShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#8b5d25" flood-opacity=".14"/>
     </filter>
   </defs>
-  <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
   <g filter="url(#shadow)">
-    <path d="M136 422c-32-84-11-170 55-227 58-50 144-59 221-25 55-82 148-119 238-88 96 33 151 123 141 235 80 32 125 100 118 174-8 84-77 147-174 157-42 85-129 137-233 131-87-5-162-49-204-115-107 4-188-43-222-124-24-58-15-110 60-118z" fill="url(#leaf)"/>
-    <path d="M168 416c53-20 108-18 163 6 3-75 31-133 84-174 50 35 82 86 95 152 62-47 129-61 199-42 3 77-25 139-85 187 65 18 115 54 149 109-47 42-104 61-171 57-55 58-126 86-213 82-59-3-111-21-156-54 24-60 73-102 146-126-78-18-139-58-181-119-22-32-32-61-30-78z" fill="#4dd84d" opacity=".72"/>
+    <path d="M140 434c-30-84-5-178 63-237 58-50 143-62 221-29 57-79 150-112 238-78 92 35 145 123 138 231 78 35 122 104 112 178-11 86-83 147-181 154-45 82-132 131-234 123-86-6-159-51-199-118-108 2-187-47-218-129-22-58-12-106 60-95z" fill="url(#tree)"/>
+    <path d="M184 427c55-18 111-12 163 14 3-78 34-137 91-177 50 37 80 91 91 160 62-48 131-64 205-46 2 78-31 142-96 192 65 19 113 55 143 110-49 39-108 55-176 49-57 55-128 81-213 75-60-4-111-23-154-58 25-59 76-100 150-121-78-21-139-64-179-127-20-32-28-56-25-71z" fill="url(#treeShade)" opacity=".78"/>
+    <path d="M255 407c128 41 284 55 458 39" fill="none" stroke="#79e767" stroke-width="22" stroke-linecap="round" opacity=".38"/>
+    <path d="M331 641c116 34 232 37 348 8" fill="none" stroke="#0f8432" stroke-width="20" stroke-linecap="round" opacity=".18"/>
   </g>
-  <g>
-    <g transform="translate(148 185)">
-      <circle cx="112" cy="112" r="38" fill="#ffd21f"/>
-      <circle cx="112" cy="48" r="48" fill="#fff"/>
-      <circle cx="176" cy="112" r="48" fill="#fff"/>
-      <circle cx="112" cy="176" r="48" fill="#fff"/>
-      <circle cx="48" cy="112" r="48" fill="#fff"/>
-    </g>
-    <g transform="translate(230 585) scale(.7)">
-      <circle cx="112" cy="112" r="34" fill="#ffcf24"/>
-      <circle cx="112" cy="52" r="44" fill="#fff"/>
-      <circle cx="172" cy="112" r="44" fill="#fff"/>
-      <circle cx="112" cy="172" r="44" fill="#fff"/>
-      <circle cx="52" cy="112" r="44" fill="#fff"/>
-    </g>
+  <g transform="translate(128 188) scale(.86)" filter="url(#petalShadow)">
+    <circle cx="112" cy="112" r="37" fill="#ffd21f"/>
+    <circle cx="112" cy="48" r="49" fill="#fff"/>
+    <circle cx="176" cy="112" r="49" fill="#fff"/>
+    <circle cx="112" cy="176" r="49" fill="#fff"/>
+    <circle cx="48" cy="112" r="49" fill="#fff"/>
   </g>
-  <g filter="url(#shadow)" transform="translate(284 270)">
-    <path d="M296 24c41 34 69 80 84 137" fill="none" stroke="#ed332c" stroke-width="38" stroke-linecap="round"/>
-    <path d="M389 133c34-17 76-18 118-2-20 41-52 68-96 81-18-19-26-42-22-69z" fill="#ffffff"/>
-    <path d="M118 150c82 28 143 81 183 158 23 44 59 72 109 84-49 61-112 92-191 93-89 2-157-35-203-109 59-17 98-48 117-92 22-50 18-111-15-134z" fill="url(#mascot)"/>
-    <ellipse cx="294" cy="170" rx="92" ry="74" fill="url(#mascot)" transform="rotate(-6 294 170)"/>
-    <circle cx="325" cy="151" r="20" fill="#ffffff"/>
-    <circle cx="331" cy="151" r="9" fill="#111827"/>
-    <path d="M76 394c-41 21-73 55-96 103" fill="none" stroke="#c3262a" stroke-width="26" stroke-linecap="round"/>
-    <path d="M240 476c-18 41-21 80-9 118" fill="none" stroke="#c3262a" stroke-width="27" stroke-linecap="round"/>
-    <path d="M333 458c17 40 44 70 80 90" fill="none" stroke="#c3262a" stroke-width="27" stroke-linecap="round"/>
-    <path d="M392 279c36 4 67 20 94 48" fill="none" stroke="#c3262a" stroke-width="23" stroke-linecap="round"/>
+  <g filter="url(#characterShadow)" transform="translate(252 166)">
+    <path d="M274 42c38 46 59 101 63 166" fill="none" stroke="#ef332e" stroke-width="42" stroke-linecap="round"/>
+    <g transform="translate(266 -6) rotate(10)" filter="url(#petalShadow)">
+      <circle cx="96" cy="96" r="35" fill="#ffd21f"/>
+      <circle cx="96" cy="34" r="47" fill="#fff"/>
+      <circle cx="158" cy="96" r="47" fill="#fff"/>
+      <circle cx="96" cy="158" r="47" fill="#fff"/>
+      <circle cx="34" cy="96" r="47" fill="#fff"/>
+    </g>
+    <path d="M132 292c-10-104 50-184 157-205 98-19 184 35 212 125 26 83 8 168-42 232 67 24 111 73 136 147-61 64-140 96-237 96-116 0-205-50-267-149 50-41 78-88 82-141 2-33-12-74-41-105z" fill="url(#redBody)"/>
+    <ellipse cx="335" cy="256" rx="142" ry="114" fill="url(#redBody)" transform="rotate(-8 335 256)"/>
+    <path d="M458 274c49 2 92 21 130 57" fill="none" stroke="#fff" stroke-width="50" stroke-linecap="round"/>
+    <path d="M494 276c42 2 76 18 105 46" fill="none" stroke="#f4f6f8" stroke-width="28" stroke-linecap="round"/>
+    <circle cx="377" cy="230" r="31" fill="#fff"/>
+    <circle cx="386" cy="229" r="13" fill="#111827"/>
+    <circle cx="390" cy="224" r="4" fill="#fff"/>
+    <path d="M148 516c-42 20-76 53-103 98" fill="none" stroke="#d22a30" stroke-width="30" stroke-linecap="round"/>
+    <path d="M499 504c35 23 60 55 78 98" fill="none" stroke="#d22a30" stroke-width="30" stroke-linecap="round"/>
+    <path d="M262 659c-20 44-23 84-9 121" fill="none" stroke="#d22a30" stroke-width="31" stroke-linecap="round"/>
+    <path d="M399 654c18 43 48 76 88 98" fill="none" stroke="#d22a30" stroke-width="31" stroke-linecap="round"/>
+    <ellipse cx="274" cy="300" rx="50" ry="72" fill="#ff8666" opacity=".18" transform="rotate(-19 274 300)"/>
   </g>
 </svg>
