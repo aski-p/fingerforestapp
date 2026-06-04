@@ -5,12 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#f7f9fc">
     <link rel="manifest" href="/manifest.webmanifest">
-    <link rel="apple-touch-icon" href="/icons/app-touch-icon.png?v=3.12.6">
-    <link rel="icon" href="/icons/app-icon-192.png?v=3.12.6" type="image/png">
-    <link rel="stylesheet" href="/styles.css?v=3.12.6">
+    <link rel="apple-touch-icon" href="/icons/app-touch-icon.png?v=3.12.7">
+    <link rel="icon" href="/icons/app-icon-192.png?v=3.12.7" type="image/png">
+    <link rel="stylesheet" href="/styles.css?v=3.12.7">
     <title>FingerForest</title>
   </head>
   <body class="logged-out splash-active main-bg-scene main-bg-forest-summer">
+    <script>
+      (() => {
+        const classes = ["main-bg-forest-spring", "main-bg-forest-summer", "main-bg-forest-autumn", "main-bg-forest-winter", "main-bg-forest-night"];
+        const now = new Date();
+        let month = now.getMonth() + 1;
+        let hour = now.getHours();
+        try {
+          const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", month: "numeric", hour: "numeric", hourCycle: "h23" }).formatToParts(now);
+          month = Number(parts.find((part) => part.type === "month")?.value || month);
+          hour = Number(parts.find((part) => part.type === "hour")?.value || hour);
+        } catch (_err) {}
+        const nextClass = hour >= 21 || hour < 8
+          ? "main-bg-forest-night"
+          : month >= 3 && month <= 5
+            ? "main-bg-forest-spring"
+            : month >= 6 && month <= 8
+              ? "main-bg-forest-summer"
+              : month >= 9 && month <= 11
+                ? "main-bg-forest-autumn"
+                : "main-bg-forest-winter";
+        document.body.classList.remove(...classes);
+        document.body.classList.add("main-bg-scene", nextClass);
+      })();
+    </script>
     <div id="launchSplash" class="launch-splash" aria-label="FingerForest 시작 화면">
       <div class="launch-wordmark" aria-hidden="true">
         <span class="launch-line">
@@ -481,7 +505,7 @@
 
       <p id="toast" class="toast" role="status"></p>
       <footer class="app-footer">
-        <span>v3.12.6 정식버전 · by aski</span>
+        <span>v3.12.7 정식버전 · by aski</span>
         <a id="supportLink" class="support-link" href="https://qr.kakaopay.com/Ej7ruxJDq" target="_blank" rel="noopener" aria-label="카카오페이로 후원하기">후원하기</a>
       </footer>
     </main>
@@ -504,6 +528,6 @@
     <button id="chatOpenBtn" class="chat-fab" type="button" aria-label="채팅 열기">
       <span class="chat-fab-mark" aria-hidden="true"></span>
     </button>
-    <script src="/app.js?v=3.12.6"></script>
+    <script src="/app.js?v=3.12.7"></script>
   </body>
 </html>
