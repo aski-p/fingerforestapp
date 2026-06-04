@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.7.8";
+const appVersion = "3.7.9";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1141,18 +1141,6 @@ function parseLocalDateValue(value) {
 function worklogBlockedDateReason(value) {
   const date = parseLocalDateValue(value);
   if (!date) return "날짜 오류";
-  const scheduleTime = $("worklogTimeInput")?.value || currentState.worklogScheduleTime || "09:05";
-  const [hour, minute] = String(scheduleTime).split(":").map((part) => Number(part));
-  const scheduled = new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-    Number.isFinite(hour) ? hour : 9,
-    Number.isFinite(minute) ? minute : 5,
-    0,
-    0
-  );
-  if (scheduled <= new Date()) return "지난 예약";
   const completedDate = String(currentState.worklogLastRunKey || "").split("T", 1)[0];
   if (completedDate && completedDate === value) return "이미 전송 완료";
   const day = date.getDay();
@@ -1163,6 +1151,21 @@ function worklogBlockedDateReason(value) {
 
 function isWorklogAllowedDate(value) {
   return !worklogBlockedDateReason(value);
+}
+
+function scheduledWorklogDateTime(dateValue, timeValue) {
+  const date = parseLocalDateValue(dateValue);
+  if (!date) return null;
+  const [hour, minute] = String(timeValue || "").split(":").map((part) => Number(part));
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    Number.isFinite(hour) ? hour : 9,
+    Number.isFinite(minute) ? minute : 5,
+    0,
+    0
+  );
 }
 
 function fmtHistorySelectedDate(value) {
@@ -2826,19 +2829,28 @@ function worklogPayload(enabledOverride) {
 
 function validateWorklogPayload(payload, options = {}) {
   if (!payload.projectId || !payload.projectName) {
-    return "프로젝트를 선택해주세요.";
+    return "업무일지 프로젝트를 선택해주세요.";
   }
   if (!payload.seedMessage) {
-    return "메시지를 작성해주세요.";
+    return "씨앗 선물 메시지를 입력해주세요.";
   }
   if (!payload.seedCount) {
-    return "보낼 씨앗 수를 작성해주세요.";
+    return "보낼 씨앗 수를 입력해주세요.";
   }
   if (!payload.content) {
-    return "일지내용을 작성해주세요.";
+    return "업무일지 내용을 입력해주세요.";
   }
   if (!payload.targetEmployeeId || !payload.targetEmployeeName) {
     return "업무씨앗 받을 직원을 선택해 주세요.";
+  }
+  if (options.requireFutureSchedule && Array.isArray(payload.scheduleDates) && payload.scheduleDates.length) {
+    const expiredDate = payload.scheduleDates.find((date) => {
+      const scheduled = scheduledWorklogDateTime(date, payload.scheduleTime);
+      return scheduled && scheduled <= new Date();
+    });
+    if (expiredDate) {
+      return "오늘 업무일지를 예약하려면 예약 시간을 현재 시간 이후로 설정해주세요.";
+    }
   }
   if (options.requireAvailableSeeds) {
     const availableSeeds = availableWorklogSeedCount();
@@ -2856,6 +2868,7 @@ function requireValidWorklogPayload(enabledOverride) {
   const payload = worklogPayload(enabledOverride);
   const message = validateWorklogPayload(payload, {
     requireAvailableSeeds: payload.enabled || enabledOverride === false,
+    requireFutureSchedule: payload.enabled,
   });
   if (message) {
     openSuccessModal("입력 확인", message, false);

@@ -3539,6 +3539,22 @@ def prune_expired_schedule_dates(dates, schedule_time, account=None, now=None):
     return result
 
 
+def expired_schedule_dates(dates, schedule_time, now=None):
+    now = now or dt.datetime.now(dt.timezone.utc)
+    local_now = now.astimezone(KST)
+    hour, minute = [int(part) for part in normalize_schedule_time(schedule_time).split(":")]
+    expired = []
+    for text in normalize_schedule_dates(dates, reject_blocked=False):
+        try:
+            day = dt.date.fromisoformat(text)
+        except ValueError:
+            continue
+        scheduled = dt.datetime.combine(day, dt.time(hour, minute), tzinfo=KST)
+        if scheduled <= local_now:
+            expired.append(text)
+    return expired
+
+
 def normalize_schedule_time(value):
     text = str(value or DEFAULT_STATE["worklogScheduleTime"]).strip()
     try:
@@ -3582,13 +3598,13 @@ def set_worklog_settings(payload, owner_key=None):
     target_position_name = payload.get("targetPositionName", state.get("worklogTargetPositionName"))
     target_duty_id = payload.get("targetDutyId", state.get("worklogTargetDutyId"))
     if not project_id or not project_name:
-        raise FruitAutoError("프로젝트를 선택해주세요.")
+        raise FruitAutoError("업무일지 프로젝트를 선택해주세요.")
     if not seed_message:
-        raise FruitAutoError("메시지를 작성해주세요.")
+        raise FruitAutoError("씨앗 선물 메시지를 입력해주세요.")
     if seed_count <= 0:
-        raise FruitAutoError("보낼 씨앗 수를 작성해주세요.")
+        raise FruitAutoError("보낼 씨앗 수를 입력해주세요.")
     if not content:
-        raise FruitAutoError("일지내용을 작성해주세요.")
+        raise FruitAutoError("업무일지 내용을 입력해주세요.")
     if not target_employee_id or not target_employee_name:
         raise FruitAutoError("업무씨앗 받을 직원을 선택해 주세요.")
     verified_balance = {}
@@ -3603,6 +3619,8 @@ def set_worklog_settings(payload, owner_key=None):
         }
     saved_at = now_iso()
     schedule_time = normalize_schedule_time(payload.get("scheduleTime", state.get("worklogScheduleTime")))
+    if enabled and expired_schedule_dates(payload.get("scheduleDates", state.get("worklogScheduleDates")), schedule_time):
+        raise FruitAutoError("오늘 업무일지를 예약하려면 예약 시간을 현재 시간 이후로 설정해주세요.")
     schedule_dates = prune_expired_schedule_dates(
         payload.get("scheduleDates", state.get("worklogScheduleDates")),
         schedule_time,
