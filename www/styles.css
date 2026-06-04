@@ -1688,6 +1688,102 @@ textarea:focus {
   background: #f2fbf5;
 }
 
+.target-cycle-card {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+  border: 1px solid #f3d56a;
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 12px 28px rgba(115, 82, 6, 0.08);
+}
+
+.target-cycle-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.target-cycle-head span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.target-cycle-head strong {
+  color: var(--text-strong);
+  font-size: 15px;
+  font-weight: 950;
+  text-align: right;
+}
+
+.target-cycle-flow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 5px 2px 9px;
+  scrollbar-width: thin;
+}
+
+.cycle-person {
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  min-width: 74px;
+}
+
+.cycle-person.current .profile-avatar {
+  outline: 3px solid #f4b400;
+  box-shadow: 0 0 0 5px rgba(244, 180, 0, 0.18);
+}
+
+.cycle-name {
+  max-width: 86px;
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 950;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cycle-remove {
+  position: absolute;
+  top: -7px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+  color: #6e4d00;
+  font-size: 14px;
+  line-height: 1;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+}
+
+.cycle-arrow {
+  flex: 0 0 auto;
+  color: #b17900;
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.cycle-arrow.return {
+  align-self: flex-end;
+  margin-left: -3px;
+  transform: translateY(-5px) rotate(18deg);
+}
+
 .balance-toolbar span {
   display: block;
   margin-bottom: 4px;

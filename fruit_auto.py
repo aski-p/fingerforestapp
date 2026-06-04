@@ -51,6 +51,8 @@ DEFAULT_STATE = {
     "status": "off",
     "targetEmployeeName": None,
     "targetEmployeeId": None,
+    "targetCycle": [],
+    "targetCycleIndex": 0,
     "lastCheckedAt": None,
     "lastSentAt": None,
     "lastSeedCount": None,
@@ -209,7 +211,8 @@ def get_send_all_berries(state=None):
 
 
 def validate_transfer_settings(state):
-    if not state.get("targetEmployeeId") or not state.get("targetEmployeeName"):
+    target, _cycle, _index = target_from_cycle(state)
+    if not target.get("emp_id") or not target.get("emp_nm"):
         raise FruitAutoError("자동전송 받을 직원을 선택해 주세요.")
     if not str(state.get("giftMessage") or "").strip():
         raise FruitAutoError("메시지를 작성해주세요.")
@@ -266,6 +269,92 @@ def display_employee(name, position=None, fallback=None):
     if safe_name and safe_position:
         return f"{safe_name} {safe_position}"
     return safe_name
+
+
+def employee_record(emp_id=None, name=None, duty_id=None, dept_nm=None, pos_nm=None, source=None):
+    source = source or {}
+    return {
+        "emp_id": str(emp_id or source.get("emp_id") or source.get("targetEmployeeId") or "").strip(),
+        "emp_nm": str(name or source.get("emp_nm") or source.get("targetEmployeeName") or "").strip(),
+        "duty_id": str(duty_id or source.get("duty_id") or source.get("targetDutyId") or "").strip(),
+        "dept_nm": str(dept_nm or source.get("dept_nm") or source.get("targetDeptName") or "").strip(),
+        "pos_nm": str(pos_nm or source.get("pos_nm") or source.get("targetPositionName") or "").strip(),
+    }
+
+
+def normalize_target_cycle(state):
+    state = state or {}
+    raw_cycle = state.get("targetCycle") if isinstance(state.get("targetCycle"), list) else []
+    cycle = []
+    seen = set()
+    for item in raw_cycle:
+        if not isinstance(item, dict):
+            continue
+        record = employee_record(source=item)
+        emp_id = record.get("emp_id")
+        if not emp_id or emp_id in seen:
+            continue
+        cycle.append(record)
+        seen.add(emp_id)
+    legacy = employee_record(
+        state.get("targetEmployeeId"),
+        state.get("targetEmployeeName"),
+        state.get("targetDutyId"),
+        state.get("targetDeptName"),
+        state.get("targetPositionName"),
+    )
+    if legacy.get("emp_id") and legacy.get("emp_id") not in seen:
+        cycle.insert(0, legacy)
+    current_id = str(state.get("targetEmployeeId") or "")
+    try:
+        index = int(state.get("targetCycleIndex") or 0)
+    except (TypeError, ValueError):
+        index = 0
+    if current_id:
+        for item_index, item in enumerate(cycle):
+            if item.get("emp_id") == current_id:
+                index = item_index
+                break
+    if cycle:
+        index %= len(cycle)
+    else:
+        index = 0
+    return cycle, index
+
+
+def target_from_cycle(state):
+    cycle, index = normalize_target_cycle(state)
+    if cycle:
+        return cycle[index], cycle, index
+    return employee_record(
+        state.get("targetEmployeeId"),
+        state.get("targetEmployeeName"),
+        state.get("targetDutyId"),
+        state.get("targetDeptName"),
+        state.get("targetPositionName"),
+    ), [], 0
+
+
+def apply_cycle_target(state, target=None, cycle=None, index=None):
+    target = target or {}
+    if cycle is None or index is None:
+        target, cycle, index = target_from_cycle({**(state or {}), **target})
+    state["targetCycle"] = cycle or []
+    state["targetCycleIndex"] = index or 0
+    state["targetEmployeeId"] = target.get("emp_id") or None
+    state["targetEmployeeName"] = target.get("emp_nm") or None
+    state["targetDutyId"] = target.get("duty_id") or None
+    state["targetDeptName"] = target.get("dept_nm") or None
+    state["targetPositionName"] = target.get("pos_nm") or None
+    return state
+
+
+def advance_target_cycle(state):
+    cycle, index = normalize_target_cycle(state)
+    if not cycle:
+        return state
+    next_index = (index + 1) % len(cycle)
+    return apply_cycle_target(state, cycle[next_index], cycle, next_index)
 
 
 def load_json(path, default):
@@ -1911,7 +2000,7 @@ def local_history_hints_by_name(local_events):
 def match_official_history_event(local_events, used_indexes, action, counterpart, berries, message, remaining=None, is_seed_history=False):
     normalized_message = normalize_history_message(message)
     for index, event in enumerate(local_events):
-        if event.get("timeSource") == "official_observed":
+        if event.get("timeSource") == "official_observed" and not (is_seed_history and action == "received"):
             continue
         sent_by_me = action == "sent"
         if sent_by_me:
@@ -1936,7 +2025,12 @@ def match_official_history_event(local_events, used_indexes, action, counterpart
             receiver_name = event.get("targetEmployeeName") or event.get("target")
             if str(receiver_name or "") != str(counterpart or ""):
                 continue
-        event_amount = parse_int(event.get("seedDelta"), None) if is_seed_history else parse_int(event.get("berries"), None)
+        if is_seed_history:
+            event_amount = parse_int(event.get("seedDelta"), None)
+            if event_amount is None:
+                event_amount = parse_int(event.get("berries"), None)
+        else:
+            event_amount = parse_int(event.get("berries"), None)
         if event_amount != berries:
             continue
         event_message = normalize_history_message(event.get("message"))
@@ -2155,6 +2249,9 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
                 "historyKind": "seed" if is_seed_history else "berry",
         }
         if is_seed_history:
+            if action == "received" and matched_event and matched_event.get("timeSource") in {"official_observed", "balance_detected"}:
+                item["observedAt"] = matched_event.get("at")
+                item["_matchedTimeSource"] = "seed_berry_observed"
             seed_api_ordinal = seed_api_ordinal_by_date.get(history_date, 0)
             seed_api_ordinal_by_date[history_date] = seed_api_ordinal + 1
             item["_apiOrderTime"] = api_order_history_time(history_date, seed_api_ordinal)
@@ -2574,8 +2671,10 @@ def check_once(dry_run=False, force=False):
         raise
 
     try:
-        target_name = state.get("targetEmployeeName")
-        target_id = state.get("targetEmployeeId")
+        cycle_target, target_cycle, target_cycle_index = target_from_cycle(state)
+        apply_cycle_target(state, cycle_target, target_cycle, target_cycle_index)
+        target_name = cycle_target.get("emp_nm")
+        target_id = cycle_target.get("emp_id")
         if not target_name and not target_id:
             state.update(
                 {
@@ -2595,6 +2694,14 @@ def check_once(dry_run=False, force=False):
         if target.get("emp_id") == employee.get("emp_id"):
             raise FruitAutoError("cannot send berries to yourself")
         target_name = target.get("emp_nm") or target_name
+        if target_cycle:
+            target_cycle[target_cycle_index] = employee_record(
+                target.get("emp_id"),
+                target_name,
+                target.get("duty_id") or cycle_target.get("duty_id"),
+                target.get("dept_nm") or cycle_target.get("dept_nm"),
+                employee_position(target),
+            )
         seeds, berries = current_seed_fruit(client, employee)
 
         state.update(
@@ -3202,20 +3309,59 @@ def search_employees(query, owner_key=None):
 def set_target(emp_id, name=None, duty_id=None, dept_nm=None, pos_nm=None, owner_key=None):
     owner_key = require_owner(owner_key)
     state = get_account_state(owner_key)
-    state.update(
+    new_target = employee_record(emp_id, name, duty_id, dept_nm, pos_nm)
+    if not new_target.get("emp_id") or not new_target.get("emp_nm"):
+        raise FruitAutoError("자동전송 받을 직원을 선택해 주세요.")
+    cycle, index = normalize_target_cycle(state)
+    existing_index = next((i for i, item in enumerate(cycle) if item.get("emp_id") == new_target["emp_id"]), None)
+    if existing_index is None:
+        cycle.append(new_target)
+        if len(cycle) == 1:
+            index = 0
+    else:
+        cycle[existing_index] = {**cycle[existing_index], **new_target}
+        if not state.get("targetEmployeeId"):
+            index = existing_index
+    state.update({"targetLocked": True, "targetSelectedAt": now_iso(), "updatedAt": now_iso()})
+    apply_cycle_target(state, cycle[index], cycle, index)
+    save_account_state(owner_key, state)
+    log_event(
         {
-            "targetEmployeeId": emp_id,
-            "targetEmployeeName": name or state.get("targetEmployeeName"),
-            "targetDutyId": duty_id,
-            "targetDeptName": dept_nm,
-            "targetPositionName": pos_nm,
-            "targetLocked": True,
-            "targetSelectedAt": now_iso(),
-            "updatedAt": now_iso(),
+            "action": "target_added",
+            "ownerKey": owner_key,
+            "targetEmployeeId": new_target.get("emp_id"),
+            "targetEmployeeName": new_target.get("emp_nm"),
+            "cycleSize": len(cycle),
         }
     )
+    return state
+
+
+def remove_cycle_target(emp_id, owner_key=None):
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    remove_id = str(emp_id or "").strip()
+    if not remove_id:
+        raise FruitAutoError("삭제할 대상 직원이 없습니다.")
+    cycle, index = normalize_target_cycle(state)
+    current_id = str(state.get("targetEmployeeId") or "")
+    remove_index = next((i for i, item in enumerate(cycle) if item.get("emp_id") == remove_id), None)
+    if remove_index is None:
+        return state
+    cycle.pop(remove_index)
+    if cycle:
+        if remove_id == current_id:
+            index = min(remove_index, len(cycle) - 1)
+        elif remove_index < index:
+            index -= 1
+        index %= len(cycle)
+        apply_cycle_target(state, cycle[index], cycle, index)
+    else:
+        apply_cycle_target(state, {}, [], 0)
+        state["targetLocked"] = False
+    state["updatedAt"] = now_iso()
     save_account_state(owner_key, state)
-    log_event({"action": "target_set", "ownerKey": owner_key, "targetEmployeeId": emp_id, "targetEmployeeName": name})
+    log_event({"action": "target_removed", "ownerKey": owner_key, "targetEmployeeId": remove_id, "cycleSize": len(cycle)})
     return state
 
 
@@ -3427,8 +3573,10 @@ def check_once(dry_run=False, force=False, owner_key=None):
 
     try:
         client, employee_info, login_dataset, employee, sender_employee_id, sender_employee_name = account_login(owner_key)
-        target_name = state.get("targetEmployeeName")
-        target_id = state.get("targetEmployeeId")
+        cycle_target, target_cycle, target_cycle_index = target_from_cycle(state)
+        apply_cycle_target(state, cycle_target, target_cycle, target_cycle_index)
+        target_name = cycle_target.get("emp_nm")
+        target_id = cycle_target.get("emp_id")
         if not target_name and not target_id:
             state.update(
                 {
@@ -3449,6 +3597,14 @@ def check_once(dry_run=False, force=False, owner_key=None):
         if target.get("emp_id") == employee.get("emp_id"):
             raise FruitAutoError("cannot send berries to yourself")
         target_name = target.get("emp_nm") or target_name
+        if target_cycle:
+            target_cycle[target_cycle_index] = employee_record(
+                target.get("emp_id"),
+                target_name,
+                target.get("duty_id") or cycle_target.get("duty_id"),
+                target.get("dept_nm") or cycle_target.get("dept_nm"),
+                employee_position(target),
+            )
         seeds, berries = current_seed_fruit(client, employee)
         state.update(
             {
@@ -3456,7 +3612,11 @@ def check_once(dry_run=False, force=False, owner_key=None):
                 "status": "on" if enabled else "forced",
                 "targetEmployeeName": target.get("emp_nm") or target_name,
                 "targetEmployeeId": target.get("emp_id"),
+                "targetDutyId": target.get("duty_id") or cycle_target.get("duty_id"),
+                "targetDeptName": target.get("dept_nm") or cycle_target.get("dept_nm"),
                 "targetPositionName": employee_position(target),
+                "targetCycle": target_cycle,
+                "targetCycleIndex": target_cycle_index,
                 "senderEmployeeId": sender_employee_id,
                 "senderEmployeeName": sender_employee_name,
                 "senderPositionName": employee_position(employee),
@@ -3591,6 +3751,8 @@ def check_once(dry_run=False, force=False, owner_key=None):
                 "pendingTargetEmployeeId": None,
             }
         )
+        advance_target_cycle(state)
+        state["updatedAt"] = now_iso()
         save_account_state(owner_key, state)
         sent_event = {
             "action": "sent",

@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.10.2";
+const appVersion = "3.10.3";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1028,8 +1028,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.10.2",
-        badge: "/icons/app-icon-192.png?v=3.10.2",
+        icon: "/icons/app-icon-192.png?v=3.10.3",
+        badge: "/icons/app-icon-192.png?v=3.10.3",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1455,6 +1455,15 @@ function mergeStatePhotos(nextState) {
   if (!merged.targetProfilePhotoUrl) {
     merged.targetProfilePhotoUrl = getCachedProfilePhoto(targetId);
   }
+  if (Array.isArray(merged.targetCycle)) {
+    merged.targetCycle = merged.targetCycle.map((item) => {
+      const nextItem = { ...(item || {}) };
+      const empId = nextItem.emp_id || nextItem.targetEmployeeId;
+      if (!nextItem.profilePhotoUrl) nextItem.profilePhotoUrl = getCachedProfilePhoto(empId);
+      rememberProfilePhoto(empId, nextItem.profilePhotoUrl);
+      return nextItem;
+    });
+  }
   rememberProfilePhoto(senderId, merged.senderProfilePhotoUrl);
   rememberProfilePhoto(targetId, merged.targetProfilePhotoUrl);
   if (merged.credentialsSaved !== false) {
@@ -1464,6 +1473,60 @@ function mergeStatePhotos(nextState) {
     preserveStateValue(merged, previous, cached, "lastCheckedAt");
   }
   return merged;
+}
+
+function cyclePersonName(person) {
+  return String(person?.emp_nm || person?.targetEmployeeName || person?.emp_id || person?.targetEmployeeId || "").trim();
+}
+
+function renderTargetCycle(state) {
+  const card = $("targetCycleCard");
+  const flow = $("targetCycleFlow");
+  const summary = $("targetCycleSummary");
+  if (!card || !flow || !summary) return;
+  const cycle = Array.isArray(state.targetCycle) ? state.targetCycle : [];
+  card.classList.toggle("hidden", !isUnlocked() || !cycle.length);
+  flow.innerHTML = "";
+  if (!cycle.length) {
+    summary.textContent = "대상 없음";
+    return;
+  }
+  const currentId = String(state.targetEmployeeId || "");
+  const currentIndex = Math.max(0, cycle.findIndex((person) => String(person.emp_id || "") === currentId));
+  summary.textContent = `${cycle.length}명 순환`;
+  cycle.forEach((person, index) => {
+    const name = cyclePersonName(person);
+    const personEl = document.createElement("div");
+    personEl.className = `cycle-person ${index === currentIndex ? "current" : ""}`;
+    personEl.innerHTML = `
+      <span class="profile-avatar person-avatar" aria-hidden="true"><span>${escapeHtml(getInitial(name))}</span></span>
+      <span class="cycle-name">${escapeHtml(name || "-")}</span>
+      <button class="cycle-remove" type="button" aria-label="${escapeHtml(name || "직원")} 제외">×</button>
+    `;
+    applyAvatar(
+      personEl.querySelector(".profile-avatar"),
+      personEl.querySelector(".profile-avatar span"),
+      name,
+      person.profilePhotoUrl || getCachedProfilePhoto(person.emp_id)
+    );
+    personEl.querySelector(".cycle-remove").addEventListener("click", async () => {
+      try {
+        setBusy(true);
+        const nextState = await api("/api/target-remove", { emp_id: person.emp_id });
+        renderState(nextState);
+        toast(`${name} 직원을 사이클에서 제외했습니다.`);
+      } catch (err) {
+        toast(`대상 제외 실패: ${err.message}`);
+      } finally {
+        setBusy(false);
+      }
+    });
+    flow.appendChild(personEl);
+    const arrow = document.createElement("span");
+    arrow.className = `cycle-arrow ${index === cycle.length - 1 ? "return" : ""}`;
+    arrow.textContent = "→";
+    flow.appendChild(arrow);
+  });
 }
 
 function cachedStateValue() {
@@ -2111,6 +2174,7 @@ function renderState(state) {
     : "로그인 필요";
   $("targetBadge").textContent = hasTarget ? "선택됨" : "미선택";
   $("targetBadge").className = `badge ${hasTarget ? "ok" : "neutral"}`;
+  renderTargetCycle(state);
   $("autoToggle").checked = enabled;
   $("pushToggle").checked = shouldShowPushEnabled(state);
   $("giftMessage").value = state.giftMessage || "자동 전달";
@@ -2399,8 +2463,8 @@ function renderResults(results) {
         <small>${escapeHtml(person.dept_nm || "-")} · ${escapeHtml(person.pos_nm || "-")}</small>
       </div>
       <div class="person-actions">
-        <button type="button" data-action="select">선택</button>
-        <button type="button" data-action="select-on">선택하고 켜기</button>
+        <button type="button" data-action="select">추가</button>
+        <button type="button" data-action="select-on">추가하고 켜기</button>
       </div>
     `;
     item.querySelector('[data-action="select"]').addEventListener("click", async () => {
@@ -2410,7 +2474,7 @@ function renderResults(results) {
         renderState(state);
         $("results").innerHTML = "";
         $("searchInput").value = "";
-        toast(`${person.emp_nm} 직원으로 설정했습니다.`);
+        toast(`${person.emp_nm} 직원을 사이클에 추가했습니다.`);
       } catch (err) {
         toast(`대상 설정 실패: ${err.message}`);
       } finally {
@@ -2425,7 +2489,7 @@ function renderResults(results) {
         renderState(state);
         $("results").innerHTML = "";
         $("searchInput").value = "";
-        toast(`${person.emp_nm} 직원으로 설정하고 자동전송을 켰습니다.`);
+        toast(`${person.emp_nm} 직원을 사이클에 추가하고 자동전송을 켰습니다.`);
       } catch (err) {
         toast(`자동전송 시작 실패: ${err.message}`);
       } finally {

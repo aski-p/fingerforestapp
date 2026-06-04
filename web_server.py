@@ -30,7 +30,7 @@ TICK_WAKE_PATH = DATA_DIR / "tick_worker.wake"
 TICK_HEARTBEAT_PATH = DATA_DIR / "tick_worker.heartbeat.json"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.10.2"
+APP_VERSION = "3.10.3"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
 CHAT_CONTEXT_MESSAGE_LIMIT = 8
 CHAT_HISTORY_MESSAGE_LIMIT = CHAT_CONTEXT_MESSAGE_LIMIT
@@ -50,6 +50,8 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "열매 자동전송 대상을 여러 명 추가해 순서대로 순환 전송할 수 있게 했고, 사이클 카드에서 X 버튼으로 개별 제외할 수 있습니다.",
+    "씨앗선물 받은 내역은 5분 체크에서 잡힌 열매 +3 관측 시각을 기준으로 실제 선물 시각을 보정합니다.",
     "로그인 화면 제목 옆 마스코트 아이콘을 제거하고 시작 캐릭터 낙하 애니메이션을 더 부드럽게 조정했습니다.",
     "메인 화면 배경을 첨부받은 고화질 봄/여름/가을/겨울 이미지로 교체했습니다.",
     "승인된 업무일지 팝업에서 기존 전송 기록에 본문이 없으면 저장된 업무 내용을 보강해 표시합니다.",
@@ -268,6 +270,9 @@ def attach_state_profile_photos(state):
         state.get("senderEmployeeId") or state.get("loginUserId"),
         state.get("targetEmployeeId"),
     ]
+    for item in state.get("targetCycle") or []:
+        if isinstance(item, dict):
+            employee_ids.append(item.get("emp_id") or item.get("targetEmployeeId"))
     photos = list_profile_photos(employee_ids)
     sender_profile = photos.get(str(employee_ids[0] or ""))
     target_profile = photos.get(str(employee_ids[1] or ""))
@@ -282,6 +287,15 @@ def attach_state_profile_photos(state):
         or (target_profile.get("url") if target_profile else "")
         or ""
     )
+    cycle = []
+    for item in state.get("targetCycle") or []:
+        if not isinstance(item, dict):
+            continue
+        next_item = dict(item)
+        profile = photos.get(str(next_item.get("emp_id") or ""))
+        next_item["profilePhotoUrl"] = profile.get("url") if profile else ""
+        cycle.append(next_item)
+    state["targetCycle"] = cycle
     return state
 
 
@@ -769,6 +783,7 @@ def public_state(owner_key=None, refresh_balance=False):
         state = dict(fruit_auto.DEFAULT_STATE)
         state["credentialsSaved"] = False
     state["hasTarget"] = bool(state.get("targetEmployeeId"))
+    state["targetCycleCount"] = len(state.get("targetCycle") or [])
     state["daemonRunning"] = ensure_daemon_running()
     state["activeAccountCount"] = len(fruit_auto.active_owner_keys())
     return attach_state_profile_photos(state)
@@ -1523,6 +1538,9 @@ class Handler(BaseHTTPRequestHandler):
                     payload.get("pos_nm"),
                     owner_key=owner_key,
                 )
+                result = state_response(owner_key)
+            elif parsed.path == "/api/target-remove":
+                fruit_auto.remove_cycle_target(payload.get("emp_id"), owner_key=owner_key)
                 result = state_response(owner_key)
             elif parsed.path == "/api/message":
                 fruit_auto.set_message(payload.get("message", ""), owner_key=owner_key)
