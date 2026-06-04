@@ -12,6 +12,7 @@ fruit-auto-android.apk
 fruit-auto-ios.mobileconfig
 *.png
 !www/icons/*.png
+!www/assets/launch/*.png
 *.jpg
 *.jpeg
 *.zip
