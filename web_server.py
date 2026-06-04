@@ -50,6 +50,7 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "승인된 업무일지 팝업에서 기존 전송 기록에 본문이 없으면 저장된 업무 내용을 보강해 표시합니다.",
     "씨앗선물 수신 내역은 열매 증가가 5분 체크에서 새로 잡힌 시각을 우선 표시합니다.",
     "기존 씨앗선물 내역은 확실한 관측 시간이 없으면 받음/보냄만 표시합니다.",
     "당일 날짜 선택과 오늘 예약 시간 보정 로직을 안정화했습니다.",
