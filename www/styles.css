@@ -321,8 +321,7 @@ body.theme-getter {
     #100205;
 }
 
-body.main-bg-scene {
-  --season-bg: url("/assets/seasons/forest-spring.jpg?v=3.9.3");
+body.logged-out.main-bg-scene {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(248, 251, 253, 0.06)),
     var(--season-bg) center top / cover no-repeat fixed,
@@ -332,23 +331,23 @@ body.main-bg-scene {
 }
 
 body.main-bg-forest-spring {
-  --season-bg: url("/assets/seasons/forest-spring.jpg?v=3.9.3");
+  --season-bg: url("/assets/seasons/forest-spring.jpg?v=3.9.4");
 }
 
 body.main-bg-forest-summer {
-  --season-bg: url("/assets/seasons/forest-summer.jpg?v=3.9.3");
+  --season-bg: url("/assets/seasons/forest-summer.jpg?v=3.9.4");
 }
 
 body.main-bg-forest-autumn {
-  --season-bg: url("/assets/seasons/forest-autumn.jpg?v=3.9.3");
+  --season-bg: url("/assets/seasons/forest-autumn.jpg?v=3.9.4");
 }
 
 body.main-bg-forest-winter {
-  --season-bg: url("/assets/seasons/forest-winter.jpg?v=3.9.3");
+  --season-bg: url("/assets/seasons/forest-winter.jpg?v=3.9.4");
 }
 
 body.main-bg-forest-night {
-  --season-bg: url("/assets/seasons/forest-night.jpg?v=3.9.3");
+  --season-bg: url("/assets/seasons/forest-night.jpg?v=3.9.4");
 }
 
 body.main-bg-forest-sleep {
@@ -381,11 +380,11 @@ body.main-bg-forest-sleep {
   background-size: cover;
 }
 
-body.main-bg-scene .app {
+body.logged-out.main-bg-scene .app {
   position: relative;
 }
 
-body.main-bg-scene .app::before {
+body.logged-out.main-bg-scene .app::before {
   content: none;
 }
 
