@@ -2633,6 +2633,17 @@ def give_all_berries(client, employee_info, target, berry_count, message):
     return client.post_json(f"{FOREST_API}/insBryGit", payload)
 
 
+def transfer_balance_confirmed(before_berries, sent_berries, after_berries):
+    before = parse_int(before_berries, 0)
+    sent = parse_int(sent_berries, 0)
+    after = parse_int(after_berries, 0)
+    if sent <= 0:
+        return False
+    if before < sent:
+        return False
+    return after <= max(0, before - sent)
+
+
 def check_once(dry_run=False, force=False):
     state = load_json(STATE_PATH, DEFAULT_STATE)
     interval_seconds = get_run_interval_seconds(state)
@@ -2765,6 +2776,37 @@ def check_once(dry_run=False, force=False):
 
         give_all_berries(client, employee_info, target, berries, message)
         remaining_seeds, remaining = current_seed_fruit(client, employee)
+        if not transfer_balance_confirmed(berries, berries, remaining):
+            state.update(
+                {
+                    "lastSeedCount": remaining_seeds,
+                    "lastBerryCount": remaining,
+                    "balanceCheckedAt": now_iso(),
+                    "lastResult": f"send_not_confirmed_remaining_{remaining}",
+                    "lastAttemptResult": f"send_not_confirmed_remaining_{remaining}",
+                }
+            )
+            save_json(STATE_PATH, state)
+            log_event(
+                {
+                    "action": "send_not_confirmed",
+                    "berries": berries,
+                    "remaining": remaining,
+                    "target": target_name,
+                    "targetEmployeeId": target.get("emp_id"),
+                    "ownerKey": owner_key,
+                    "slot": slot,
+                }
+            )
+            return {
+                "action": "failed",
+                "reason": "send_not_confirmed",
+                "berries": berries,
+                "remaining": remaining,
+                "target": target_name,
+                "targetEmployeeId": target.get("emp_id"),
+                "ownerKey": owner_key,
+            }
         state.update(
             {
                 "lastSentAt": now_iso(),
@@ -3750,6 +3792,39 @@ def check_once(dry_run=False, force=False, owner_key=None):
 
         give_all_berries(client, employee_info, target, send_berries, message)
         remaining_seeds, remaining = current_seed_fruit(client, employee)
+        if not transfer_balance_confirmed(berries, send_berries, remaining):
+            state.update(
+                {
+                    "lastSeedCount": remaining_seeds,
+                    "lastBerryCount": remaining,
+                    "balanceCheckedAt": now_iso(),
+                    "lastResult": f"send_not_confirmed_remaining_{remaining}",
+                    "lastAttemptResult": f"send_not_confirmed_remaining_{remaining}",
+                }
+            )
+            save_account_state(owner_key, state)
+            log_event(
+                {
+                    "action": "send_not_confirmed",
+                    "berries": send_berries,
+                    "availableBerries": berries,
+                    "remaining": remaining,
+                    "target": target_name,
+                    "targetEmployeeId": target.get("emp_id"),
+                    "ownerKey": owner_key,
+                    "slot": slot,
+                }
+            )
+            return {
+                "action": "failed",
+                "reason": "send_not_confirmed",
+                "berries": send_berries,
+                "availableBerries": berries,
+                "remaining": remaining,
+                "target": target_name,
+                "targetEmployeeId": target.get("emp_id"),
+                "ownerKey": owner_key,
+            }
         state.update(
             {
                 "lastSentAt": now_iso(),
