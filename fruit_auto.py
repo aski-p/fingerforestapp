@@ -2131,7 +2131,7 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
                 "toAvatarName": to_avatar_name,
                 "senderIsMe": sender_is_me,
                 "seeds": seed_count,
-                "berries": 0 if is_seed_history else abs(delta),
+                "berries": abs(delta),
                 "remaining": fruit_count,
                 "delta": delta,
                 "content": content_message,
@@ -2144,6 +2144,8 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
             seed_api_ordinal_by_date[history_date] = seed_api_ordinal + 1
             item["_apiOrderTime"] = api_order_history_time(history_date, seed_api_ordinal)
             item["_officialSeedFingerprint"] = official_seed_history_fingerprint(item)
+            if action == "received":
+                item["_officialFingerprint"] = official_history_fingerprint(item)
         else:
             item["_officialFingerprint"] = official_history_fingerprint(item)
         rows.append(item)
@@ -2169,7 +2171,7 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
                 row["_matchedTimeSource"] = "seed_observed"
     berry_rows_by_date = {}
     for row in rows:
-        if row.get("historyKind") != "seed" and row.get("historyDate"):
+        if row.get("_officialFingerprint") and row.get("historyDate"):
             berry_rows_by_date.setdefault(row.get("historyDate"), []).append(row)
     for history_date, berry_rows in berry_rows_by_date.items():
         lookup = sync_official_history_observations(
@@ -2186,7 +2188,7 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
             if first_seen_at and observed_time_matches_history_date(first_seen_at, row.get("historyDate")):
                 row["observedAt"] = first_seen_at
                 row["at"] = first_seen_at
-                row["_matchedTimeSource"] = "observed_db"
+                row["_matchedTimeSource"] = "seed_berry_observed" if row.get("historyKind") == "seed" else "observed_db"
     for row in rows:
         if not row.get("at"):
             row["timeSource"] = "missing"
@@ -2194,6 +2196,8 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
             row["timeSource"] = "api_order"
         elif row.get("_matchedTimeSource") == "seed_observed":
             row["timeSource"] = "seed_observed"
+        elif row.get("_matchedTimeSource") == "seed_berry_observed":
+            row["timeSource"] = "seed_berry_observed"
         elif row.get("_matchedTimeSource") == "observed_db":
             row["timeSource"] = "observed_db"
         elif row.get("action") == "received" and row.get("_matchedTimeSource") == "balance_detected":
