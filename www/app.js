@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.11.6";
+const appVersion = "3.11.7";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -437,7 +437,7 @@ function koreanDateParts(date = new Date()) {
 
 function currentMainBackgroundClass(date = new Date()) {
   const { month, hour } = koreanDateParts(date);
-  if (hour >= 21) return "main-bg-forest-night";
+  if (hour >= 21 || hour <= 8) return "main-bg-forest-night";
   if (month >= 3 && month <= 5) return "main-bg-forest-spring";
   if (month >= 6 && month <= 8) return "main-bg-forest-summer";
   if (month >= 9 && month <= 11) return "main-bg-forest-autumn";
@@ -1063,8 +1063,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.11.6",
-        badge: "/icons/app-icon-192.png?v=3.11.6",
+        icon: "/icons/app-icon-192.png?v=3.11.7",
+        badge: "/icons/app-icon-192.png?v=3.11.7",
         data: { url: item.url || "/" },
       });
       return true;

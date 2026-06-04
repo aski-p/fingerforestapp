@@ -10,8 +10,8 @@ self.addEventListener("push", (event) => {
     body: data.body || "새 알림이 있습니다.",
     tag: data.tag || "fruit-auto",
     renotify: false,
-    icon: "/icons/app-icon-192.png?v=3.11.6",
-    badge: "/icons/app-icon-192.png?v=3.11.6",
+    icon: "/icons/app-icon-192.png?v=3.11.7",
+    badge: "/icons/app-icon-192.png?v=3.11.7",
     data: {
       url: data.url || "/",
     },
