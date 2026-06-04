@@ -335,7 +335,7 @@ body.main-bg-forest-spring {
 }
 
 body.main-bg-forest-summer {
-  --season-bg: url("/assets/seasons/forest-summer.jpg?v=3.11.9");
+  --season-bg: url("/assets/seasons/forest-summer.jpg?v=3.12.0");
 }
 
 body.main-bg-forest-autumn {
@@ -1792,8 +1792,56 @@ textarea:focus {
 }
 
 .cycle-person.current .profile-avatar {
-  outline: 3px solid #f4b400;
-  box-shadow: 0 0 0 5px rgba(244, 180, 0, 0.18);
+  overflow: visible;
+  border-color: #f7c948;
+  outline: 0;
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, .96),
+    0 0 0 7px rgba(247, 201, 72, .46),
+    0 0 24px rgba(217, 154, 0, .5);
+  animation: cycleCurrentPulse 1.8s ease-in-out infinite;
+  isolation: isolate;
+}
+
+.cycle-person.current .profile-avatar::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  background:
+    conic-gradient(
+      from 0deg,
+      rgba(255, 255, 255, .95) 0deg 18deg,
+      #ffd95a 42deg 96deg,
+      rgba(184, 122, 0, .9) 132deg 168deg,
+      rgba(255, 255, 255, .9) 198deg 218deg,
+      #f4b400 250deg 318deg,
+      rgba(255, 255, 255, .95) 340deg 360deg
+    );
+  filter: drop-shadow(0 0 8px rgba(255, 217, 90, .75));
+  animation: cycleCurrentShine 1.4s linear infinite;
+  z-index: -1;
+}
+
+@keyframes cycleCurrentPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 3px rgba(255, 255, 255, .96),
+      0 0 0 7px rgba(247, 201, 72, .42),
+      0 0 20px rgba(217, 154, 0, .42);
+  }
+  50% {
+    box-shadow:
+      0 0 0 4px rgba(255, 255, 255, .98),
+      0 0 0 9px rgba(247, 201, 72, .58),
+      0 0 30px rgba(217, 154, 0, .64);
+  }
+}
+
+@keyframes cycleCurrentShine {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .cycle-name {
