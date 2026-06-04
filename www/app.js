@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.11.1";
+const appVersion = "3.11.2";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1039,8 +1039,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.11.1",
-        badge: "/icons/app-icon-192.png?v=3.11.1",
+        icon: "/icons/app-icon-192.png?v=3.11.2",
+        badge: "/icons/app-icon-192.png?v=3.11.2",
         data: { url: item.url || "/" },
       });
       return true;
@@ -2219,7 +2219,7 @@ function renderState(state) {
   const sendModeText = sendAllBerries ? "보유 열매 전부" : `${sendCount}개`;
   const daemonText = state.daemonRunning ? "데몬 실행 중" : "데몬 확인 필요";
   const nextFruitRunAt = state.nextRunAt || new Date(Date.now() + intervalMinutes(state) * 60000).toISOString();
-  $("fruitScheduleBadge").textContent = enabled ? `예약됨 ${fmtPlanTime(nextFruitRunAt)} 예정` : "대기";
+  $("fruitScheduleBadge").textContent = enabled ? `예약됨 ${fmtDate(nextFruitRunAt)} 예정` : "대기";
   $("fruitScheduleBadge").className = `badge ${enabled ? "ok" : "neutral"}`;
   $("controlHint").textContent = enabled
     ? `켜짐 상태입니다. ${daemonText}. 다음 확인 ${fmtDate(nextFruitRunAt)}. 전송 수 ${sendModeText}`
