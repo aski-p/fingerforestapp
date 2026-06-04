@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.12.4";
+const appVersion = "3.12.5";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1065,8 +1065,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.12.4",
-        badge: "/icons/app-icon-192.png?v=3.12.4",
+        icon: "/icons/app-icon-192.png?v=3.12.5",
+        badge: "/icons/app-icon-192.png?v=3.12.5",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1609,12 +1609,9 @@ function renderTargetCycle(state) {
           <marker id="cycleArrowHead" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto">
             <path d="M1,1 L7,4 L1,7 Z"></path>
           </marker>
-          <marker id="cycleActiveArrowHead" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto">
-            <path d="M1,1 L7,4 L1,7 Z"></path>
-          </marker>
         </defs>
         <path class="cycle-ring-path" d="M100 18 A82 82 0 1 1 99.9 18" marker-end="url(#cycleArrowHead)"></path>
-        <path class="cycle-ring-active-path" d="${activePath}" marker-end="url(#cycleActiveArrowHead)"></path>
+        <path class="cycle-ring-active-path" d="${activePath}"></path>
       </svg>
     `;
     flow.appendChild(ring);
