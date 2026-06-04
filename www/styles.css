@@ -322,7 +322,7 @@ body.theme-getter {
 }
 
 body.main-bg-scene {
-  --season-bg: url("/assets/seasons/forest-spring.jpg?v=3.9.1");
+  --season-bg: url("/assets/seasons/forest-spring.jpg?v=3.9.2");
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(248, 251, 253, 0.06)),
     var(--season-bg) center top / cover no-repeat fixed,
@@ -332,19 +332,19 @@ body.main-bg-scene {
 }
 
 body.main-bg-forest-spring {
-  --season-bg: url("/assets/seasons/forest-spring.jpg?v=3.9.1");
+  --season-bg: url("/assets/seasons/forest-spring.jpg?v=3.9.2");
 }
 
 body.main-bg-forest-summer {
-  --season-bg: url("/assets/seasons/forest-summer.jpg?v=3.9.1");
+  --season-bg: url("/assets/seasons/forest-summer.jpg?v=3.9.2");
 }
 
 body.main-bg-forest-autumn {
-  --season-bg: url("/assets/seasons/forest-autumn.jpg?v=3.9.1");
+  --season-bg: url("/assets/seasons/forest-autumn.jpg?v=3.9.2");
 }
 
 body.main-bg-forest-winter {
-  --season-bg: url("/assets/seasons/forest-winter.jpg?v=3.9.1");
+  --season-bg: url("/assets/seasons/forest-winter.jpg?v=3.9.2");
 }
 
 body.main-bg-forest-sleep {

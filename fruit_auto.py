@@ -2167,7 +2167,6 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
             first_seen_at = lookup.get((fingerprint, occurrence_by_fingerprint[fingerprint]))
             if first_seen_at and observed_time_matches_history_date(first_seen_at, row.get("historyDate")):
                 row["observedAt"] = first_seen_at
-                row["at"] = first_seen_at
                 row["_matchedTimeSource"] = "seed_observed"
     berry_rows_by_date = {}
     for row in rows:
@@ -2182,6 +2181,8 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
         )
         occurrence_by_fingerprint = {}
         for row in berry_rows:
+            if row.get("historyKind") == "seed":
+                continue
             fingerprint = row.get("_officialFingerprint")
             occurrence_by_fingerprint[fingerprint] = occurrence_by_fingerprint.get(fingerprint, 0) + 1
             first_seen_at = lookup.get((fingerprint, occurrence_by_fingerprint[fingerprint]))
