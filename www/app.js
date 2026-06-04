@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.12.5";
+const appVersion = "3.12.6";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -439,7 +439,7 @@ function koreanDateParts(date = new Date()) {
 
 function currentMainBackgroundClass(date = new Date()) {
   const { month, hour } = koreanDateParts(date);
-  if (hour >= 21 || hour <= 8) return "main-bg-forest-night";
+  if (hour >= 21 || hour < 8) return "main-bg-forest-night";
   if (month >= 3 && month <= 5) return "main-bg-forest-spring";
   if (month >= 6 && month <= 8) return "main-bg-forest-summer";
   if (month >= 9 && month <= 11) return "main-bg-forest-autumn";
@@ -1065,8 +1065,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.12.5",
-        badge: "/icons/app-icon-192.png?v=3.12.5",
+        icon: "/icons/app-icon-192.png?v=3.12.6",
+        badge: "/icons/app-icon-192.png?v=3.12.6",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1591,27 +1591,40 @@ function renderTargetCycle(state) {
     ring.className = "cycle-ring";
     ring.setAttribute("aria-hidden", "true");
     const segmentSize = 360 / cycle.length;
-    const activeStartAngle = -90 + segmentSize * currentIndex;
-    const activeEndAngle = activeStartAngle + segmentSize;
-    const cycleArcPoint = (angleDeg) => {
-      const rad = angleDeg * (Math.PI / 180);
+    const activeStartAngle = (-90 + segmentSize * currentIndex) * (Math.PI / 180);
+    const activeEndAngle = (-90 + segmentSize * ((currentIndex + 1) % cycle.length)) * (Math.PI / 180);
+    const cyclePoint = (angleRad, radiusX = 82, radiusY = 82) => ({
+      x: 100 + Math.cos(angleRad) * radiusX,
+      y: 100 + Math.sin(angleRad) * radiusY,
+    });
+    const shortenLine = (start, end, startOffset, endOffset) => {
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const length = Math.hypot(dx, dy) || 1;
       return {
-        x: 100 + Math.cos(rad) * 82,
-        y: 100 + Math.sin(rad) * 82,
+        start: { x: start.x + (dx / length) * startOffset, y: start.y + (dy / length) * startOffset },
+        end: { x: end.x - (dx / length) * endOffset, y: end.y - (dy / length) * endOffset },
       };
     };
-    const activeStart = cycleArcPoint(activeStartAngle);
-    const activeEnd = cycleArcPoint(activeEndAngle);
-    const activePath = `M${activeStart.x.toFixed(2)} ${activeStart.y.toFixed(2)} A82 82 0 0 1 ${activeEnd.x.toFixed(2)} ${activeEnd.y.toFixed(2)}`;
+    const activeLine = shortenLine(
+      cyclePoint(activeStartAngle, 86, 76),
+      cyclePoint(activeEndAngle, 86, 76),
+      30,
+      34
+    );
+    const activePath = `M${activeLine.start.x.toFixed(2)} ${activeLine.start.y.toFixed(2)} L${activeLine.end.x.toFixed(2)} ${activeLine.end.y.toFixed(2)}`;
     ring.innerHTML = `
       <svg viewBox="0 0 200 200" focusable="false">
         <defs>
           <marker id="cycleArrowHead" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto">
             <path d="M1,1 L7,4 L1,7 Z"></path>
           </marker>
+          <marker id="cycleActiveArrowHead" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M1,1 L6,3.5 L1,6 Z"></path>
+          </marker>
         </defs>
         <path class="cycle-ring-path" d="M100 18 A82 82 0 1 1 99.9 18" marker-end="url(#cycleArrowHead)"></path>
-        <path class="cycle-ring-active-path" d="${activePath}"></path>
+        <path class="cycle-ring-active-path" d="${activePath}" marker-end="url(#cycleActiveArrowHead)"></path>
       </svg>
     `;
     flow.appendChild(ring);
