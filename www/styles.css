@@ -1750,13 +1750,13 @@ textarea:focus {
 }
 
 .target-cycle-flow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  position: relative;
+  display: grid;
+  place-items: center;
   min-width: 0;
-  overflow-x: auto;
-  padding: 5px 2px 9px;
-  scrollbar-width: thin;
+  min-height: 226px;
+  overflow: hidden;
+  padding: 8px;
 }
 
 .cycle-person {
@@ -1766,6 +1766,60 @@ textarea:focus {
   justify-items: center;
   gap: 5px;
   min-width: 74px;
+  z-index: 2;
+}
+
+.target-cycle-card.multiple .cycle-person {
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
+.target-cycle-card.single .target-cycle-flow {
+  min-height: 118px;
+}
+
+.target-cycle-card.empty .target-cycle-flow {
+  min-height: 58px;
+}
+
+.cycle-ring {
+  position: absolute;
+  inset: 12px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.cycle-ring svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.cycle-ring-path {
+  fill: none;
+  stroke: #f0c33e;
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 16 11;
+  filter: drop-shadow(0 6px 8px rgba(115, 82, 6, 0.14));
+}
+
+.cycle-ring marker path {
+  fill: #d99a00;
+}
+
+.cycle-empty {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 42px;
+  border: 1px dashed #e4c469;
+  border-radius: 8px;
+  color: #8a6713;
+  font-size: 13px;
+  font-weight: 900;
+  text-align: center;
+  padding: 0 12px;
 }
 
 .cycle-person.current .profile-avatar {
@@ -1799,19 +1853,6 @@ textarea:focus {
   font-size: 14px;
   line-height: 1;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
-}
-
-.cycle-arrow {
-  flex: 0 0 auto;
-  color: #b17900;
-  font-size: 22px;
-  font-weight: 950;
-}
-
-.cycle-arrow.return {
-  align-self: flex-end;
-  margin-left: -3px;
-  transform: translateY(-5px) rotate(18deg);
 }
 
 .balance-toolbar span {

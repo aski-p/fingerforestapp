@@ -32,9 +32,9 @@ TICK_CURSOR_PATH = DATA_DIR / "tick_cursor.json"
 WEB_PUSH_SCRIPT_PATH = BASE_DIR / "send_web_push.js"
 DEFAULT_TICK_MAX_SECONDS = 240
 DEFAULT_TICK_MAX_OWNERS = 50
-DEFAULT_RUN_INTERVAL_MINUTES = 5
-MIN_RUN_INTERVAL_MINUTES = 5
-MAX_RUN_INTERVAL_MINUTES = 60
+DEFAULT_RUN_INTERVAL_MINUTES = 60
+MIN_RUN_INTERVAL_MINUTES = 60
+MAX_RUN_INTERVAL_MINUTES = 12 * 60
 COMMON_OBSERVE_INTERVAL_SECONDS = 5 * 60
 WAKE_REQUESTED = False
 QUIET_LOG_ACTIONS = {"balance", "check"}
@@ -194,6 +194,10 @@ def get_run_interval_minutes(state=None):
 
 def get_run_interval_seconds(state=None):
     return get_run_interval_minutes(state) * 60
+
+
+def get_history_observe_interval_seconds():
+    return COMMON_OBSERVE_INTERVAL_SECONDS
 
 
 def get_send_berry_count(state=None):
@@ -2050,6 +2054,7 @@ def row_counterpart_key(row):
 
 
 def pair_official_history_transfer_times(rows):
+    observe_interval = get_history_observe_interval_seconds()
     paired_received_indexes = set()
     for sent_index, sent in enumerate(rows):
         if sent.get("action") != "sent" or sent.get("timeSource") != "local_log":
@@ -2070,7 +2075,7 @@ def pair_official_history_transfer_times(rows):
             if not received_at:
                 continue
             delta_seconds = (received_at - sent_at).total_seconds()
-            if abs(delta_seconds) > get_run_interval_seconds() + 180:
+            if abs(delta_seconds) > observe_interval + 180:
                 continue
             rank = (abs(sent_index - received_index), abs(delta_seconds))
             if best_rank is None or rank < best_rank:
@@ -2079,7 +2084,7 @@ def pair_official_history_transfer_times(rows):
         if best_index is not None:
             received = rows[best_index]
             received["observedAt"] = received.get("at")
-            inferred_at = sent_at - dt.timedelta(seconds=get_run_interval_seconds())
+            inferred_at = sent_at - dt.timedelta(seconds=observe_interval)
             received["at"] = inferred_at.replace(microsecond=0).isoformat()
             received["inferredFromSentAt"] = sent_at.replace(microsecond=0).isoformat()
             received["timeSource"] = "paired_sent_log"
@@ -2088,7 +2093,7 @@ def pair_official_history_transfer_times(rows):
 
 
 def infer_official_history_times(rows):
-    run_interval = get_run_interval_seconds()
+    observe_interval = get_history_observe_interval_seconds()
     for seed in rows:
         if seed.get("historyKind") != "seed":
             continue
@@ -2099,7 +2104,7 @@ def infer_official_history_times(rows):
         observed_at = parse_iso(seed.get("observedAt"))
         if not observed_at:
             continue
-        inferred_at = (observed_at - dt.timedelta(seconds=run_interval)).replace(microsecond=0)
+        inferred_at = (observed_at - dt.timedelta(seconds=observe_interval)).replace(microsecond=0)
         seed["at"] = inferred_at.isoformat()
         seed["inferredFromSeedObservedAt"] = observed_at.replace(microsecond=0).isoformat()
         seed["timeSource"] = "seed_inferred_from_observed_seed"

@@ -318,9 +318,15 @@ function fmtDate(value) {
 }
 
 function intervalMinutes(state) {
-  const minutes = Number(state && state.runIntervalMinutes || 5);
-  if (!Number.isFinite(minutes)) return 5;
-  return Math.max(5, Math.min(60, minutes));
+  const minutes = Number(state && state.runIntervalMinutes || 60);
+  if (!Number.isFinite(minutes)) return 60;
+  return Math.max(60, Math.min(720, minutes));
+}
+
+function intervalLabel(state) {
+  const minutes = intervalMinutes(state);
+  const hours = minutes / 60;
+  return Number.isInteger(hours) ? `${hours}시간` : `${minutes}분`;
 }
 
 function renderState(state) {
@@ -411,7 +417,7 @@ $("messageBtn").addEventListener("click", async () => {
 $("onBtn").addEventListener("click", async () => {
   const state = await api("/api/on", {});
   renderState(state);
-  toast(`열매 자동전송을 켰습니다. ${intervalMinutes(state)}분에 한 번만 실행합니다.`);
+  toast(`열매 자동전송을 켰습니다. ${intervalLabel(state)}에 한 번만 실행합니다.`);
 });
 
 $("offBtn").addEventListener("click", async () => {

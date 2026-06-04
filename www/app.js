@@ -16,11 +16,12 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.10.4";
+const appVersion = "3.10.9";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
 const apiTimeoutMs = 8000;
+const historyApiTimeoutMs = 45000;
 const chatApiTimeoutMs = 70000;
 const recentNotificationWindowMs = 2 * 60 * 1000;
 const mainBackgroundClasses = [
@@ -317,10 +318,20 @@ const fonts = [
   { id: "typewriter", label: "Typewriter" },
 ];
 
+const minIntervalMinutes = 60;
+const maxIntervalMinutes = 12 * 60;
+const intervalStepMinutes = 60;
+
 function intervalMinutes(state = currentState) {
-  const minutes = Number(state.runIntervalMinutes || 5);
-  if (!Number.isFinite(minutes)) return 5;
-  return Math.max(5, Math.min(60, minutes));
+  const minutes = Number(state.runIntervalMinutes || minIntervalMinutes);
+  if (!Number.isFinite(minutes)) return minIntervalMinutes;
+  return Math.max(minIntervalMinutes, Math.min(maxIntervalMinutes, minutes));
+}
+
+function intervalLabel(state = currentState) {
+  const minutes = intervalMinutes(state);
+  const hours = minutes / 60;
+  return Number.isInteger(hours) ? `${hours}시간` : `${minutes}분`;
 }
 
 function isUnlocked() {
@@ -1028,8 +1039,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.10.4",
-        badge: "/icons/app-icon-192.png?v=3.10.4",
+        icon: "/icons/app-icon-192.png?v=3.10.9",
+        badge: "/icons/app-icon-192.png?v=3.10.9",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1485,19 +1496,44 @@ function renderTargetCycle(state) {
   const summary = $("targetCycleSummary");
   if (!card || !flow || !summary) return;
   const cycle = Array.isArray(state.targetCycle) ? state.targetCycle : [];
-  card.classList.toggle("hidden", !isUnlocked() || !cycle.length);
+  card.classList.toggle("hidden", !isUnlocked());
+  card.classList.toggle("empty", !cycle.length);
+  card.classList.toggle("single", cycle.length === 1);
+  card.classList.toggle("multiple", cycle.length > 1);
   flow.innerHTML = "";
   if (!cycle.length) {
     summary.textContent = "대상 없음";
+    flow.innerHTML = `<div class="cycle-empty">직원을 추가하면 전송 순서가 여기에 표시됩니다.</div>`;
     return;
   }
   const currentId = String(state.targetEmployeeId || "");
   const currentIndex = Math.max(0, cycle.findIndex((person) => String(person.emp_id || "") === currentId));
   summary.textContent = `${cycle.length}명 순환`;
+  if (cycle.length > 1) {
+    const ring = document.createElement("div");
+    ring.className = "cycle-ring";
+    ring.setAttribute("aria-hidden", "true");
+    ring.innerHTML = `
+      <svg viewBox="0 0 200 200" focusable="false">
+        <defs>
+          <marker id="cycleArrowHead" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto">
+            <path d="M1,1 L7,4 L1,7 Z"></path>
+          </marker>
+        </defs>
+        <path class="cycle-ring-path" d="M100 18 A82 82 0 1 1 99.9 18" marker-end="url(#cycleArrowHead)"></path>
+      </svg>
+    `;
+    flow.appendChild(ring);
+  }
   cycle.forEach((person, index) => {
     const name = cyclePersonName(person);
     const personEl = document.createElement("div");
     personEl.className = `cycle-person ${index === currentIndex ? "current" : ""}`;
+    if (cycle.length > 1) {
+      const angle = (-90 + (360 / cycle.length) * index) * (Math.PI / 180);
+      personEl.style.left = `calc(50% + ${Math.cos(angle) * 86}px)`;
+      personEl.style.top = `calc(50% + ${Math.sin(angle) * 76}px)`;
+    }
     personEl.innerHTML = `
       <span class="profile-avatar person-avatar" aria-hidden="true"><span>${escapeHtml(getInitial(name))}</span></span>
       <span class="cycle-name">${escapeHtml(name || "-")}</span>
@@ -1522,10 +1558,6 @@ function renderTargetCycle(state) {
       }
     });
     flow.appendChild(personEl);
-    const arrow = document.createElement("span");
-    arrow.className = `cycle-arrow ${index === cycle.length - 1 ? "return" : ""}`;
-    arrow.textContent = "→";
-    flow.appendChild(arrow);
   });
 }
 
@@ -1716,7 +1748,7 @@ function openFruitRunResultModal(result) {
     return;
   }
   const detail = result?.reason === "already_attempted_this_interval"
-    ? `이번 주기는 이미 확인했습니다. 다음 ${intervalMinutes()}분에 다시 시도합니다.`
+    ? `이번 주기는 이미 확인했습니다. 다음 ${intervalLabel()}에 다시 시도합니다.`
     : `실행 결과: ${result?.action || "확인 필요"}`;
   openSuccessModal("실행 결과", detail, false);
 }
@@ -2166,7 +2198,7 @@ function renderState(state) {
     unlocked && state.lastBerryCount !== null && state.lastBerryCount !== undefined
       ? `${state.lastBerryCount}개`
       : "-";
-  $("intervalDisplay").textContent = `${intervalMinutes(state)}분`;
+  $("intervalDisplay").textContent = intervalLabel(state);
   $("balanceStatus").textContent = unlocked
     ? state.balanceError
       ? "조회 오류"
@@ -2192,7 +2224,7 @@ function renderState(state) {
   $("controlHint").textContent = enabled
     ? `켜짐 상태입니다. ${daemonText}. 다음 확인 ${fmtDate(nextFruitRunAt)}. 전송 수 ${sendModeText}`
     : hasTarget
-      ? `켜면 ${intervalMinutes(state)}분마다 한 번씩 보유 열매를 확인하고 ${sendModeText} 보냅니다.`
+      ? `켜면 ${intervalLabel(state)}마다 한 번씩 보유 열매를 확인하고 ${sendModeText} 보냅니다.`
       : "대상 직원을 먼저 검색해서 선택하세요.";
   renderWorklogState(state);
   try {
@@ -2276,11 +2308,14 @@ async function refreshHistory({ silent = false } = {}) {
       date: selectedHistoryDate,
       tz: String(historyTimezoneOffsetMinutes),
     });
-    const data = await api(`/api/history?${query.toString()}`);
+    const data = await api(`/api/history?${query.toString()}`, undefined, false, { timeoutMs: historyApiTimeoutMs });
     renderHistory(data.items || []);
   } catch (err) {
-    body.innerHTML = `<div class="history-empty">내역 조회 실패: ${escapeHtml(err.message)}</div>`;
-    if (!silent) toast(`내역 조회 실패: ${err.message}`);
+    const message = err.name === "AbortError" || /aborted|abort/i.test(err.message || "")
+      ? "내역 조회가 오래 걸리고 있습니다. 잠시 후 다시 시도해주세요."
+      : `내역 조회 실패: ${err.message}`;
+    body.innerHTML = `<div class="history-empty">${escapeHtml(message)}</div>`;
+    if (!silent) toast(message);
   }
 }
 
@@ -2431,7 +2466,7 @@ async function setIntervalMinutes(minutes) {
     setBusy(true);
     const state = await api("/api/interval", { minutes });
     renderState(state);
-    toast(`전송 시간을 ${intervalMinutes(state)}분으로 설정했습니다.`);
+    toast(`전송 시간을 ${intervalLabel(state)}으로 설정했습니다.`);
   } catch (err) {
     toast(`전송 시간 변경 실패: ${err.message}`);
   } finally {
@@ -2950,11 +2985,11 @@ $("profilePhotoResetBtn").addEventListener("click", async () => {
 $("refreshBalanceBtn").addEventListener("click", refreshBalance);
 
 $("intervalAddBtn").addEventListener("click", () => {
-  setIntervalMinutes(Math.min(60, intervalMinutes() + 5));
+  setIntervalMinutes(Math.min(maxIntervalMinutes, intervalMinutes() + intervalStepMinutes));
 });
 
 $("intervalResetBtn").addEventListener("click", () => {
-  setIntervalMinutes(5);
+  setIntervalMinutes(minIntervalMinutes);
 });
 
 $("historyModal").addEventListener("click", (event) => {
@@ -3320,7 +3355,7 @@ $("autoToggle").addEventListener("change", async () => {
     const path = $("autoToggle").checked ? "/api/on" : "/api/off";
     const state = await api(path, {});
     renderState(state);
-    toast($("autoToggle").checked ? `열매 자동전송을 켰습니다. ${intervalMinutes(state)}분마다 한 번만 실행합니다.` : "열매 자동전송을 껐습니다.");
+    toast($("autoToggle").checked ? `열매 자동전송을 켰습니다. ${intervalLabel(state)}마다 한 번만 실행합니다.` : "열매 자동전송을 껐습니다.");
   } catch (err) {
     $("autoToggle").checked = !!currentState.enabled;
     toast(`상태 변경 실패: ${err.message}`);
@@ -3372,7 +3407,7 @@ $("runBtn").addEventListener("click", async () => {
       await refreshHistory({ silent: true });
     }
   } catch (err) {
-    openSuccessModal("실행 실패", `${err.message}. 다음 ${intervalMinutes()}분에 다시 확인합니다.`, false);
+    openSuccessModal("실행 실패", `${err.message}. 다음 ${intervalLabel()}에 다시 확인합니다.`, false);
   } finally {
     setBusy(false);
   }
