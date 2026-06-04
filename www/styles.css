@@ -322,67 +322,29 @@ body.theme-getter {
 }
 
 body.main-bg-scene {
-  --forest-sky-top: #fff9dc;
-  --forest-sky-mid: #eaf8d7;
-  --forest-water: rgba(137, 201, 201, 0.58);
-  --forest-water-line: rgba(255, 255, 255, 0.54);
-  --forest-grass: rgba(176, 218, 112, 0.64);
-  --forest-grass-deep: rgba(85, 154, 89, 0.48);
-  --forest-tree: rgba(105, 159, 75, 0.50);
-  --forest-tree-light: rgba(205, 228, 118, 0.56);
-  --forest-flower: rgba(255, 244, 163, 0.68);
-  --forest-glow: rgba(255, 226, 96, 0.42);
+  --season-bg: url("/assets/seasons/forest-spring.jpg?v=3.9.0");
   background:
-    radial-gradient(circle at 12% 11%, rgba(255, 244, 154, 0.82) 0 4.8rem, transparent 7.5rem),
-    radial-gradient(circle at 18% 36%, var(--forest-tree-light) 0 2.8rem, transparent 3.7rem),
-    radial-gradient(circle at 33% 29%, var(--forest-tree) 0 3.4rem, transparent 4.6rem),
-    radial-gradient(circle at 72% 23%, var(--forest-tree-light) 0 3.1rem, transparent 4.2rem),
-    radial-gradient(circle at 88% 34%, var(--forest-tree) 0 3.5rem, transparent 4.8rem),
-    radial-gradient(ellipse at 55% 79%, var(--forest-water-line) 0 5%, transparent 5.4% 100%),
-    radial-gradient(ellipse at 53% 78%, var(--forest-water) 0 18%, transparent 18.5% 100%),
-    radial-gradient(circle at 18% 77%, var(--forest-flower) 0 0.42rem, transparent 0.62rem),
-    radial-gradient(circle at 30% 71%, rgba(255, 255, 255, 0.74) 0 0.5rem, transparent 0.72rem),
-    radial-gradient(circle at 82% 72%, var(--forest-flower) 0 0.46rem, transparent 0.7rem),
-    radial-gradient(ellipse at 50% 100%, var(--forest-grass) 0 42%, transparent 42.5%),
-    linear-gradient(180deg, var(--forest-sky-top) 0%, var(--forest-sky-mid) 48%, var(--forest-grass-deep) 100%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(248, 251, 253, 0.06)),
+    var(--season-bg) center top / cover no-repeat fixed,
+    #eef7ef;
   background-attachment: fixed;
   background-size: cover;
 }
 
+body.main-bg-forest-spring {
+  --season-bg: url("/assets/seasons/forest-spring.jpg?v=3.9.0");
+}
+
 body.main-bg-forest-summer {
-  --forest-sky-top: #fff8cc;
-  --forest-sky-mid: #dff5bd;
-  --forest-water: rgba(121, 199, 196, 0.64);
-  --forest-grass: rgba(153, 212, 87, 0.68);
-  --forest-grass-deep: rgba(67, 148, 83, 0.54);
-  --forest-tree: rgba(83, 152, 70, 0.58);
-  --forest-tree-light: rgba(188, 224, 89, 0.62);
-  --forest-flower: rgba(255, 238, 102, 0.74);
-  --forest-glow: rgba(255, 213, 69, 0.46);
+  --season-bg: url("/assets/seasons/forest-summer.jpg?v=3.9.0");
 }
 
 body.main-bg-forest-autumn {
-  --forest-sky-top: #fff3c2;
-  --forest-sky-mid: #ffe3aa;
-  --forest-water: rgba(151, 197, 195, 0.58);
-  --forest-grass: rgba(218, 174, 80, 0.62);
-  --forest-grass-deep: rgba(177, 104, 45, 0.44);
-  --forest-tree: rgba(226, 151, 50, 0.60);
-  --forest-tree-light: rgba(255, 196, 73, 0.62);
-  --forest-flower: rgba(255, 219, 118, 0.72);
-  --forest-glow: rgba(255, 180, 56, 0.45);
+  --season-bg: url("/assets/seasons/forest-autumn.jpg?v=3.9.0");
 }
 
 body.main-bg-forest-winter {
-  --forest-sky-top: #f8fbff;
-  --forest-sky-mid: #e8f2f8;
-  --forest-water: rgba(190, 217, 226, 0.62);
-  --forest-grass: rgba(229, 235, 230, 0.72);
-  --forest-grass-deep: rgba(177, 198, 204, 0.50);
-  --forest-tree: rgba(205, 217, 210, 0.58);
-  --forest-tree-light: rgba(255, 255, 255, 0.72);
-  --forest-flower: rgba(255, 255, 255, 0.86);
-  --forest-glow: rgba(214, 233, 255, 0.48);
+  --season-bg: url("/assets/seasons/forest-winter.jpg?v=3.9.0");
 }
 
 body.main-bg-forest-sleep {
@@ -420,16 +382,7 @@ body.main-bg-scene .app {
 }
 
 body.main-bg-scene .app::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 22% 70%, var(--forest-glow) 0 0.38rem, transparent 0.72rem),
-    radial-gradient(circle at 76% 66%, var(--forest-glow) 0 0.32rem, transparent 0.68rem),
-    radial-gradient(circle at 69% 42%, rgba(255, 255, 255, 0.50) 0 0.22rem, transparent 0.52rem),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.16) 52%, rgba(255, 255, 255, 0.32));
+  content: none;
 }
 
 body.modal-open {

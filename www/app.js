@@ -16,7 +16,7 @@ const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.8.9";
+const appVersion = "3.9.0";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -28,7 +28,6 @@ const mainBackgroundClasses = [
   "main-bg-forest-summer",
   "main-bg-forest-autumn",
   "main-bg-forest-winter",
-  "main-bg-forest-sleep",
 ];
 let latestAppInfo = null;
 let releaseNotesShownThisSession = false;
@@ -408,8 +407,7 @@ function koreanDateParts(date = new Date()) {
 }
 
 function currentMainBackgroundClass(date = new Date()) {
-  const { month, hour } = koreanDateParts(date);
-  if (hour >= 0 && hour < 9) return "main-bg-forest-sleep";
+  const { month } = koreanDateParts(date);
   if (month >= 3 && month <= 5) return "main-bg-forest-spring";
   if (month >= 6 && month <= 8) return "main-bg-forest-summer";
   if (month >= 9 && month <= 11) return "main-bg-forest-autumn";
@@ -1028,8 +1026,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.8.9",
-        badge: "/icons/app-icon-192.png?v=3.8.9",
+        icon: "/icons/app-icon-192.png?v=3.9.0",
+        badge: "/icons/app-icon-192.png?v=3.9.0",
         data: { url: item.url || "/" },
       });
       return true;

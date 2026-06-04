@@ -23,7 +23,7 @@ import android.webkit.WebViewClient;
 
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST_CODE = 20260529;
-    private static final String APP_VERSION = "3.8.9";
+    private static final String APP_VERSION = "3.9.0";
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
     private static final String APP_URL = "https://web-production-011c4.up.railway.app/?token=IV2d0ecXO9X50cJvmOHb-lI7wCSRiFji";
