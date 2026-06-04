@@ -13,10 +13,11 @@ const themeKey = "fruitTheme";
 const fontKey = "fruitFont";
 const profilePhotoKey = "fruitProfilePhoto";
 const profilePhotoCacheKey = "fruitProfilePhotoCache";
+const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.12.1";
+const appVersion = "3.12.2";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1064,8 +1065,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.12.1",
-        badge: "/icons/app-icon-192.png?v=3.12.1",
+        icon: "/icons/app-icon-192.png?v=3.12.2",
+        badge: "/icons/app-icon-192.png?v=3.12.2",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1234,24 +1235,69 @@ function worklogApprovalForDate(value) {
   return worklogApprovalsByDate?.[value] || null;
 }
 
-async function refreshWorklogApprovalsForMonth(date = worklogCalendarMonth) {
+function worklogApprovalCacheKey(monthKey) {
+  return `${worklogApprovalCachePrefix}${expectedOwnerKey() || "default"}:${monthKey}`;
+}
+
+function applyWorklogApprovals(data, monthKey) {
+  if (!data || data.month !== monthKey) return false;
+  worklogApprovalsByDate = {};
+  (data.items || []).forEach((item) => {
+    if (item.date) worklogApprovalsByDate[item.date] = item;
+  });
+  worklogApprovalsMonthKey = monthKey;
+  return true;
+}
+
+function readCachedWorklogApprovals(monthKey) {
+  try {
+    const cached = sessionStorage.getItem(worklogApprovalCacheKey(monthKey));
+    if (!cached) return false;
+    return applyWorklogApprovals(JSON.parse(cached), monthKey);
+  } catch (_err) {
+    return false;
+  }
+}
+
+function cacheWorklogApprovals(data, monthKey) {
+  try {
+    sessionStorage.setItem(worklogApprovalCacheKey(monthKey), JSON.stringify({
+      month: monthKey,
+      items: data.items || [],
+      cachedAt: Date.now(),
+    }));
+  } catch (_err) {
+    // Approval cache is a speed hint only.
+  }
+}
+
+async function refreshWorklogApprovalsForMonth(date = worklogCalendarMonth, { fastOnly = false, silent = false } = {}) {
   if (!isUnlocked()) return;
   const requestedMonthKey = monthValue(date);
   try {
     const query = new URLSearchParams({ month: requestedMonthKey });
-    const data = await api(`/api/worklog-approvals?${query.toString()}`);
+    const data = await api(`/api/${fastOnly ? "worklog-approvals-local" : "worklog-approvals"}?${query.toString()}`);
     if (requestedMonthKey !== monthValue(worklogCalendarMonth)) return;
-    worklogApprovalsByDate = {};
-    (data.items || []).forEach((item) => {
-      if (item.date) worklogApprovalsByDate[item.date] = item;
-    });
-    worklogApprovalsMonthKey = requestedMonthKey;
+    applyWorklogApprovals(data, requestedMonthKey);
+    cacheWorklogApprovals(data, requestedMonthKey);
   } catch (err) {
     if (requestedMonthKey !== monthValue(worklogCalendarMonth)) return;
+    if (!fastOnly && readCachedWorklogApprovals(requestedMonthKey)) return;
     worklogApprovalsByDate = {};
     worklogApprovalsMonthKey = requestedMonthKey;
-    toast(`승인 내역 조회 실패: ${err.message}`);
+    if (!silent) toast(`승인 내역 조회 실패: ${err.message}`);
   }
+}
+
+function loadFastWorklogApprovalsForCalendar() {
+  const monthKey = monthValue(worklogCalendarMonth);
+  readCachedWorklogApprovals(monthKey);
+  renderWorklogCalendar();
+  refreshWorklogApprovalsForMonth(worklogCalendarMonth, { fastOnly: true, silent: true })
+    .then(renderWorklogCalendar)
+    .finally(() => {
+      refreshWorklogApprovalsForMonth(worklogCalendarMonth, { silent: true }).finally(renderWorklogCalendar);
+    });
 }
 
 function scheduledWorklogDateTime(dateValue, timeValue) {
@@ -1724,11 +1770,12 @@ async function openWorklogCalendar() {
   if (worklogApprovalsMonthKey !== monthValue(worklogCalendarMonth)) {
     worklogApprovalsByDate = {};
   }
+  readCachedWorklogApprovals(monthValue(worklogCalendarMonth));
   renderWorklogCalendar();
   $("worklogCalendarModal").classList.remove("hidden");
   document.body.classList.add("modal-open");
   window.requestAnimationFrame(() => {
-    refreshWorklogApprovalsForMonth(worklogCalendarMonth).finally(renderWorklogCalendar);
+    loadFastWorklogApprovalsForCalendar();
   });
 }
 
@@ -3205,14 +3252,16 @@ $("worklogCalendarModal").addEventListener("click", (event) => {
 $("worklogCalendarPrevBtn").addEventListener("click", () => {
   worklogCalendarMonth = new Date(worklogCalendarMonth.getFullYear(), worklogCalendarMonth.getMonth() - 1, 1);
   worklogApprovalsByDate = {};
+  readCachedWorklogApprovals(monthValue(worklogCalendarMonth));
   renderWorklogCalendar();
-  refreshWorklogApprovalsForMonth(worklogCalendarMonth).finally(renderWorklogCalendar);
+  loadFastWorklogApprovalsForCalendar();
 });
 $("worklogCalendarNextBtn").addEventListener("click", () => {
   worklogCalendarMonth = new Date(worklogCalendarMonth.getFullYear(), worklogCalendarMonth.getMonth() + 1, 1);
   worklogApprovalsByDate = {};
+  readCachedWorklogApprovals(monthValue(worklogCalendarMonth));
   renderWorklogCalendar();
-  refreshWorklogApprovalsForMonth(worklogCalendarMonth).finally(renderWorklogCalendar);
+  loadFastWorklogApprovalsForCalendar();
 });
 $("worklogApprovalCloseBtn").addEventListener("click", closeWorklogApprovalModal);
 $("worklogApprovalModal").addEventListener("click", (event) => {

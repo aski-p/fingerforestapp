@@ -2484,13 +2484,13 @@ def local_worklog_events_by_date(owner_key, month=None, limit=20000):
 
 def worklog_approvals(owner_key=None, month=None):
     owner_key = require_owner(owner_key)
-    client, _employee_info, _login_dataset, _employee, sender_employee_id, _sender_employee_name = account_login(owner_key)
     state = get_account_state(owner_key)
     selected_month = normalize_history_month(month)
+    local_events = local_worklog_events_by_date(owner_key, selected_month)
+    client, _employee_info, _login_dataset, _employee, sender_employee_id, _sender_employee_name = account_login(owner_key)
     content = client.post_json(f"{FOREST_API}/dwBerySeed", {"stdMt": selected_month, "empId": sender_employee_id})
     if not isinstance(content, list):
         raise FruitAutoError("FOREST history did not return a list")
-    local_events = local_worklog_events_by_date(owner_key, selected_month)
     approvals = {}
     for row in content:
         message = row.get("tgtMsg") or ""
@@ -2522,6 +2522,29 @@ def worklog_approvals(owner_key=None, month=None):
             "officialMessage": message,
         }
     return {"month": selected_month, "items": sorted(approvals.values(), key=lambda item: item["date"])}
+
+
+def worklog_approvals_local(owner_key=None, month=None):
+    owner_key = require_owner(owner_key)
+    state = get_account_state(owner_key)
+    selected_month = normalize_history_month(month)
+    approvals = []
+    for history_date, local in local_worklog_events_by_date(owner_key, selected_month).items():
+        message = local.get("officialMessage") or local.get("message") or "승인 완료"
+        approvals.append({
+            "date": history_date,
+            "approved": True,
+            "projectName": local.get("projectName") or state.get("worklogProjectName") or "",
+            "content": local.get("workDesc") or state.get("worklogContent") or "",
+            "seedMessage": local.get("seedMessage") or state.get("worklogSeedMessage") or message,
+            "seedCount": local.get("seedCount") if local.get("seedCount") is not None else state.get("worklogSeedCount"),
+            "targetEmployeeName": local.get("targetEmployeeName") or state.get("worklogTargetEmployeeName") or "",
+            "targetEmployeeId": local.get("targetEmployeeId") or state.get("worklogTargetEmployeeId") or "",
+            "completedAt": local.get("completedAt") or local.get("at") or "",
+            "officialMessage": message,
+            "source": "local",
+        })
+    return {"month": selected_month, "items": sorted(approvals, key=lambda item: item["date"])}
 
 
 def notification_items(limit=20, owner_key=None):

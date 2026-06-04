@@ -30,7 +30,7 @@ TICK_WAKE_PATH = DATA_DIR / "tick_worker.wake"
 TICK_HEARTBEAT_PATH = DATA_DIR / "tick_worker.heartbeat.json"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.12.1"
+APP_VERSION = "3.12.2"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
 CHAT_CONTEXT_MESSAGE_LIMIT = 8
 CHAT_HISTORY_MESSAGE_LIMIT = CHAT_CONTEXT_MESSAGE_LIMIT
@@ -1494,6 +1494,11 @@ class Handler(BaseHTTPRequestHandler):
                     params = urllib.parse.parse_qs(parsed.query)
                     selected_month = (params.get("month") or [""])[0]
                     self.send_json(200, {"ok": True, "result": fruit_auto.worklog_approvals(owner_key=owner_key, month=selected_month)})
+                elif parsed.path == "/api/worklog-approvals-local":
+                    owner_key, _session_token = self.require_session_owner()
+                    params = urllib.parse.parse_qs(parsed.query)
+                    selected_month = (params.get("month") or [""])[0]
+                    self.send_json(200, {"ok": True, "result": fruit_auto.worklog_approvals_local(owner_key=owner_key, month=selected_month)})
                 elif parsed.path == "/api/notifications":
                     owner_key, _session_token = self.require_session_owner()
                     self.send_json(200, {"ok": True, "result": {"items": fruit_auto.notification_items(owner_key=owner_key)}})
