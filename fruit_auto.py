@@ -1994,6 +1994,58 @@ def pair_official_history_transfer_times(rows):
 
 
 def infer_official_history_times(rows):
+    run_interval = get_run_interval_seconds()
+    berry_candidates = []
+    for index, row in enumerate(rows):
+        if row.get("historyKind") == "seed":
+            continue
+        if row.get("action") != "received":
+            continue
+        if parse_int(row.get("berries"), 0) != 3:
+            continue
+        berry_at = parse_iso(row.get("at") or row.get("observedAt"))
+        if not berry_at:
+            continue
+        berry_candidates.append((index, row, berry_at))
+
+    used_berry_indexes = set()
+    for seed_index, seed in enumerate(rows):
+        if seed.get("historyKind") != "seed":
+            continue
+        if seed.get("action") != "received":
+            continue
+        if seed.get("at"):
+            continue
+        best = None
+        best_rank = None
+        for berry_index, berry, berry_at in berry_candidates:
+            if berry_index in used_berry_indexes:
+                continue
+            if seed.get("historyDate") != berry.get("historyDate"):
+                continue
+            if str(seed.get("target") or "") != str(berry.get("target") or ""):
+                continue
+            api_distance = abs(
+                parse_int(seed.get("_apiIndex"), seed_index)
+                - parse_int(berry.get("_apiIndex"), berry_index)
+            )
+            if api_distance > 3:
+                continue
+            rank = (api_distance, abs(seed_index - berry_index))
+            if best_rank is None or rank < best_rank:
+                best = (berry_index, berry, berry_at)
+                best_rank = rank
+        if best is None:
+            continue
+        berry_index, berry, berry_at = best
+        inferred_at = berry_at.replace(microsecond=0)
+        if berry.get("timeSource") in {"observed_db", "received_log", "seed_berry_observed"}:
+            inferred_at = (berry_at - dt.timedelta(seconds=run_interval)).replace(microsecond=0)
+        seed["at"] = inferred_at.isoformat()
+        seed["observedAt"] = berry.get("observedAt") or berry.get("at")
+        seed["inferredFromBerryAt"] = berry_at.replace(microsecond=0).isoformat()
+        seed["timeSource"] = "seed_inferred_from_berry"
+        used_berry_indexes.add(berry_index)
     return rows
 
 
