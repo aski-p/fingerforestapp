@@ -30,7 +30,7 @@ TICK_WAKE_PATH = DATA_DIR / "tick_worker.wake"
 TICK_HEARTBEAT_PATH = DATA_DIR / "tick_worker.heartbeat.json"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.9.0"
+APP_VERSION = "3.9.1"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
 CHAT_CONTEXT_MESSAGE_LIMIT = 8
 CHAT_HISTORY_MESSAGE_LIMIT = CHAT_CONTEXT_MESSAGE_LIMIT
@@ -50,6 +50,7 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "로그인 화면 제목 옆 마스코트 아이콘을 제거하고 시작 캐릭터 낙하 애니메이션을 더 부드럽게 조정했습니다.",
     "메인 화면 배경을 첨부받은 고화질 봄/여름/가을/겨울 이미지로 교체했습니다.",
     "승인된 업무일지 팝업에서 기존 전송 기록에 본문이 없으면 저장된 업무 내용을 보강해 표시합니다.",
     "씨앗선물 수신 내역은 열매 증가가 5분 체크에서 새로 잡힌 시각을 우선 표시합니다.",
