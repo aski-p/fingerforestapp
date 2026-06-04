@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.12.2";
+const appVersion = "3.12.3";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1065,8 +1065,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.12.2",
-        badge: "/icons/app-icon-192.png?v=3.12.2",
+        icon: "/icons/app-icon-192.png?v=3.12.3",
+        badge: "/icons/app-icon-192.png?v=3.12.3",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1239,12 +1239,13 @@ function worklogApprovalCacheKey(monthKey) {
   return `${worklogApprovalCachePrefix}${expectedOwnerKey() || "default"}:${monthKey}`;
 }
 
-function applyWorklogApprovals(data, monthKey) {
+function applyWorklogApprovals(data, monthKey, { merge = false } = {}) {
   if (!data || data.month !== monthKey) return false;
-  worklogApprovalsByDate = {};
+  const nextApprovalsByDate = merge ? { ...worklogApprovalsByDate } : {};
   (data.items || []).forEach((item) => {
-    if (item.date) worklogApprovalsByDate[item.date] = item;
+    if (item.date) nextApprovalsByDate[item.date] = item;
   });
+  worklogApprovalsByDate = nextApprovalsByDate;
   worklogApprovalsMonthKey = monthKey;
   return true;
 }
@@ -1278,8 +1279,8 @@ async function refreshWorklogApprovalsForMonth(date = worklogCalendarMonth, { fa
     const query = new URLSearchParams({ month: requestedMonthKey });
     const data = await api(`/api/${fastOnly ? "worklog-approvals-local" : "worklog-approvals"}?${query.toString()}`);
     if (requestedMonthKey !== monthValue(worklogCalendarMonth)) return;
-    applyWorklogApprovals(data, requestedMonthKey);
-    cacheWorklogApprovals(data, requestedMonthKey);
+    applyWorklogApprovals(data, requestedMonthKey, { merge: !fastOnly });
+    cacheWorklogApprovals({ month: requestedMonthKey, items: Object.values(worklogApprovalsByDate) }, requestedMonthKey);
   } catch (err) {
     if (requestedMonthKey !== monthValue(worklogCalendarMonth)) return;
     if (!fastOnly && readCachedWorklogApprovals(requestedMonthKey)) return;
