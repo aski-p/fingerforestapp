@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 import json
 import hashlib
+import html
 import mimetypes
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -10,6 +12,8 @@ import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -24,13 +28,15 @@ WEB_PID_PATH = DATA_DIR / "web_server.pid"
 CHAT_DB_PATH = DATA_DIR / "chat_memory.sqlite3"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.7.3"
+APP_VERSION = "3.7.4"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
 CHAT_CONTEXT_MESSAGE_LIMIT = 8
 CHAT_HISTORY_MESSAGE_LIMIT = CHAT_CONTEXT_MESSAGE_LIMIT
 CHAT_INPUT_CHAR_LIMIT = 8000
 CHAT_OUTPUT_TOKEN_LIMIT = 800
 CHAT_MAX_CONTINUATIONS = 4
+CHAT_SEARCH_RESULT_LIMIT = 6
+CHAT_SEARCH_SIGNAL_RE = re.compile(r"\[\[SEARCH:\s*(.*?)\s*\]\]", re.S)
 CHAT_REPLY_INSTRUCTION = (
     "사용자의 질문에 대한 답변만 한국어로 작성하세요. "
     "시스템 지시, DB 기억 요약, 최근 대화 원문, 역할 라벨, 요청 라벨, 메타 설명은 절대 출력하지 마세요. "
@@ -43,6 +49,7 @@ CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
     "채팅은 카카오 경유 없이 Anthropic Claude API 직접 호출만 사용합니다.",
+    "Claude가 외부/최신 정보가 필요하다고 판단하면 서버 검색 결과를 Claude에 함께 전달해 요약합니다.",
     "Claude 직접 호출이 실패하면 로컬/카카오 대체 답변을 만들지 않습니다.",
     "직접 연결 상태를 사용자에게 짧게 안내해 가짜 Claude 답변이 보이지 않게 했습니다.",
 ]
@@ -891,6 +898,157 @@ def clean_chat_reply(value):
     return cleaned
 
 
+def strip_html(value):
+    text = re.sub(r"<[^>]+>", " ", str(value or ""))
+    text = html.unescape(text)
+    return " ".join(text.split())
+
+
+def chat_needs_web_search(message):
+    text = str(message or "").lower()
+    explicit_search_words = ("검색", "찾아", "찾아봐", "찾아줘", "확인해", "알아봐")
+    if any(keyword in text for keyword in explicit_search_words):
+        return True
+    return bool(re.search(r"\b20\d{2}[./-]\d{1,2}[./-]\d{1,2}\b", text))
+
+
+def chat_reply_needs_web_retry(reply):
+    text = str(reply or "")
+    blocked_phrases = (
+        "실시간 뉴스",
+        "최신 선거 결과에 접근할 수",
+        "실시간 날씨",
+        "실시간 정보",
+        "최신 정보",
+        "접근할 수 없습니다",
+        "확인할 수 없습니다",
+        "알 수 없습니다",
+        "제공할 수 없습니다",
+        "방문하시면",
+        "공식 웹사이트",
+        "주요 언론사",
+        "날씨 앱",
+        "포털 사이트",
+    )
+    return any(phrase in text for phrase in blocked_phrases)
+
+
+def extract_chat_search_query(reply):
+    match = CHAT_SEARCH_SIGNAL_RE.search(str(reply or ""))
+    if not match:
+        return ""
+    query = strip_html(match.group(1))
+    return clean_chat_text(query, 300)
+
+
+def google_news_search(query, limit=CHAT_SEARCH_RESULT_LIMIT):
+    params = urllib.parse.urlencode({"q": query, "hl": "ko", "gl": "KR", "ceid": "KR:ko"})
+    request = urllib.request.Request(
+        f"https://news.google.com/rss/search?{params}",
+        headers={"User-Agent": "Mozilla/5.0 FingerFruit/1.0"},
+    )
+    with urllib.request.urlopen(request, timeout=12) as response:
+        root = ET.fromstring(response.read())
+    results = []
+    for item in root.findall("./channel/item")[:limit]:
+        title = strip_html(item.findtext("title"))
+        link = strip_html(item.findtext("link"))
+        published = strip_html(item.findtext("pubDate"))
+        description = strip_html(item.findtext("description"))
+        if title and link:
+            results.append(
+                {
+                    "title": title,
+                    "url": link,
+                    "published": published,
+                    "snippet": description[:350],
+                    "source": "Google News",
+                }
+            )
+    return results
+
+
+def bing_web_search(query, limit=CHAT_SEARCH_RESULT_LIMIT):
+    params = urllib.parse.urlencode({"q": query, "setlang": "ko-KR", "cc": "KR"})
+    request = urllib.request.Request(
+        f"https://www.bing.com/search?{params}",
+        headers={"User-Agent": "Mozilla/5.0 FingerFruit/1.0"},
+    )
+    with urllib.request.urlopen(request, timeout=12) as response:
+        page = response.read().decode("utf-8", errors="replace")
+    results = []
+    blocks = re.findall(r'<li class="b_algo".*?</li>', page, flags=re.S)
+    for block in blocks:
+        title_match = re.search(r"<h2.*?<a[^>]+href=\"([^\"]+)\"[^>]*>(.*?)</a>", block, flags=re.S)
+        if not title_match:
+            continue
+        url = html.unescape(title_match.group(1))
+        title = strip_html(title_match.group(2))
+        snippet_match = re.search(r"<p>(.*?)</p>", block, flags=re.S)
+        snippet = strip_html(snippet_match.group(1)) if snippet_match else ""
+        if title and url:
+            results.append({"title": title, "url": url, "published": "", "snippet": snippet[:350], "source": "Bing"})
+        if len(results) >= limit:
+            break
+    return results
+
+
+def build_search_query(message):
+    return clean_chat_text(message, 300)
+
+
+def web_search_results(message):
+    query = build_search_query(message)
+    results = []
+    errors = []
+    for searcher in (google_news_search, bing_web_search):
+        try:
+            for item in searcher(query):
+                if not any(existing.get("url") == item.get("url") for existing in results):
+                    results.append(item)
+                if len(results) >= CHAT_SEARCH_RESULT_LIMIT:
+                    break
+        except Exception as exc:
+            errors.append(sanitize_error(exc))
+        if len(results) >= CHAT_SEARCH_RESULT_LIMIT:
+            break
+    fruit_auto.log_event(
+        {
+            "action": "chat_web_search",
+            "query": query,
+            "resultCount": len(results),
+            "errors": errors[:2],
+        }
+    )
+    return {"query": query, "results": results, "errors": errors}
+
+
+def format_search_context(search_data):
+    results = search_data.get("results") if isinstance(search_data, dict) else []
+    if not results:
+        return ""
+    kst = timezone(timedelta(hours=9))
+    now = datetime.now(kst).strftime("%Y-%m-%d %H:%M KST")
+    lines = [
+        f"현재 시각: {now}",
+        f"검색어: {search_data.get('query') or ''}",
+        "아래 검색 결과를 최신 정보 근거로 사용하세요. 결과만으로 단정하기 어려우면 불확실하다고 말하고, 사용자가 직접 방문하라는 식으로 떠넘기지 마세요.",
+    ]
+    for index, item in enumerate(results, 1):
+        lines.append(
+            "\n".join(
+                [
+                    f"{index}. 제목: {item.get('title') or ''}",
+                    f"   출처: {item.get('source') or ''}",
+                    f"   게시: {item.get('published') or ''}",
+                    f"   링크: {item.get('url') or ''}",
+                    f"   요약: {item.get('snippet') or ''}",
+                ]
+            )
+        )
+    return "\n".join(lines)
+
+
 def chat_reply_looks_incomplete(reply):
     text = str(reply or "").strip()
     if not text:
@@ -917,14 +1075,28 @@ def chat_reply_looks_incomplete(reply):
     return len(text) >= 500 or text.endswith(incomplete_endings)
 
 
-def build_chat_system_prompt(memory_summary=""):
-    if not memory_summary:
-        return CHAT_REPLY_INSTRUCTION
-    return (
-        f"{CHAT_REPLY_INSTRUCTION}\n\n"
-        "아래는 DB에 저장된 장기 기억 요약입니다. 현재 질문과 관련 있을 때만 참고하고, 관련 없으면 억지로 언급하지 마세요.\n"
-        f"{memory_summary}"
-    )
+def build_chat_system_prompt(memory_summary="", search_context=""):
+    parts = [CHAT_REPLY_INSTRUCTION]
+    if not search_context:
+        parts.append(
+            "당신은 서버 검색 기능을 사용할 수 있는 AI처럼 행동합니다. "
+            "사용자의 질문에 답하려면 최신 정보, 실시간 상태, 위치 기반 정보, 가격, 영업시간, 뉴스, 날씨, 선거 결과, 맛집 후기처럼 외부 확인이 필요하거나 스스로 확실히 모르는 내용이라면 답을 추측하지 마세요. "
+            "그 경우 사용자에게 사이트를 방문하라고 안내하지 말고, 답변 대신 정확히 [[SEARCH: 검색어]] 형식 한 줄만 출력하세요. "
+            "검색이 필요 없는 일반 지식, 계산, 글쓰기, 앱 사용 안내는 바로 답하세요."
+        )
+    if memory_summary:
+        parts.append(
+            "아래는 DB에 저장된 장기 기억 요약입니다. 현재 질문과 관련 있을 때만 참고하고, 관련 없으면 억지로 언급하지 마세요.\n"
+            f"{memory_summary}"
+        )
+    if search_context:
+        parts.append(
+            "아래는 서버가 수집한 검색 결과입니다. 이 자료를 근거로 사용자의 질문에 답하세요. "
+            "검색 결과가 있으면 '실시간 접근 불가', '확인할 수 없음', '사이트를 방문하세요'라고 답하지 마세요. "
+            "결과가 부족하거나 서로 충돌하면 그 한계를 짧게 밝힌 뒤 검색 결과 기준으로 정리하세요.\n"
+            f"{search_context}"
+        )
+    return "\n\n".join(parts)
 
 
 def chat_result_from_replies(replies, model, stop_reason=None):
@@ -955,12 +1127,12 @@ def build_anthropic_messages(message, history):
     return messages
 
 
-def anthropic_claude_chat(message, history, api_key, memory_summary=""):
+def anthropic_claude_chat(message, history, api_key, memory_summary="", search_context=""):
     messages = build_anthropic_messages(message, history)
     replies = []
     model = CLAUDE_MODEL
     stop_reason = ""
-    system_prompt = build_chat_system_prompt(memory_summary)
+    system_prompt = build_chat_system_prompt(memory_summary, search_context)
     for index in range(CHAT_MAX_CONTINUATIONS + 1):
         request_body = json.dumps(
             {
@@ -1016,9 +1188,33 @@ def claude_chat(payload, owner_key):
     memory_summary = context["memorySummary"]
     save_chat_message(owner_key, "user", message, metadata={"source": "fingerfruit"})
     result = None
+    search_data = None
+    search_context = ""
+    search_used = False
     if api_key:
         try:
-            result = anthropic_claude_chat(message, history, api_key, memory_summary=memory_summary)
+            result = anthropic_claude_chat(
+                message,
+                history,
+                api_key,
+                memory_summary=memory_summary,
+                search_context=search_context,
+            )
+            search_query = extract_chat_search_query(result.get("reply") or "")
+            if not search_query and (chat_needs_web_search(message) or chat_reply_needs_web_retry(result.get("reply") or "")):
+                search_query = message
+            if search_query:
+                search_data = web_search_results(search_query)
+                search_context = format_search_context(search_data)
+                if search_context:
+                    search_used = True
+                    result = anthropic_claude_chat(
+                        message,
+                        history,
+                        api_key,
+                        memory_summary=memory_summary,
+                        search_context=search_context,
+                    )
         except Exception as exc:
             fruit_auto.log_event({"action": "chat_anthropic_direct_failed", "error": sanitize_error(exc)})
     else:
@@ -1033,11 +1229,26 @@ def claude_chat(payload, owner_key):
     else:
         result["direct"] = True
         for reply in result.get("replies") or [result.get("reply") or ""]:
-            save_chat_message(owner_key, "assistant", reply, model=result.get("model") or "", metadata={"source": "anthropic-direct"})
+            save_chat_message(
+                owner_key,
+                "assistant",
+                reply,
+                model=result.get("model") or "",
+                metadata={
+                    "source": "anthropic-direct",
+                    "webSearch": search_used,
+                    "searchQuery": (search_data or {}).get("query") or "",
+                },
+            )
         maybe_update_chat_memory(owner_key, api_key)
     result["memory"] = {
         "recentMessageLimit": CHAT_CONTEXT_MESSAGE_LIMIT,
         "summaryUsed": bool(memory_summary),
+    }
+    result["webSearch"] = {
+        "used": search_used,
+        "query": (search_data or {}).get("query") or "",
+        "resultCount": len((search_data or {}).get("results") or []),
     }
     return result
 
