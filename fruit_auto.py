@@ -2360,6 +2360,7 @@ def local_worklog_events_by_date(owner_key, month=None, limit=20000):
 def worklog_approvals(owner_key=None, month=None):
     owner_key = require_owner(owner_key)
     client, _employee_info, _login_dataset, _employee, sender_employee_id, _sender_employee_name = account_login(owner_key)
+    state = get_account_state(owner_key)
     selected_month = normalize_history_month(month)
     content = client.post_json(f"{FOREST_API}/dwBerySeed", {"stdMt": selected_month, "empId": sender_employee_id})
     if not isinstance(content, list):
@@ -2375,15 +2376,23 @@ def worklog_approvals(owner_key=None, month=None):
         if not history_date:
             continue
         local = local_events.get(history_date, {})
+        project_name = local.get("projectName") or state.get("worklogProjectName") or ""
+        target_employee_name = local.get("targetEmployeeName") or row.get("tgtEmpNm") or state.get("worklogTargetEmployeeName") or ""
+        content_text = local.get("workDesc") or ""
+        if not content_text:
+            state_project_matches = not local.get("projectName") or local.get("projectName") == state.get("worklogProjectName")
+            state_target_matches = not local.get("targetEmployeeId") or local.get("targetEmployeeId") == state.get("worklogTargetEmployeeId")
+            if state_project_matches and state_target_matches:
+                content_text = state.get("worklogContent") or ""
         approvals[history_date] = {
             "date": history_date,
             "approved": True,
-            "projectName": local.get("projectName") or "",
-            "content": local.get("workDesc") or "",
-            "seedMessage": local.get("seedMessage") or message,
-            "seedCount": local.get("seedCount"),
-            "targetEmployeeName": local.get("targetEmployeeName") or row.get("tgtEmpNm") or "",
-            "targetEmployeeId": local.get("targetEmployeeId") or "",
+            "projectName": project_name,
+            "content": content_text,
+            "seedMessage": local.get("seedMessage") or state.get("worklogSeedMessage") or message,
+            "seedCount": local.get("seedCount") if local.get("seedCount") is not None else state.get("worklogSeedCount"),
+            "targetEmployeeName": target_employee_name,
+            "targetEmployeeId": local.get("targetEmployeeId") or state.get("worklogTargetEmployeeId") or "",
             "completedAt": local.get("completedAt") or local.get("at") or "",
             "officialMessage": message,
         }
