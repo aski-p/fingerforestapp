@@ -2346,7 +2346,8 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
             first_seen_at = lookup.get((fingerprint, occurrence_by_fingerprint[fingerprint]))
             if first_seen_at and observed_time_matches_history_date(first_seen_at, row.get("historyDate")):
                 row["observedAt"] = first_seen_at
-                row["at"] = first_seen_at
+                if row.get("action") != "sent" and not row.get("at"):
+                    row["at"] = first_seen_at
                 row["_matchedTimeSource"] = "seed_berry_observed" if row.get("historyKind") == "seed" else "observed_db"
     for row in rows:
         if not row.get("at"):
