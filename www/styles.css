@@ -335,7 +335,7 @@ body.main-bg-forest-spring {
 }
 
 body.main-bg-forest-summer {
-  --season-bg: url("/assets/seasons/forest-summer.jpg?v=3.12.8");
+  --season-bg: url("/assets/seasons/forest-summer.jpg?v=3.12.9");
 }
 
 body.main-bg-forest-autumn {
@@ -1773,26 +1773,22 @@ textarea:focus {
   filter: drop-shadow(0 6px 8px rgba(115, 82, 6, 0.14));
 }
 
-.cycle-ring marker path {
-  fill: #d99a00;
-}
-
 .cycle-ring-active-path {
   fill: none;
-  stroke: #fff4a8;
+  stroke: #ff4b4b;
   stroke-width: 9;
   stroke-linecap: round;
   stroke-dasharray: 16 11;
   filter:
-    drop-shadow(0 0 7px rgba(255, 255, 255, 0.95))
-    drop-shadow(0 0 14px rgba(255, 217, 90, 0.85))
-    drop-shadow(0 0 24px rgba(217, 154, 0, 0.54));
+    drop-shadow(0 0 6px rgba(255, 255, 255, 0.88))
+    drop-shadow(0 0 14px rgba(255, 75, 75, 0.86))
+    drop-shadow(0 0 24px rgba(185, 28, 28, 0.58));
   animation: cycleActiveSparkle 1.35s ease-in-out infinite;
 }
 
 .cycle-ring-active-halo {
   fill: none;
-  stroke: rgba(255, 217, 90, 0.34);
+  stroke: rgba(239, 68, 68, 0.34);
   stroke-width: 17;
   stroke-linecap: round;
   stroke-dasharray: 16 11;
@@ -1801,11 +1797,11 @@ textarea:focus {
 
 @keyframes cycleActiveSparkle {
   0%, 100% {
-    stroke: #ffe27a;
+    stroke: #ff4b4b;
     opacity: .88;
   }
   50% {
-    stroke: #ffffff;
+    stroke: #ff9a9a;
     opacity: 1;
   }
 }
