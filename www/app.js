@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.14.0";
+const appVersion = "3.14.1";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1065,8 +1065,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.14.0",
-        badge: "/icons/app-icon-192.png?v=3.14.0",
+        icon: "/icons/app-icon-192.png?v=3.14.1",
+        badge: "/icons/app-icon-192.png?v=3.14.1",
         data: { url: item.url || "/" },
       });
       return true;
@@ -3327,14 +3327,10 @@ $("worklogCalendarResetBtn").addEventListener("click", () => {
 $("worklogCalendarApplyBtn").addEventListener("click", async () => {
   pruneApprovedSelectedWorklogDates();
   selectedWorklogDates = normalizeWorklogDateList(calendarDraftDates);
-  const adjustedTodayTime = ensureWorklogTimeAllowsSelectedToday();
   markWorklogDraftDirty();
   renderWorklogDates();
   closeWorklogCalendar();
-  if (adjustedTodayTime) {
-    toast(`오늘 예약 시간이 지나서 ${$("worklogTimeInput").value}로 맞췄습니다.`);
-  }
-  await saveWorklogSettingsFromForm("업무일지 날짜를 저장했습니다.");
+  toast("업무일지 날짜를 반영했습니다. 저장 버튼을 눌러 예약에 적용하세요.");
 });
 
 document.querySelectorAll("[data-workspace-slide]").forEach((button) => {
