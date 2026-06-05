@@ -766,6 +766,24 @@ def received_notification_payload(result):
     }
 
 
+def notify_received_events(received_events, owner_key):
+    notified = False
+    for received_event in received_events:
+        if received_event.get("timeSource") == "balance_detected":
+            log_event(
+                {
+                    "action": "push_notify_skipped",
+                    "reason": "balance_detected_received_event",
+                    "ownerKey": owner_key,
+                    "targetEmployeeId": received_event.get("targetEmployeeId"),
+                    "berries": received_event.get("berries"),
+                }
+            )
+            continue
+        notified = notify_web_push(received_notification_payload(received_event), [owner_key]) or notified
+    return notified
+
+
 def worklog_completed_display(result):
     completed_at = parse_iso(result.get("scheduledFor") or result.get("completedAt") or result.get("at"))
     if completed_at is None:
@@ -3622,8 +3640,7 @@ def observe_received_history(owner_key=None, force=False):
         state["lastReceivedHistoryAt"] = received_events[0].get("at")
         state["lastReceivedHistoryCount"] = len(received_events)
     save_account_state(owner_key, state)
-    for received_event in received_events:
-        notify_web_push(received_notification_payload(received_event), [owner_key])
+    notify_received_events(received_events, owner_key)
     return {
         "action": "observed",
         "ownerKey": owner_key,
@@ -3815,8 +3832,7 @@ def check_once(dry_run=False, force=False, owner_key=None):
         if received_events:
             state["lastReceivedHistoryAt"] = received_events[0].get("at")
             state["lastReceivedHistoryCount"] = len(received_events)
-            for received_event in received_events:
-                notify_web_push(received_notification_payload(received_event), [owner_key])
+            notify_received_events(received_events, owner_key)
         pending_eligible_at = parse_iso(state.get("pendingEligibleAt"))
         if pending_eligible_at is None:
             pending_eligible_at = pending_received_at + dt.timedelta(seconds=next_delay_seconds)
