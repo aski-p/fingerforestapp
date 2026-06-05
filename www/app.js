@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.13.9";
+const appVersion = "3.14.0";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1065,8 +1065,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.13.9",
-        badge: "/icons/app-icon-192.png?v=3.13.9",
+        icon: "/icons/app-icon-192.png?v=3.14.0",
+        badge: "/icons/app-icon-192.png?v=3.14.0",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1708,7 +1708,9 @@ function renderWorklogDates() {
 }
 
 function normalizeWorklogDateList(dates) {
-  return Array.from(new Set((dates || []).filter(isWorklogAllowedDate))).sort();
+  return Array.from(new Set((dates || []).filter((date) => (
+    isWorklogAllowedDate(date) && !worklogApprovalForDate(date)
+  )))).sort();
 }
 
 function markWorklogDraftDirty() {
@@ -1744,11 +1746,12 @@ function renderWorklogCalendar() {
     const holidayName = koreanPublicHolidays[date] || "";
     const approval = hasMonthApprovals ? worklogApprovalForDate(date) : null;
     const blockedReason = worklogBlockedDateReason(date);
+    const isSelected = !approval && calendarDraftDates.includes(date);
     const button = document.createElement("button");
     button.type = "button";
     button.className = [
       "calendar-day",
-      calendarDraftDates.includes(date) ? "selected" : "",
+      isSelected ? "selected" : "",
       approval ? "approved" : "",
       date === todayValue ? "today" : "",
       blockedReason ? "blocked" : "",
@@ -1760,7 +1763,7 @@ function renderWorklogCalendar() {
       <span class="calendar-day-number">${day}</span>
       ${label ? `<small>${escapeHtml(label)}</small>` : ""}
     `;
-    button.setAttribute("aria-pressed", calendarDraftDates.includes(date) ? "true" : "false");
+    button.setAttribute("aria-pressed", isSelected ? "true" : "false");
     if (blockedReason && !approval) {
       button.disabled = true;
       button.title = blockedReason;
@@ -3322,6 +3325,7 @@ $("worklogCalendarResetBtn").addEventListener("click", () => {
   renderWorklogCalendar();
 });
 $("worklogCalendarApplyBtn").addEventListener("click", async () => {
+  pruneApprovedSelectedWorklogDates();
   selectedWorklogDates = normalizeWorklogDateList(calendarDraftDates);
   const adjustedTodayTime = ensureWorklogTimeAllowsSelectedToday();
   markWorklogDraftDirty();
