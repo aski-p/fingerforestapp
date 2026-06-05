@@ -332,22 +332,27 @@ body.main-bg-scene {
 
 body.main-bg-forest-spring {
   --season-bg: url("/assets/seasons/forest-spring.jpg?v=3.10.2");
+  --season-splash-bg: url("/assets/seasons/fast/forest-spring-fast.jpg");
 }
 
 body.main-bg-forest-summer {
-  --season-bg: url("/assets/seasons/forest-summer.jpg?v=3.12.9");
+  --season-bg: url("/assets/seasons/forest-summer.jpg?v=3.13.1");
+  --season-splash-bg: url("/assets/seasons/fast/forest-summer-fast.jpg");
 }
 
 body.main-bg-forest-autumn {
   --season-bg: url("/assets/seasons/forest-autumn.jpg?v=3.10.2");
+  --season-splash-bg: url("/assets/seasons/fast/forest-autumn-fast.jpg");
 }
 
 body.main-bg-forest-winter {
   --season-bg: url("/assets/seasons/forest-winter.jpg?v=3.10.2");
+  --season-splash-bg: url("/assets/seasons/fast/forest-winter-fast.jpg");
 }
 
 body.main-bg-forest-night {
   --season-bg: url("/assets/seasons/forest-night.jpg?v=3.10.2");
+  --season-splash-bg: url("/assets/seasons/fast/forest-night-fast.jpg");
 }
 
 body.main-bg-forest-sleep {
@@ -414,7 +419,7 @@ body.splash-active {
 body.main-bg-scene .launch-splash {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(248, 251, 253, 0.04)),
-    var(--season-bg) center top / cover no-repeat,
+    var(--season-splash-bg, var(--season-bg)) center top / cover no-repeat,
     #eef7ef;
 }
 

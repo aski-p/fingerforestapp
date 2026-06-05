@@ -3740,11 +3740,11 @@ def check_once(dry_run=False, force=False, owner_key=None):
         pending_target_id = str(state.get("pendingTargetEmployeeId") or "")
         current_target_id = str(target.get("emp_id") or "")
         pending_berry_count = parse_int(state.get("pendingBerryCount"), 0)
-        if pending_received_at is None or pending_target_id != current_target_id or berries > pending_berry_count:
+        if pending_received_at is None or pending_target_id != current_target_id or send_berries > pending_berry_count:
             pending_received_at = attempt_at
             state["pendingReceivedAt"] = pending_received_at.isoformat()
             state["pendingTargetEmployeeId"] = target.get("emp_id")
-        state["pendingBerryCount"] = berries
+        state["pendingBerryCount"] = send_berries
         received_events = record_received_history_from_official(
             client,
             owner_key,
@@ -3764,7 +3764,7 @@ def check_once(dry_run=False, force=False, owner_key=None):
                 target.get("emp_id"),
                 target_name,
                 employee_position(target),
-                berries,
+                send_berries,
                 pending_received_at,
                 seeds=seeds,
                 remaining=berries,
