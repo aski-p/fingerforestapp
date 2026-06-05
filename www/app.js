@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.13.5";
+const appVersion = "3.13.6";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1065,8 +1065,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.13.5",
-        badge: "/icons/app-icon-192.png?v=3.13.5",
+        icon: "/icons/app-icon-192.png?v=3.13.6",
+        badge: "/icons/app-icon-192.png?v=3.13.6",
         data: { url: item.url || "/" },
       });
       return true;
@@ -3195,6 +3195,28 @@ function requireValidWorklogPayload(enabledOverride) {
   return payload;
 }
 
+async function saveWorklogSettingsFromForm(successMessage) {
+  if (!isUnlocked()) {
+    toast("먼저 로그인하세요.");
+    return null;
+  }
+  const payload = requireValidWorklogPayload();
+  if (!payload) return null;
+  setBusy(true);
+  try {
+    const state = await api("/api/worklog-settings", payload);
+    worklogDraftDirty = false;
+    renderState(state);
+    toast(successMessage || (state.worklogEnabled ? "업무일지 예약을 저장했습니다." : "업무일지 설정을 저장했습니다."));
+    return state;
+  } catch (err) {
+    openSuccessModal("입력 확인", err.message, false);
+    return null;
+  } finally {
+    setBusy(false);
+  }
+}
+
 function transferSettingsPayload() {
   const sendAll = $("sendAllBerries").checked;
   const countValue = $("sendBerryCount").value.trim();
@@ -3291,7 +3313,7 @@ $("worklogCalendarResetBtn").addEventListener("click", () => {
   markWorklogDraftDirty();
   renderWorklogCalendar();
 });
-$("worklogCalendarApplyBtn").addEventListener("click", () => {
+$("worklogCalendarApplyBtn").addEventListener("click", async () => {
   selectedWorklogDates = normalizeWorklogDateList(calendarDraftDates);
   const adjustedTodayTime = ensureWorklogTimeAllowsSelectedToday();
   markWorklogDraftDirty();
@@ -3300,6 +3322,7 @@ $("worklogCalendarApplyBtn").addEventListener("click", () => {
   if (adjustedTodayTime) {
     toast(`오늘 예약 시간이 지나서 ${$("worklogTimeInput").value}로 맞췄습니다.`);
   }
+  await saveWorklogSettingsFromForm("업무일지 날짜를 저장했습니다.");
 });
 
 document.querySelectorAll("[data-workspace-slide]").forEach((button) => {
@@ -3338,23 +3361,7 @@ $("worklogSeedCount").addEventListener("input", () => {
 });
 
 $("worklogSaveBtn").addEventListener("click", async () => {
-  if (!isUnlocked()) {
-    toast("먼저 로그인하세요.");
-    return;
-  }
-  try {
-    const payload = requireValidWorklogPayload();
-    if (!payload) return;
-    setBusy(true);
-    const state = await api("/api/worklog-settings", payload);
-    worklogDraftDirty = false;
-    renderState(state);
-    toast(state.worklogEnabled ? "업무일지 예약을 저장했습니다." : "업무일지 설정을 저장했습니다.");
-  } catch (err) {
-    openSuccessModal("입력 확인", err.message, false);
-  } finally {
-    setBusy(false);
-  }
+  await saveWorklogSettingsFromForm();
 });
 
 $("worklogRunBtn").addEventListener("click", async () => {
