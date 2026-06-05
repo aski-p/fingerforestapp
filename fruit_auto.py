@@ -5,6 +5,7 @@ import hashlib
 import http.cookiejar
 import json
 import os
+import random
 import re
 import signal
 import sqlite3
@@ -35,6 +36,7 @@ DEFAULT_TICK_MAX_OWNERS = 50
 DEFAULT_RUN_INTERVAL_MINUTES = 60
 MIN_RUN_INTERVAL_MINUTES = 60
 MAX_RUN_INTERVAL_MINUTES = 12 * 60
+RUN_INTERVAL_RANDOM_EXTRA_MINUTES = 59
 COMMON_OBSERVE_INTERVAL_SECONDS = 5 * 60
 WAKE_REQUESTED = False
 QUIET_LOG_ACTIONS = {"balance", "check"}
@@ -67,6 +69,7 @@ DEFAULT_STATE = {
     "lastCommonObservedAt": None,
     "lastCommonObserveResult": None,
     "pendingReceivedAt": None,
+    "pendingEligibleAt": None,
     "pendingBerryCount": None,
     "pendingTargetEmployeeId": None,
     "nextRunAt": None,
@@ -194,6 +197,19 @@ def get_run_interval_minutes(state=None):
 
 def get_run_interval_seconds(state=None):
     return get_run_interval_minutes(state) * 60
+
+
+def random_run_delay_seconds(state=None):
+    base_minutes = get_run_interval_minutes(state)
+    extra_minutes = random.randint(1, RUN_INTERVAL_RANDOM_EXTRA_MINUTES)
+    return (base_minutes + extra_minutes) * 60
+
+
+def schedule_next_run(state, base=None):
+    delay_seconds = random_run_delay_seconds(state)
+    state["nextRunDelaySeconds"] = delay_seconds
+    state["nextRunAt"] = iso_after(delay_seconds, base)
+    return delay_seconds
 
 
 def get_history_observe_interval_seconds():
@@ -3494,7 +3510,7 @@ def set_run_interval(minutes, owner_key=None):
     if state.get("enabled"):
         last_attempt = parse_iso(state.get("lastAttemptAt"))
         base = last_attempt or dt.datetime.now(dt.timezone.utc)
-        state["nextRunAt"] = iso_after(next_minutes * 60, base)
+        schedule_next_run(state, base)
     state["updatedAt"] = now_iso()
     save_account_state(owner_key, state)
     log_event({"action": "interval_set", "ownerKey": owner_key, "runIntervalMinutes": next_minutes})
@@ -3506,15 +3522,20 @@ def set_enabled(enabled, owner_key=None):
     state = get_account_state(owner_key)
     if enabled:
         validate_transfer_settings(state)
-    interval_seconds = get_run_interval_seconds(state)
+    next_run_at = None
+    if enabled:
+        schedule_next_run(state)
+        next_run_at = state.get("nextRunAt")
     state.update(
         {
             "enabled": enabled,
             "status": "on" if enabled else "off",
-            "nextRunAt": iso_after(interval_seconds) if enabled else None,
+            "nextRunAt": next_run_at,
             "updatedAt": now_iso(),
         }
     )
+    if not enabled:
+        state["nextRunDelaySeconds"] = None
     save_account_state(owner_key, state)
     log_event({"action": "enabled" if enabled else "disabled", "ownerKey": owner_key})
     return state
@@ -3621,29 +3642,45 @@ def check_once(dry_run=False, force=False, owner_key=None):
         save_account_state(owner_key, state)
         return {"action": "skipped", "reason": "disabled", "enabled": enabled, "ownerKey": owner_key}
 
+    now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+    next_run = parse_iso(state.get("nextRunAt"))
+    if not force and next_run is not None and now < next_run:
+        remaining_seconds = max(0, int((next_run - now).total_seconds()))
+        return {
+            "action": "skipped",
+            "reason": "waiting_next_run",
+            "ownerKey": owner_key,
+            "intervalSeconds": interval_seconds,
+            "remainingSeconds": remaining_seconds,
+            "nextRunAt": state.get("nextRunAt"),
+        }
+
     last_attempt_age = seconds_since(state.get("lastAttemptAt"))
     if not force and last_attempt_age is not None and last_attempt_age < interval_seconds:
-        state["nextRunAt"] = iso_after(interval_seconds - last_attempt_age)
+        last_attempt = parse_iso(state.get("lastAttemptAt"))
+        schedule_next_run(state, last_attempt)
+        next_run = parse_iso(state.get("nextRunAt"))
+        remaining_seconds = max(0, int((next_run - now).total_seconds())) if next_run else max(0, int(interval_seconds - last_attempt_age))
         save_account_state(owner_key, state)
         return {
             "action": "skipped",
             "reason": "already_attempted_this_interval",
             "ownerKey": owner_key,
             "intervalSeconds": interval_seconds,
-            "remainingSeconds": max(0, int(interval_seconds - last_attempt_age)),
+            "remainingSeconds": remaining_seconds,
             "lastAttemptResult": state.get("lastAttemptResult"),
             "nextRunAt": state.get("nextRunAt"),
         }
 
     slot = int(time.time() // interval_seconds)
-    attempt_at = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+    attempt_at = now
+    next_delay_seconds = schedule_next_run(state, attempt_at)
     state.update(
         {
             "lastAttemptAt": attempt_at.isoformat(),
             "lastAttemptSlot": slot,
             "lastAttemptIntervalSeconds": interval_seconds,
             "lastAttemptResult": "running",
-            "nextRunAt": iso_after(interval_seconds, attempt_at),
         }
     )
     save_account_state(owner_key, state)
@@ -3710,6 +3747,7 @@ def check_once(dry_run=False, force=False, owner_key=None):
             state["lastAttemptResult"] = "no_berries"
             state["lastNoBerriesAt"] = checked_at
             state["pendingReceivedAt"] = None
+            state["pendingEligibleAt"] = None
             state["pendingBerryCount"] = None
             state["pendingTargetEmployeeId"] = None
             should_log_no_berries = (
@@ -3743,6 +3781,7 @@ def check_once(dry_run=False, force=False, owner_key=None):
         if pending_received_at is None or pending_target_id != current_target_id or send_berries > pending_berry_count:
             pending_received_at = attempt_at
             state["pendingReceivedAt"] = pending_received_at.isoformat()
+            state["pendingEligibleAt"] = iso_after(next_delay_seconds, pending_received_at)
             state["pendingTargetEmployeeId"] = target.get("emp_id")
         state["pendingBerryCount"] = send_berries
         received_events = record_received_history_from_official(
@@ -3776,7 +3815,11 @@ def check_once(dry_run=False, force=False, owner_key=None):
             state["lastReceivedHistoryCount"] = len(received_events)
             for received_event in received_events:
                 notify_web_push(received_notification_payload(received_event), [owner_key])
-        eligible_at = pending_received_at + dt.timedelta(seconds=interval_seconds)
+        pending_eligible_at = parse_iso(state.get("pendingEligibleAt"))
+        if pending_eligible_at is None:
+            pending_eligible_at = pending_received_at + dt.timedelta(seconds=next_delay_seconds)
+            state["pendingEligibleAt"] = pending_eligible_at.replace(microsecond=0).isoformat()
+        eligible_at = pending_eligible_at
         if not force and attempt_at < eligible_at:
             remaining_seconds = max(0, int((eligible_at - attempt_at).total_seconds()))
             state["nextRunAt"] = eligible_at.replace(microsecond=0).isoformat()
@@ -3857,6 +3900,7 @@ def check_once(dry_run=False, force=False, owner_key=None):
                 "lastResult": f"sent_{send_berries}_remaining_{remaining}",
                 "lastAttemptResult": f"sent_{send_berries}_remaining_{remaining}",
                 "pendingReceivedAt": None,
+                "pendingEligibleAt": None,
                 "pendingBerryCount": None,
                 "pendingTargetEmployeeId": None,
             }
