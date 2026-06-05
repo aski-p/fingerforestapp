@@ -3508,9 +3508,7 @@ def set_run_interval(minutes, owner_key=None):
     state = get_account_state(owner_key)
     state["runIntervalMinutes"] = next_minutes
     if state.get("enabled"):
-        last_attempt = parse_iso(state.get("lastAttemptAt"))
-        base = last_attempt or dt.datetime.now(dt.timezone.utc)
-        schedule_next_run(state, base)
+        schedule_next_run(state, dt.datetime.now(dt.timezone.utc))
     state["updatedAt"] = now_iso()
     save_account_state(owner_key, state)
     log_event({"action": "interval_set", "ownerKey": owner_key, "runIntervalMinutes": next_minutes})
