@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.13.4";
+const appVersion = "3.13.5";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1065,8 +1065,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.13.4",
-        badge: "/icons/app-icon-192.png?v=3.13.4",
+        icon: "/icons/app-icon-192.png?v=3.13.5",
+        badge: "/icons/app-icon-192.png?v=3.13.5",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1470,6 +1470,7 @@ function setLockedState(unlocked) {
     "historyOpenBtn",
     "rankingOpenBtn",
     "refreshBalanceBtn",
+    "intervalSubtractBtn",
     "intervalAddBtn",
     "intervalResetBtn",
     "worklogSearchInput",
@@ -3082,6 +3083,10 @@ $("profilePhotoResetBtn").addEventListener("click", async () => {
 });
 
 $("refreshBalanceBtn").addEventListener("click", refreshBalance);
+
+$("intervalSubtractBtn").addEventListener("click", () => {
+  setIntervalMinutes(Math.max(minIntervalMinutes, intervalMinutes() - intervalStepMinutes));
+});
 
 $("intervalAddBtn").addEventListener("click", () => {
   setIntervalMinutes(Math.min(maxIntervalMinutes, intervalMinutes() + intervalStepMinutes));
