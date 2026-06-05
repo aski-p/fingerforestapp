@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.13.8";
+const appVersion = "3.13.9";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1065,8 +1065,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.13.8",
-        badge: "/icons/app-icon-192.png?v=3.13.8",
+        icon: "/icons/app-icon-192.png?v=3.13.9",
+        badge: "/icons/app-icon-192.png?v=3.13.9",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1235,6 +1235,13 @@ function worklogApprovalForDate(value) {
   return worklogApprovalsByDate?.[value] || null;
 }
 
+function pruneApprovedSelectedWorklogDates() {
+  const approvedDates = new Set(Object.keys(worklogApprovalsByDate || {}));
+  if (!approvedDates.size) return;
+  selectedWorklogDates = selectedWorklogDates.filter((date) => !approvedDates.has(date));
+  calendarDraftDates = calendarDraftDates.filter((date) => !approvedDates.has(date));
+}
+
 function worklogApprovalCacheKey(monthKey) {
   return `${worklogApprovalCachePrefix}${expectedOwnerKey() || "default"}:${monthKey}`;
 }
@@ -1247,6 +1254,7 @@ function applyWorklogApprovals(data, monthKey, { merge = false } = {}) {
   });
   worklogApprovalsByDate = nextApprovalsByDate;
   worklogApprovalsMonthKey = monthKey;
+  pruneApprovedSelectedWorklogDates();
   return true;
 }
 
@@ -1670,7 +1678,7 @@ function preserveStateValue(merged, previous, cached, key) {
 }
 
 function renderWorklogDates() {
-  const allowedDates = selectedWorklogDates.filter(isWorklogAllowedDate);
+  const allowedDates = selectedWorklogDates.filter((date) => isWorklogAllowedDate(date) && !worklogApprovalForDate(date));
   if (allowedDates.length !== selectedWorklogDates.length) {
     selectedWorklogDates = allowedDates;
   }

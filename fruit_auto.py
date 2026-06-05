@@ -2537,6 +2537,10 @@ def worklog_approvals(owner_key=None, month=None):
             "completedAt": local.get("completedAt") or local.get("at") or "",
             "officialMessage": message,
         }
+    if remove_completed_schedule_dates(state, approvals.keys()):
+        state["worklogNextRunAt"] = next_worklog_run_at(state)
+        state["updatedAt"] = now_iso()
+        save_account_state(owner_key, state)
     return {"month": selected_month, "items": sorted(approvals.values(), key=lambda item: item["date"])}
 
 
@@ -4039,6 +4043,22 @@ def prune_expired_schedule_dates(dates, schedule_time, account=None, now=None):
     return result
 
 
+def remove_completed_schedule_dates(account, completed_dates):
+    completed = {
+        str(item or "").strip()
+        for item in completed_dates or []
+        if str(item or "").strip()
+    }
+    if not completed:
+        return False
+    current_dates = normalize_schedule_dates(account.get("worklogScheduleDates"), reject_blocked=False)
+    next_dates = [item for item in current_dates if item not in completed]
+    if next_dates == current_dates:
+        return False
+    account["worklogScheduleDates"] = next_dates
+    return True
+
+
 def expired_schedule_dates(dates, schedule_time, now=None):
     now = now or dt.datetime.now(dt.timezone.utc)
     local_now = now.astimezone(KST)
@@ -4323,6 +4343,8 @@ def save_worklog_once(owner_key=None, run_date=None, force=False):
             remaining_seeds, remaining_berries = current_seed_fruit(client, employee)
         schedule_time = normalize_schedule_time(state.get("worklogScheduleTime"))
         run_key = f"{target_date.isoformat()}T{schedule_time}"
+        completed_date = target_date.isoformat()
+        remove_completed_schedule_dates(state, [completed_date])
         scheduled_for_iso = (
             scheduled_for.astimezone(dt.timezone.utc).replace(microsecond=0).isoformat()
             if scheduled_for is not None
@@ -4339,6 +4361,7 @@ def save_worklog_once(owner_key=None, run_date=None, force=False):
                 "worklogLastError": None,
                 "worklogRunningRunKey": None,
                 "worklogRunningAt": None,
+                "worklogScheduleDates": state.get("worklogScheduleDates"),
                 **(
                     {
                         "lastSeedCount": remaining_seeds,
