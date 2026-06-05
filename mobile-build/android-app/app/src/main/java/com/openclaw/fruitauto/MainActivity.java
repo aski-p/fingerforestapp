@@ -23,7 +23,7 @@ import android.webkit.WebViewClient;
 
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST_CODE = 20260529;
-    private static final String APP_VERSION = "3.11.6";
+    private static final String APP_VERSION = "3.13.4";
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
     private static final String APP_URL = "https://web-production-011c4.up.railway.app/?token=IV2d0ecXO9X50cJvmOHb-lI7wCSRiFji";
@@ -214,7 +214,7 @@ public class MainActivity extends Activity {
             alarmManager.cancel(pendingIntent);
             return;
         }
-        int minutes = Math.max(5, Math.min(60, prefs.getInt("runIntervalMinutes", 5)));
+        int minutes = Math.max(60, Math.min(23 * 60, prefs.getInt("runIntervalMinutes", 60)));
         long nextRun = System.currentTimeMillis() + (minutes * 60_000L);
         if (Build.VERSION.SDK_INT >= 23) {
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, nextRun, pendingIntent);
@@ -279,7 +279,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void saveSettings(boolean autoEnabled, boolean pushEnabled, int runIntervalMinutes) {
-            int minutes = Math.max(5, Math.min(60, runIntervalMinutes));
+            int minutes = Math.max(60, Math.min(23 * 60, runIntervalMinutes));
             context.getSharedPreferences("fruit-auto", MODE_PRIVATE)
                 .edit()
                 .putBoolean("autoEnabled", autoEnabled)

@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.13.2";
+const appVersion = "3.13.4";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -338,7 +338,7 @@ const fonts = [
 ];
 
 const minIntervalMinutes = 60;
-const maxIntervalMinutes = 12 * 60;
+const maxIntervalMinutes = 23 * 60;
 const intervalStepMinutes = 60;
 
 function intervalMinutes(state = currentState) {
@@ -1065,8 +1065,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.13.2",
-        badge: "/icons/app-icon-192.png?v=3.13.2",
+        icon: "/icons/app-icon-192.png?v=3.13.4",
+        badge: "/icons/app-icon-192.png?v=3.13.4",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1698,6 +1698,10 @@ function renderWorklogDates() {
   window.setTimeout(syncWorkspacePagerHeight, 0);
 }
 
+function normalizeWorklogDateList(dates) {
+  return Array.from(new Set((dates || []).filter(isWorklogAllowedDate))).sort();
+}
+
 function markWorklogDraftDirty() {
   worklogDraftDirty = true;
 }
@@ -1765,6 +1769,7 @@ function renderWorklogCalendar() {
       calendarDraftDates = calendarDraftDates.includes(date)
         ? calendarDraftDates.filter((item) => item !== date)
         : [...calendarDraftDates, date].sort();
+      markWorklogDraftDirty();
       renderWorklogCalendar();
     });
     grid.appendChild(button);
@@ -1772,9 +1777,7 @@ function renderWorklogCalendar() {
 }
 
 async function openWorklogCalendar() {
-  calendarDraftDates = selectedWorklogDates.filter(isWorklogAllowedDate);
-  selectedWorklogDates = calendarDraftDates;
-  renderWorklogDates();
+  calendarDraftDates = normalizeWorklogDateList(selectedWorklogDates);
   const anchor = calendarDraftDates[0] || localDateValue(new Date());
   const [year, month] = anchor.split("-").map(Number);
   worklogCalendarMonth = new Date(year || new Date().getFullYear(), (month || new Date().getMonth() + 1) - 1, 1);
@@ -3284,7 +3287,7 @@ $("worklogCalendarResetBtn").addEventListener("click", () => {
   renderWorklogCalendar();
 });
 $("worklogCalendarApplyBtn").addEventListener("click", () => {
-  selectedWorklogDates = calendarDraftDates.filter(isWorklogAllowedDate).sort();
+  selectedWorklogDates = normalizeWorklogDateList(calendarDraftDates);
   const adjustedTodayTime = ensureWorklogTimeAllowsSelectedToday();
   markWorklogDraftDirty();
   renderWorklogDates();
