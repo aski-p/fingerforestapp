@@ -30,7 +30,7 @@ TICK_WAKE_PATH = DATA_DIR / "tick_worker.wake"
 TICK_HEARTBEAT_PATH = DATA_DIR / "tick_worker.heartbeat.json"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.14.3"
+APP_VERSION = "3.14.4"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
 CHAT_CONTEXT_MESSAGE_LIMIT = 8
 CHAT_HISTORY_MESSAGE_LIMIT = CHAT_CONTEXT_MESSAGE_LIMIT
@@ -1298,7 +1298,24 @@ def tick_worker_running():
     return age <= max(180, interval * 3) and fruit_auto.is_process_alive(pid)
 
 
+def start_tick_worker():
+    if tick_worker_running():
+        return True
+    try:
+        subprocess.Popen(
+            [sys.executable, str(BASE_DIR / "tick_worker.py")],
+            cwd=str(BASE_DIR),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        return True
+    except OSError:
+        return False
+
+
 def request_scheduler_wake():
+    start_tick_worker()
     try:
         TICK_WAKE_PATH.write_text(datetime.now(timezone.utc).isoformat() + "\n", encoding="utf-8")
     except OSError:
@@ -1323,7 +1340,7 @@ def wake_daemon():
 
 
 def ensure_daemon_running():
-    return tick_worker_running() or daemon_running()
+    return tick_worker_running() or start_tick_worker() or daemon_running()
 
 
 def run_check_once(owner_key, force=False):

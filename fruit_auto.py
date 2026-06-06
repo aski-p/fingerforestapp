@@ -5,7 +5,6 @@ import hashlib
 import http.cookiejar
 import json
 import os
-import random
 import re
 import signal
 import sqlite3
@@ -36,7 +35,7 @@ DEFAULT_TICK_MAX_OWNERS = 50
 DEFAULT_RUN_INTERVAL_MINUTES = 60
 MIN_RUN_INTERVAL_MINUTES = 60
 MAX_RUN_INTERVAL_MINUTES = 23 * 60
-RUN_INTERVAL_RANDOM_EXTRA_MINUTES = 59
+RUN_INTERVAL_RANDOM_EXTRA_MINUTES = 0
 COMMON_OBSERVE_INTERVAL_SECONDS = 5 * 60
 WAKE_REQUESTED = False
 QUIET_LOG_ACTIONS = {"balance", "check"}
@@ -201,7 +200,7 @@ def get_run_interval_seconds(state=None):
 
 def random_run_delay_seconds(state=None):
     base_minutes = get_run_interval_minutes(state)
-    extra_minutes = random.randint(1, RUN_INTERVAL_RANDOM_EXTRA_MINUTES)
+    extra_minutes = 0
     return (base_minutes + extra_minutes) * 60
 
 

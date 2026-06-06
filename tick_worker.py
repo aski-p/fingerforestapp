@@ -10,9 +10,11 @@ from pathlib import Path
 
 
 BASE_DIR = Path(__file__).resolve().parent
-LOG_PATH = BASE_DIR / "tick_worker.log"
-WAKE_PATH = BASE_DIR / "tick_worker.wake"
-HEARTBEAT_PATH = BASE_DIR / "tick_worker.heartbeat.json"
+DATA_DIR = Path(os.environ.get("FRUIT_AUTO_DATA_DIR") or BASE_DIR).resolve()
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+LOG_PATH = DATA_DIR / "tick_worker.log"
+WAKE_PATH = DATA_DIR / "tick_worker.wake"
+HEARTBEAT_PATH = DATA_DIR / "tick_worker.heartbeat.json"
 INTERVAL_SECONDS = int(os.environ.get("FRUIT_TICK_INTERVAL_SECONDS", "60"))
 TICK_TIMEOUT_SECONDS = int(os.environ.get("FRUIT_TICK_TIMEOUT_SECONDS", "240"))
 STOP = False

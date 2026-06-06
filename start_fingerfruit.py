@@ -41,7 +41,16 @@ def main():
     signal.signal(signal.SIGINT, handle_stop)
 
     try:
-        return web.wait()
+        while True:
+            web_status = web.poll()
+            if web_status is not None:
+                return web_status
+            if worker.poll() is not None:
+                worker = subprocess.Popen([sys.executable, str(BASE_DIR / "tick_worker.py")], cwd=str(BASE_DIR))
+            try:
+                web.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                continue
     finally:
         terminate(worker)
 
