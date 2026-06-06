@@ -418,8 +418,8 @@ body.splash-active {
 
 body.main-bg-scene .launch-splash {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(248, 251, 253, 0.04)),
-    var(--season-splash-bg, var(--season-bg)) center top / cover no-repeat,
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(248, 251, 253, 0.02)),
+    var(--launch-splash-image, var(--season-splash-bg, var(--season-bg))) center center / cover no-repeat,
     #eef7ef;
 }
 
