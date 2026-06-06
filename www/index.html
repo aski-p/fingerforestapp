@@ -5,34 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#f7f9fc">
     <link rel="manifest" href="/manifest.webmanifest">
-    <link rel="apple-touch-icon" href="/icons/app-touch-icon.png?v=3.14.4">
-    <link rel="icon" href="/icons/app-icon-192.png?v=3.14.4" type="image/png">
+    <link rel="apple-touch-icon" href="/icons/app-touch-icon.png?v=3.14.3">
+    <link rel="icon" href="/icons/app-icon-192.png?v=3.14.3" type="image/png">
     <script>
       (() => {
-        const splashImages = [
-          "/assets/splash/dailywon-forest-start.jpg",
-          "/assets/splash/dailywon-cloud-island.jpg",
-          "/assets/splash/dailywon-river-bridge.jpg",
-          "/assets/splash/dailywon-night-path.jpg",
-          "/assets/splash/dailywon-warm-hands.jpg",
-          "/assets/splash/dailywon-growth-river.jpg",
-          "/assets/splash/dailywon-seedling.jpg",
-          "/assets/splash/dailywon-sleep-forest.jpg",
-          "/assets/splash/dailywon-village.jpg",
-          "/assets/splash/dailywon-flower-swing.jpg",
-        ];
-        const selected = splashImages[Math.floor(Math.random() * splashImages.length)];
-        window.__launchSplashImage = selected;
-        document.documentElement.style.setProperty("--launch-splash-image", `url("${selected}")`);
+        const now = new Date();
+        let month = now.getMonth() + 1;
+        let hour = now.getHours();
+        try {
+          const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", month: "numeric", hour: "numeric", hourCycle: "h23" }).formatToParts(now);
+          month = Number(parts.find((part) => part.type === "month")?.value || month);
+          hour = Number(parts.find((part) => part.type === "hour")?.value || hour);
+        } catch (_err) {}
+        const name = hour >= 21 || hour < 8 ? "night" : month >= 3 && month <= 5 ? "spring" : month >= 6 && month <= 8 ? "summer" : month >= 9 && month <= 11 ? "autumn" : "winter";
         const preload = document.createElement("link");
         preload.rel = "preload";
         preload.as = "image";
-        preload.href = selected;
+        preload.href = `/assets/seasons/fast/forest-${name}-fast.jpg`;
         preload.fetchPriority = "high";
         document.head.appendChild(preload);
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=3.14.4">
+    <link rel="stylesheet" href="/styles.css?v=3.14.3">
     <title>FingerForest</title>
   </head>
   <body class="logged-out splash-active main-bg-scene main-bg-forest-summer">
@@ -531,7 +525,7 @@
 
       <p id="toast" class="toast" role="status"></p>
       <footer class="app-footer">
-        <span>v3.14.4 정식버전 · by aski</span>
+        <span>v3.14.3 정식버전 · by aski</span>
         <a id="supportLink" class="support-link" href="https://qr.kakaopay.com/Ej7ruxJDq" target="_blank" rel="noopener" aria-label="카카오페이로 후원하기">후원하기</a>
       </footer>
     </main>
@@ -554,6 +548,6 @@
     <button id="chatOpenBtn" class="chat-fab" type="button" aria-label="채팅 열기">
       <span class="chat-fab-mark" aria-hidden="true"></span>
     </button>
-    <script src="/app.js?v=3.14.4"></script>
+    <script src="/app.js?v=3.14.3"></script>
   </body>
 </html>
