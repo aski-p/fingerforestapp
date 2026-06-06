@@ -594,14 +594,23 @@ def is_process_alive(pid):
 
 
 def claim_daemon_pid():
-    if PID_PATH.exists():
+    while True:
         try:
-            existing_pid = int(PID_PATH.read_text(encoding="utf-8").strip())
-        except ValueError:
-            existing_pid = None
-        if existing_pid and is_process_alive(existing_pid):
-            raise FruitAutoError(f"daemon already running: pid {existing_pid}")
-    PID_PATH.write_text(f"{os.getpid()}\n", encoding="utf-8")
+            fd = os.open(PID_PATH, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(f"{os.getpid()}\n")
+            return
+        except FileExistsError:
+            try:
+                existing_pid = int(PID_PATH.read_text(encoding="utf-8").strip())
+            except ValueError:
+                existing_pid = None
+            if existing_pid and is_process_alive(existing_pid):
+                raise FruitAutoError(f"daemon already running: pid {existing_pid}")
+            try:
+                PID_PATH.unlink()
+            except FileNotFoundError:
+                continue
 
 
 def release_daemon_pid():
@@ -613,18 +622,23 @@ def release_daemon_pid():
 
 
 def claim_tick_lock():
-    if TICK_LOCK_PATH.exists():
+    while True:
         try:
-            existing_pid = int(TICK_LOCK_PATH.read_text(encoding="utf-8").strip())
-        except ValueError:
-            existing_pid = None
-        if existing_pid and is_process_alive(existing_pid):
-            raise FruitAutoError(f"tick already running: pid {existing_pid}")
-        try:
-            TICK_LOCK_PATH.unlink()
-        except OSError:
-            pass
-    TICK_LOCK_PATH.write_text(f"{os.getpid()}\n", encoding="utf-8")
+            fd = os.open(TICK_LOCK_PATH, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(f"{os.getpid()}\n")
+            return
+        except FileExistsError:
+            try:
+                existing_pid = int(TICK_LOCK_PATH.read_text(encoding="utf-8").strip())
+            except ValueError:
+                existing_pid = None
+            if existing_pid and is_process_alive(existing_pid):
+                raise FruitAutoError(f"tick already running: pid {existing_pid}")
+            try:
+                TICK_LOCK_PATH.unlink()
+            except FileNotFoundError:
+                continue
 
 
 def release_tick_lock():
@@ -4266,6 +4280,8 @@ def worklog_due(account, now=None):
     next_run = parse_iso(account.get("worklogNextRunAt"))
     if next_run is None or now < next_run:
         return False
+    if next_run.astimezone(KST).date() < now.astimezone(KST).date():
+        return False
     run_key = next_run.astimezone(KST).strftime("%Y-%m-%dT%H:%M")
     run_day = next_run.astimezone(KST).date()
     return not worklog_already_completed_for_day(account, run_day)
@@ -4456,8 +4472,43 @@ def save_worklog_once(owner_key=None, run_date=None, force=False):
         raise
 
 
+def expire_stale_worklog_run(account, now=None):
+    now = now or dt.datetime.now(dt.timezone.utc)
+    next_run = parse_iso(account.get("worklogNextRunAt"))
+    if next_run is None:
+        return False
+    local_now = now.astimezone(KST)
+    scheduled_day = next_run.astimezone(KST).date()
+    if scheduled_day >= local_now.date():
+        return False
+
+    account["worklogScheduleDates"] = prune_expired_schedule_dates(
+        account.get("worklogScheduleDates"),
+        account.get("worklogScheduleTime"),
+        account=account,
+        now=now,
+    )
+    account["worklogRunningRunKey"] = None
+    account["worklogRunningAt"] = None
+    account["worklogLastRunAt"] = now_iso()
+    account["worklogLastResult"] = "skipped_stale"
+    account["worklogLastError"] = f"예약 실행 시각이 지난 {scheduled_day.isoformat()} 업무일지는 건너뜀"
+    account["worklogNextRunAt"] = next_worklog_run_at(account, now)
+    account["updatedAt"] = now_iso()
+    return True
+
+
 def run_worklog_if_due(owner_key):
     state = get_account_state(owner_key)
+    if expire_stale_worklog_run(state):
+        save_account_state(owner_key, state)
+        log_event({
+            "action": "worklog_stale_skipped",
+            "ownerKey": owner_key,
+            "nextRunAt": state.get("worklogNextRunAt"),
+            "error": state.get("worklogLastError"),
+        })
+        return {"action": "skipped", "reason": "worklog_stale", "ownerKey": owner_key, "nextRunAt": state.get("worklogNextRunAt")}
     if not worklog_due(state):
         next_run = next_worklog_run_at(state)
         if next_run != state.get("worklogNextRunAt"):
