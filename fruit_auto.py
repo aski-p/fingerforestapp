@@ -3720,8 +3720,14 @@ def check_once(dry_run=False, force=False, owner_key=None):
             "nextRunAt": state.get("nextRunAt"),
         }
 
+    pending_eligible_at = parse_iso(state.get("pendingEligibleAt"))
+    pending_send_due = (
+        parse_int(state.get("pendingBerryCount"), 0) > 0
+        and pending_eligible_at is not None
+        and now >= pending_eligible_at
+    )
     last_attempt_age = seconds_since(state.get("lastAttemptAt"))
-    if not force and last_attempt_age is not None and last_attempt_age < interval_seconds:
+    if not force and not pending_send_due and last_attempt_age is not None and last_attempt_age < interval_seconds:
         last_attempt = parse_iso(state.get("lastAttemptAt"))
         schedule_next_run(state, last_attempt)
         next_run = parse_iso(state.get("nextRunAt"))
