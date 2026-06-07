@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.14.8";
+const appVersion = "3.14.9";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -364,16 +364,17 @@ function nextRunDelayMinutes(state = currentState) {
 }
 
 function randomizedIntervalLabel(state = currentState) {
-  const delayMinutes = nextRunDelayMinutes(state);
-  if (!delayMinutes) return intervalLabel(state);
-  return minuteDurationLabel(delayMinutes);
+  return intervalLabel(state);
 }
 
 function randomizedIntervalHint(state = currentState) {
   const baseMinutes = intervalMinutes(state);
   const delayMinutes = nextRunDelayMinutes(state);
-  if (!delayMinutes || delayMinutes <= baseMinutes) return intervalLabel(state);
-  return `${minuteDurationLabel(baseMinutes)} + 랜덤 ${delayMinutes - baseMinutes}분`;
+  if (!delayMinutes) return `${minuteDurationLabel(baseMinutes)} 시간대 랜덤`;
+  const target = state.nextRunAt ? fmtTime(state.nextRunAt) : "";
+  return target
+    ? `${minuteDurationLabel(baseMinutes)} 시간대 랜덤, 이번 예약 ${target}`
+    : `${minuteDurationLabel(baseMinutes)} 시간대 랜덤`;
 }
 
 function isUnlocked() {
@@ -1088,8 +1089,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.14.8",
-        badge: "/icons/app-icon-192.png?v=3.14.8",
+        icon: "/icons/app-icon-192.png?v=3.14.9",
+        badge: "/icons/app-icon-192.png?v=3.14.9",
         data: { url: item.url || "/" },
       });
       return true;

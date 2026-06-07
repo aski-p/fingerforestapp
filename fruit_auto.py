@@ -201,9 +201,23 @@ def get_run_interval_seconds(state=None):
 
 
 def random_run_delay_seconds(state=None):
+    return random_scheduled_run_after(state)[0]
+
+
+def random_scheduled_run_after(state=None, base=None):
+    base = base or dt.datetime.now(dt.timezone.utc)
+    if base.tzinfo is None:
+        base = base.replace(tzinfo=dt.timezone.utc)
     base_minutes = get_run_interval_minutes(state)
-    extra_minutes = random.randint(1, RUN_INTERVAL_RANDOM_EXTRA_MINUTES)
-    return (base_minutes + extra_minutes) * 60
+    local_base = base.astimezone(KST)
+    target_hour_start = local_base.replace(minute=0, second=0, microsecond=0) + dt.timedelta(minutes=base_minutes)
+    random_minute = random.randint(0, RUN_INTERVAL_RANDOM_EXTRA_MINUTES)
+    scheduled_local = target_hour_start + dt.timedelta(minutes=random_minute)
+    if scheduled_local <= local_base:
+        scheduled_local += dt.timedelta(hours=1)
+    scheduled_utc = scheduled_local.astimezone(dt.timezone.utc).replace(microsecond=0)
+    delay_seconds = max(1, int((scheduled_utc - base).total_seconds()))
+    return delay_seconds, scheduled_utc
 
 
 def get_send_stabilization_delay_seconds():
@@ -211,9 +225,9 @@ def get_send_stabilization_delay_seconds():
 
 
 def schedule_next_run(state, base=None):
-    delay_seconds = random_run_delay_seconds(state)
+    delay_seconds, scheduled_at = random_scheduled_run_after(state, base)
     state["nextRunDelaySeconds"] = delay_seconds
-    state["nextRunAt"] = iso_after(delay_seconds, base)
+    state["nextRunAt"] = scheduled_at.isoformat()
     return delay_seconds
 
 
