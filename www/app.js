@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.14.7";
+const appVersion = "3.14.8";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -349,8 +349,31 @@ function intervalMinutes(state = currentState) {
 
 function intervalLabel(state = currentState) {
   const minutes = intervalMinutes(state);
+  return minuteDurationLabel(minutes);
+}
+
+function minuteDurationLabel(minutes) {
   const hours = minutes / 60;
   return Number.isInteger(hours) ? `${hours}시간` : `${minutes}분`;
+}
+
+function nextRunDelayMinutes(state = currentState) {
+  const seconds = Number(state.nextRunDelaySeconds);
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  return Math.max(1, Math.round(seconds / 60));
+}
+
+function randomizedIntervalLabel(state = currentState) {
+  const delayMinutes = nextRunDelayMinutes(state);
+  if (!delayMinutes) return intervalLabel(state);
+  return minuteDurationLabel(delayMinutes);
+}
+
+function randomizedIntervalHint(state = currentState) {
+  const baseMinutes = intervalMinutes(state);
+  const delayMinutes = nextRunDelayMinutes(state);
+  if (!delayMinutes || delayMinutes <= baseMinutes) return intervalLabel(state);
+  return `${minuteDurationLabel(baseMinutes)} + 랜덤 ${delayMinutes - baseMinutes}분`;
 }
 
 function isUnlocked() {
@@ -1065,8 +1088,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.14.7",
-        badge: "/icons/app-icon-192.png?v=3.14.7",
+        icon: "/icons/app-icon-192.png?v=3.14.8",
+        badge: "/icons/app-icon-192.png?v=3.14.8",
         data: { url: item.url || "/" },
       });
       return true;
@@ -2308,7 +2331,7 @@ function renderState(state) {
     unlocked && state.lastBerryCount !== null && state.lastBerryCount !== undefined
       ? `${state.lastBerryCount}개`
       : "-";
-  $("intervalDisplay").textContent = intervalLabel(state);
+  $("intervalDisplay").textContent = randomizedIntervalLabel(state);
   $("balanceStatus").textContent = unlocked
     ? state.balanceError
       ? "조회 오류"
@@ -2332,9 +2355,9 @@ function renderState(state) {
   $("fruitScheduleBadge").textContent = enabled ? `예약됨 ${fmtDate(nextFruitRunAt)} 예정` : "대기";
   $("fruitScheduleBadge").className = `badge ${enabled ? "ok" : "neutral"}`;
   $("controlHint").textContent = enabled
-    ? `켜짐 상태입니다. ${daemonText}. 다음 확인 ${fmtDate(nextFruitRunAt)}. 전송 수 ${sendModeText}`
+    ? `켜짐 상태입니다. ${daemonText}. 다음 확인 ${fmtDate(nextFruitRunAt)}. ${randomizedIntervalHint(state)} 기준. 전송 수 ${sendModeText}`
     : hasTarget
-      ? `켜면 ${intervalLabel(state)}마다 한 번씩 보유 열매를 확인하고 ${sendModeText} 보냅니다.`
+      ? `켜면 ${randomizedIntervalHint(state)}마다 한 번씩 보유 열매를 확인하고 ${sendModeText} 보냅니다.`
       : "대상 직원을 먼저 검색해서 선택하세요.";
   renderWorklogState(state);
   try {
@@ -2576,7 +2599,7 @@ async function setIntervalMinutes(minutes) {
     setBusy(true);
     const state = await api("/api/interval", { minutes });
     renderState(state);
-    toast(`전송 시간을 ${intervalLabel(state)}으로 설정했습니다.`);
+    toast(`전송 시간을 ${randomizedIntervalLabel(state)}으로 설정했습니다.`);
   } catch (err) {
     toast(`전송 시간 변경 실패: ${err.message}`);
   } finally {
