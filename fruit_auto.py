@@ -37,6 +37,7 @@ MIN_RUN_INTERVAL_MINUTES = 60
 MAX_RUN_INTERVAL_MINUTES = 23 * 60
 RUN_INTERVAL_RANDOM_EXTRA_MINUTES = 0
 COMMON_OBSERVE_INTERVAL_SECONDS = 5 * 60
+SEND_STABILIZATION_DELAY_SECONDS = int(os.environ.get("FRUIT_SEND_STABILIZATION_DELAY_SECONDS", "300"))
 WAKE_REQUESTED = False
 QUIET_LOG_ACTIONS = {"balance", "check"}
 SESSION_SCHEMA_VERSION = 4
@@ -204,11 +205,39 @@ def random_run_delay_seconds(state=None):
     return (base_minutes + extra_minutes) * 60
 
 
+def get_send_stabilization_delay_seconds():
+    return max(0, min(60 * 60, SEND_STABILIZATION_DELAY_SECONDS))
+
+
 def schedule_next_run(state, base=None):
     delay_seconds = random_run_delay_seconds(state)
     state["nextRunDelaySeconds"] = delay_seconds
     state["nextRunAt"] = iso_after(delay_seconds, base)
     return delay_seconds
+
+
+def normalize_pending_send_schedule(state, now=None):
+    pending_received_at = parse_iso(state.get("pendingReceivedAt"))
+    if pending_received_at is None:
+        return False
+    if parse_int(state.get("pendingBerryCount"), 0) <= 0:
+        return False
+
+    send_delay = get_send_stabilization_delay_seconds()
+    target_eligible_at = (pending_received_at + dt.timedelta(seconds=send_delay)).replace(microsecond=0)
+    changed = False
+
+    pending_eligible_at = parse_iso(state.get("pendingEligibleAt"))
+    if pending_eligible_at is None or pending_eligible_at > target_eligible_at:
+        state["pendingEligibleAt"] = target_eligible_at.isoformat()
+        pending_eligible_at = target_eligible_at
+        changed = True
+
+    next_run_at = parse_iso(state.get("nextRunAt"))
+    if next_run_at is None or next_run_at > pending_eligible_at:
+        state["nextRunAt"] = pending_eligible_at.isoformat()
+        changed = True
+    return changed
 
 
 def get_history_observe_interval_seconds():
@@ -3676,6 +3705,8 @@ def check_once(dry_run=False, force=False, owner_key=None):
         return {"action": "skipped", "reason": "disabled", "enabled": enabled, "ownerKey": owner_key}
 
     now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+    if normalize_pending_send_schedule(state, now):
+        save_account_state(owner_key, state)
     next_run = parse_iso(state.get("nextRunAt"))
     if not force and next_run is not None and now < next_run:
         remaining_seconds = max(0, int((next_run - now).total_seconds()))
@@ -3814,7 +3845,7 @@ def check_once(dry_run=False, force=False, owner_key=None):
         if pending_received_at is None or pending_target_id != current_target_id or send_berries > pending_berry_count:
             pending_received_at = attempt_at
             state["pendingReceivedAt"] = pending_received_at.isoformat()
-            state["pendingEligibleAt"] = iso_after(next_delay_seconds, pending_received_at)
+            state["pendingEligibleAt"] = iso_after(get_send_stabilization_delay_seconds(), pending_received_at)
             state["pendingTargetEmployeeId"] = target.get("emp_id")
         state["pendingBerryCount"] = send_berries
         received_events = record_received_history_from_official(
@@ -3849,7 +3880,7 @@ def check_once(dry_run=False, force=False, owner_key=None):
             notify_received_events(received_events, owner_key)
         pending_eligible_at = parse_iso(state.get("pendingEligibleAt"))
         if pending_eligible_at is None:
-            pending_eligible_at = pending_received_at + dt.timedelta(seconds=next_delay_seconds)
+            pending_eligible_at = pending_received_at + dt.timedelta(seconds=get_send_stabilization_delay_seconds())
             state["pendingEligibleAt"] = pending_eligible_at.replace(microsecond=0).isoformat()
         eligible_at = pending_eligible_at
         if not force and attempt_at < eligible_at:
@@ -4567,6 +4598,7 @@ def failed_slot_result(exc, owner_key=None):
 
 def account_next_run_delay(account, now=None):
     now = now or dt.datetime.now(dt.timezone.utc)
+    normalize_pending_send_schedule(account, now)
     interval_seconds = get_run_interval_seconds(account)
     next_run = parse_iso(account.get("nextRunAt"))
     if next_run is None:

@@ -11,8 +11,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 WWW = ROOT / "www"
 ANDROID = ROOT / "mobile-build" / "android-app"
-GRADLE = ROOT / "mobile-build" / "gradle" / "bin" / "gradle"
-JAVA_HOME = ROOT / "mobile-build" / "jdk21"
+LOCAL_MOBILE_BUILD = ROOT / "mobile-build"
+STATE_MOBILE_BUILD = ROOT.parent / "state" / "fruit-auto" / "mobile-build"
+GRADLE = LOCAL_MOBILE_BUILD / "gradle" / "bin" / "gradle"
+JAVA_HOME = LOCAL_MOBILE_BUILD / "jdk21"
+if not GRADLE.exists():
+    GRADLE = STATE_MOBILE_BUILD / "gradle" / "bin" / "gradle"
+if not (JAVA_HOME / "bin" / "java").exists():
+    JAVA_HOME = STATE_MOBILE_BUILD / "jdk21"
 
 
 def read(path):
@@ -58,10 +64,13 @@ def update_versions(old, new):
         WWW / "install.html",
         WWW / "app.js",
         WWW / "sw.js",
-        ANDROID / "app" / "src" / "main" / "java" / "com" / "openclaw" / "fruitauto" / "MainActivity.java",
     ]
     for path in files:
         replace_version(path, old, new)
+    main_activity = ANDROID / "app" / "src" / "main" / "java" / "com" / "openclaw" / "fruitauto" / "MainActivity.java"
+    main_text = read(main_activity)
+    main_text = re.sub(r'APP_VERSION\s*=\s*"[^"]+"', f'APP_VERSION = "{new}"', main_text)
+    write(main_activity, main_text)
     gradle_path = ANDROID / "app" / "build.gradle"
     gradle_text = read(gradle_path)
     gradle_text = re.sub(r"versionCode\s+\d+", f"versionCode {version_code(new)}", gradle_text)
