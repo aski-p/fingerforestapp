@@ -54,7 +54,16 @@ def version_code(version):
 
 def replace_version(path, old, new):
     text = read(path).replace(old, new)
+    text = re.sub(r"v\d+\.\d+\.\d+ 정식버전 · by aski", f"v{new} 정식버전 · by aski", text)
+    text = re.sub(r"(?:app-touch-icon|app-icon-192)\.png\?v=\d+\.\d+\.\d+", lambda match: match.group(0).split("?")[0] + f"?v={new}", text)
+    text = re.sub(r"(?:styles\.css|app\.js)\?v=\d+\.\d+\.\d+", lambda match: match.group(0).split("?")[0] + f"?v={new}", text)
     write(path, text)
+
+
+def profile_url_for_version(match, version):
+    url = re.sub(r"([?&](?:amp;)?v=)\d+\.\d+\.\d+", "", match.group(2))
+    separator = "&amp;" if "?" in url else "?"
+    return f"{match.group(1)}{url}{separator}v={version}{match.group(3)}"
 
 
 def update_versions(old, new):
@@ -97,6 +106,7 @@ def rebuild_ios_profile(old, new):
         flags=re.S,
     )
     text = text.replace(old, new)
+    text = re.sub(r"(<key>URL</key>\s*<string>)([^<]*)(</string>)", lambda match: profile_url_for_version(match, new), text, count=1, flags=re.S)
     (downloads / f"fingerfruit-ios-v{new}.mobileconfig").write_text(text, encoding="utf-8")
 
 
