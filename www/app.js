@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.15.1";
+const appVersion = "3.15.4";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1089,8 +1089,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.15.1",
-        badge: "/icons/app-icon-192.png?v=3.15.1",
+        icon: "/icons/app-icon-192.png?v=3.15.4",
+        badge: "/icons/app-icon-192.png?v=3.15.4",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1278,7 +1278,10 @@ function applyWorklogApprovals(data, monthKey, { merge = false } = {}) {
   if (!data || data.month !== monthKey) return false;
   const nextApprovalsByDate = merge ? { ...worklogApprovalsByDate } : {};
   (data.items || []).forEach((item) => {
-    if (item.date) nextApprovalsByDate[item.date] = item;
+    if (!item.date) return;
+    const current = nextApprovalsByDate[item.date];
+    if (current?.approved && !item.approved) return;
+    nextApprovalsByDate[item.date] = item;
   });
   worklogApprovalsByDate = nextApprovalsByDate;
   worklogApprovalsMonthKey = monthKey;
@@ -1315,7 +1318,7 @@ async function refreshWorklogApprovalsForMonth(date = worklogCalendarMonth, { fa
     const query = new URLSearchParams({ month: requestedMonthKey });
     const data = await api(`/api/${fastOnly ? "worklog-approvals-local" : "worklog-approvals"}?${query.toString()}`);
     if (requestedMonthKey !== monthValue(worklogCalendarMonth)) return;
-    applyWorklogApprovals(data, requestedMonthKey, { merge: !fastOnly });
+    applyWorklogApprovals(data, requestedMonthKey, { merge: true });
     cacheWorklogApprovals({ month: requestedMonthKey, items: Object.values(worklogApprovalsByDate) }, requestedMonthKey);
   } catch (err) {
     if (requestedMonthKey !== monthValue(worklogCalendarMonth)) return;
@@ -1622,7 +1625,9 @@ function renderTargetCycle(state) {
   }
   const currentId = String(state.targetEmployeeId || "");
   const currentIndex = Math.max(0, cycle.findIndex((person) => String(person.emp_id || "") === currentId));
-  summary.textContent = `${cycle.length}명 순환`;
+  const cyclePosition = Math.min(cycle.length, currentIndex + 1);
+  const completedCount = Math.max(0, Number(state.targetCycleCompletedCount || 0));
+  summary.innerHTML = `${cycle.length}명중 <span class="cycle-progress-count">${cyclePosition}명</span> 순환(${completedCount}번 완료)`;
   if (cycle.length > 1) {
     const ring = document.createElement("div");
     ring.className = "cycle-ring";

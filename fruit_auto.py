@@ -56,6 +56,7 @@ DEFAULT_STATE = {
     "targetEmployeeId": None,
     "targetCycle": [],
     "targetCycleIndex": 0,
+    "targetCycleCompletedCount": 0,
     "lastCheckedAt": None,
     "lastSentAt": None,
     "lastSeedCount": None,
@@ -417,6 +418,18 @@ def advance_target_cycle(state):
     if not cycle:
         return state
     next_index = (index + 1) % len(cycle)
+    if next_index == 0 and len(cycle) > 1:
+        try:
+            completed_count = int(state.get("targetCycleCompletedCount") or 0)
+        except (TypeError, ValueError):
+            completed_count = 0
+        state["targetCycleCompletedCount"] = completed_count + 1
+        previous_emp_id = cycle[index].get("emp_id")
+        shuffled_cycle = list(cycle)
+        random.shuffle(shuffled_cycle)
+        if shuffled_cycle[0].get("emp_id") == previous_emp_id:
+            shuffled_cycle = shuffled_cycle[1:] + shuffled_cycle[:1]
+        cycle = shuffled_cycle
     return apply_cycle_target(state, cycle[next_index], cycle, next_index)
 
 
@@ -3501,6 +3514,7 @@ def set_target(emp_id, name=None, duty_id=None, dept_nm=None, pos_nm=None, owner
     existing_index = next((i for i, item in enumerate(cycle) if item.get("emp_id") == new_target["emp_id"]), None)
     if existing_index is None:
         cycle.append(new_target)
+        state["targetCycleCompletedCount"] = 0
         if len(cycle) == 1:
             index = 0
     else:
@@ -3534,6 +3548,7 @@ def remove_cycle_target(emp_id, owner_key=None):
     if remove_index is None:
         return state
     cycle.pop(remove_index)
+    state["targetCycleCompletedCount"] = 0
     if cycle:
         if remove_id == current_id:
             index = min(remove_index, len(cycle) - 1)
