@@ -1491,6 +1491,16 @@ def berry_history_reward_kind(value):
     return "gift"
 
 
+def work_approval_message_day(value):
+    text = str(value or "")
+    match = re.search(r"업무\s*승인\]?\s*(\d{1,2})\s*일", text)
+    if not match:
+        match = re.search(r"\[업무승인\]\s*(\d{1,2})\s*일", text)
+    if not match:
+        return None
+    return parse_int(match.group(1), None)
+
+
 def parse_seed_berry_counts(value):
     parts = str(value or "0/0").split("/")
     berries = parse_int(parts[0] if len(parts) > 0 else 0)
@@ -2588,7 +2598,7 @@ def worklog_approvals(owner_key=None, month=None):
         message = row.get("tgtMsg") or ""
         if berry_history_reward_kind(message) != "work_approval":
             continue
-        day = parse_int(str(row.get("stdDt") or "").replace("일", ""), None)
+        day = work_approval_message_day(message) or parse_int(str(row.get("stdDt") or "").replace("일", ""), None)
         history_date = history_date_from_month_day(selected_month, day)
         if not history_date:
             continue
