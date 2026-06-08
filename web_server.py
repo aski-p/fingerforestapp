@@ -50,6 +50,8 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "업무일지 달력에서 이미 승인된 날짜가 빠른 로컬 조회 때문에 다시 미승인으로 보이는 지연을 줄였습니다.",
+    "열매 순환 카드에 '7명중 x명 순환(n번 완료)' 진행 문구를 추가하고 현재 순번 숫자를 빨간색으로 표시합니다.",
     "로그인 화면 상단에 FingerForest 로고를 추가하고 로그인 카드를 아래로 내려 배경 여백을 정리했습니다.",
     "열매 자동전송 대상을 여러 명 추가해 순서대로 순환 전송할 수 있게 했고, 사이클 카드에서 X 버튼으로 개별 제외할 수 있습니다.",
     "씨앗선물 받은 내역은 5분 체크에서 열매 +3 증가가 새로 잡힌 그 시각을 표시합니다.",
