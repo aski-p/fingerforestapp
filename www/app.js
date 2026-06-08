@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.14.9";
+const appVersion = "3.15.0";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1089,8 +1089,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.14.9",
-        badge: "/icons/app-icon-192.png?v=3.14.9",
+        icon: "/icons/app-icon-192.png?v=3.15.0",
+        badge: "/icons/app-icon-192.png?v=3.15.0",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1260,7 +1260,11 @@ function worklogApprovalForDate(value) {
 }
 
 function pruneApprovedSelectedWorklogDates() {
-  const approvedDates = new Set(Object.keys(worklogApprovalsByDate || {}));
+  const approvedDates = new Set(
+    Object.entries(worklogApprovalsByDate || {})
+      .filter(([, item]) => item?.approved)
+      .map(([date]) => date)
+  );
   if (!approvedDates.size) return;
   selectedWorklogDates = selectedWorklogDates.filter((date) => !approvedDates.has(date));
   calendarDraftDates = calendarDraftDates.filter((date) => !approvedDates.has(date));
@@ -1771,18 +1775,21 @@ function renderWorklogCalendar() {
     const approval = hasMonthApprovals ? worklogApprovalForDate(date) : null;
     const blockedReason = worklogBlockedDateReason(date);
     const isSelected = !approval && calendarDraftDates.includes(date);
+    const isApproved = Boolean(approval?.approved);
+    const isPending = Boolean(approval && !approval.approved);
     const button = document.createElement("button");
     button.type = "button";
     button.className = [
       "calendar-day",
       isSelected ? "selected" : "",
-      approval ? "approved" : "",
+      isApproved ? "approved" : "",
+      isPending ? "pending" : "",
       date === todayValue ? "today" : "",
       blockedReason ? "blocked" : "",
       isWeekend ? "weekend" : "",
       holidayName ? "holiday" : "",
     ].filter(Boolean).join(" ");
-    const label = approval ? "승인" : holidayName || (isWeekend ? "휴무" : "");
+    const label = approval ? (isApproved ? "승인" : "미승인") : holidayName || (isWeekend ? "휴무" : "");
     button.innerHTML = `
       <span class="calendar-day-number">${day}</span>
       ${label ? `<small>${escapeHtml(label)}</small>` : ""}
@@ -1843,6 +1850,11 @@ function openSuccessModal(title, message, ok = true) {
 }
 
 function openWorklogApprovalModal(approval) {
+  const isApproved = Boolean(approval?.approved);
+  $("worklogApprovalModal").classList.toggle("is-pending", !isApproved);
+  const statusLabel = $("worklogApprovalModal").querySelector(".label");
+  if (statusLabel) statusLabel.textContent = isApproved ? "APPROVED" : "PENDING";
+  $("worklogApprovalTitle").textContent = isApproved ? "승인된 업무일지" : "미승인 업무일지";
   $("worklogApprovalDate").textContent = fmtHistorySelectedDate(approval.date);
   $("worklogApprovalProject").textContent = approval.projectName || "-";
   $("worklogApprovalContent").textContent = approval.content || "저장된 업무일지 본문이 없습니다.";
@@ -1851,7 +1863,7 @@ function openWorklogApprovalModal(approval) {
     approval.targetEmployeeName ? `수신 ${approval.targetEmployeeName}` : "",
     approval.seedMessage ? `메시지: ${approval.seedMessage}` : "",
   ].filter(Boolean).join(" · ") || "-";
-  $("worklogApprovalOfficial").textContent = approval.officialMessage || "승인 완료";
+  $("worklogApprovalOfficial").textContent = approval.officialMessage || (isApproved ? "승인 완료" : "승인 대기");
   $("worklogApprovalModal").classList.remove("hidden");
   document.body.classList.add("modal-open");
 }

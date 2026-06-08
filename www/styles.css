@@ -2366,6 +2366,17 @@ textarea:focus {
   color: #2563eb;
 }
 
+.calendar-day.pending {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  color: #e11d48;
+  cursor: pointer;
+}
+
+.calendar-day.pending small {
+  color: #e11d48;
+}
+
 .calendar-day.blocked {
   background: #fff1f2;
   border-color: #fecdd3;
@@ -3513,11 +3524,20 @@ body.logged-out .chat-popup {
   background: #eff6ff;
 }
 
+.modal.is-pending .worklog-approval-body div {
+  border-color: #fecdd3;
+  background: #fff1f2;
+}
+
 .worklog-approval-body dt {
   margin: 0 0 4px;
   color: #1d4ed8;
   font-size: 11px;
   font-weight: 1000;
+}
+
+.modal.is-pending .worklog-approval-body dt {
+  color: #be123c;
 }
 
 .worklog-approval-body dd {

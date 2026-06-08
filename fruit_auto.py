@@ -2604,6 +2604,7 @@ def worklog_approvals(owner_key=None, month=None):
         approvals[history_date] = {
             "date": history_date,
             "approved": True,
+            "status": "approved",
             "projectName": project_name,
             "content": content_text,
             "seedMessage": local.get("seedMessage") or state.get("worklogSeedMessage") or message,
@@ -2626,10 +2627,11 @@ def worklog_approvals_local(owner_key=None, month=None):
     selected_month = normalize_history_month(month)
     approvals = []
     for history_date, local in local_worklog_events_by_date(owner_key, selected_month).items():
-        message = local.get("officialMessage") or local.get("message") or "승인 완료"
+        message = local.get("officialMessage") or local.get("message") or "업무일지 작성 완료, 승인 대기"
         approvals.append({
             "date": history_date,
-            "approved": True,
+            "approved": False,
+            "status": "pending",
             "projectName": local.get("projectName") or state.get("worklogProjectName") or "",
             "content": local.get("workDesc") or state.get("worklogContent") or "",
             "seedMessage": local.get("seedMessage") or state.get("worklogSeedMessage") or message,
