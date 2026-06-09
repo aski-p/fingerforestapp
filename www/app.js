@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.15.4";
+const appVersion = "3.15.5";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -582,6 +582,7 @@ async function checkAppVersion() {
     if (info.publicHolidays && typeof info.publicHolidays === "object") {
       koreanPublicHolidays = { ...koreanPublicHolidays, ...info.publicHolidays };
       renderWorklogDates();
+      if (isModalVisible("worklogCalendarModal")) renderWorklogCalendar();
     }
   } catch (_err) {
     return false;
@@ -1089,8 +1090,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.15.4",
-        badge: "/icons/app-icon-192.png?v=3.15.4",
+        icon: "/icons/app-icon-192.png?v=3.15.5",
+        badge: "/icons/app-icon-192.png?v=3.15.5",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1249,6 +1250,15 @@ function worklogBlockedDateReason(value) {
   if (day === 0) return "주말";
   if (day === 6) return "주말";
   return koreanPublicHolidays[value] || "";
+}
+
+function calendarHolidayLabel(name) {
+  if (!name) return "";
+  if (name.includes("대체공휴일")) return "대체휴일";
+  if (name.includes("임시공휴일")) return "임시휴일";
+  if (name.includes("선거일")) return "선거일";
+  if (name.includes("연휴")) return name.replace(" 연휴", "");
+  return name;
 }
 
 function isWorklogAllowedDate(value) {
@@ -1793,13 +1803,15 @@ function renderWorklogCalendar() {
       blockedReason ? "blocked" : "",
       isWeekend ? "weekend" : "",
       holidayName ? "holiday" : "",
+      holidayName.includes("대체공휴일") ? "substitute-holiday" : "",
     ].filter(Boolean).join(" ");
-    const label = approval ? (isApproved ? "승인" : "미승인") : holidayName || (isWeekend ? "휴무" : "");
+    const label = approval ? (isApproved ? "승인" : "미승인") : calendarHolidayLabel(holidayName) || (isWeekend ? "휴무" : "");
     button.innerHTML = `
       <span class="calendar-day-number">${day}</span>
       ${label ? `<small>${escapeHtml(label)}</small>` : ""}
     `;
     button.setAttribute("aria-pressed", isSelected ? "true" : "false");
+    if (holidayName) button.title = holidayName;
     if (blockedReason && !approval) {
       button.disabled = true;
       button.title = blockedReason;

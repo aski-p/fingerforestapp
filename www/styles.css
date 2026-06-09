@@ -2409,6 +2409,17 @@ textarea:focus {
   color: #be123c;
 }
 
+.calendar-day.blocked.substitute-holiday {
+  background: #fef2f2;
+  border-color: #fb7185;
+  color: #9f1239;
+}
+
+.calendar-day.substitute-holiday small {
+  font-size: 8px;
+  letter-spacing: 0;
+}
+
 .calendar-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

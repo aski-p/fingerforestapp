@@ -30,7 +30,7 @@ TICK_WAKE_PATH = DATA_DIR / "tick_worker.wake"
 TICK_HEARTBEAT_PATH = DATA_DIR / "tick_worker.heartbeat.json"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.15.4"
+APP_VERSION = "3.15.5"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
 CHAT_CONTEXT_MESSAGE_LIMIT = 8
 CHAT_HISTORY_MESSAGE_LIMIT = CHAT_CONTEXT_MESSAGE_LIMIT
@@ -50,6 +50,7 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "업무일지 달력에서 대체공휴일과 임시공휴일을 짧은 휴일 라벨로 확실히 표시합니다.",
     "업무일지 달력에서 이미 승인된 날짜가 빠른 로컬 조회 때문에 다시 미승인으로 보이는 지연을 줄였습니다.",
     "열매 순환 카드에 '7명중 x명 순환(n번 완료)' 진행 문구를 추가하고 현재 순번 숫자를 빨간색으로 표시합니다.",
     "로그인 화면 상단에 FingerForest 로고를 추가하고 로그인 카드를 아래로 내려 배경 여백을 정리했습니다.",
