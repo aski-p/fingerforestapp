@@ -2409,6 +2409,17 @@ textarea:focus {
   color: #be123c;
 }
 
+.calendar-day.blocked.substitute-holiday {
+  background: #fef2f2;
+  border-color: #fb7185;
+  color: #9f1239;
+}
+
+.calendar-day.substitute-holiday small {
+  font-size: 8px;
+  letter-spacing: 0;
+}
+
 .calendar-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2706,6 +2717,52 @@ body.logged-out .chat-popup {
 
 .send-all-option span {
   margin: 0;
+}
+
+.transfer-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.transfer-title-row h3 {
+  min-width: 0;
+}
+
+.business-hours-option {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.compact-switch {
+  flex: 0 0 42px;
+  width: 42px;
+  height: 26px;
+}
+
+.compact-switch span {
+  width: 42px;
+  height: 26px;
+}
+
+.compact-switch span::after {
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+}
+
+.compact-switch input:checked + span::after {
+  transform: translateX(16px);
 }
 
 .control-card {

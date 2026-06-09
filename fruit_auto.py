@@ -81,6 +81,7 @@ DEFAULT_STATE = {
     "giftMessage": "자동 전달",
     "sendBerryCount": 1,
     "sendAllBerries": False,
+    "businessHoursOnly": False,
     "runIntervalMinutes": DEFAULT_RUN_INTERVAL_MINUTES,
     "pushEnabled": True,
     "worklogEnabled": False,
@@ -229,6 +230,43 @@ def schedule_next_run(state, base=None):
     delay_seconds, scheduled_at = random_scheduled_run_after(state, base)
     state["nextRunDelaySeconds"] = delay_seconds
     state["nextRunAt"] = scheduled_at.isoformat()
+    return delay_seconds
+
+
+def business_hours_only(state=None):
+    return bool((state or {}).get("businessHoursOnly"))
+
+
+def is_business_hours(now=None):
+    now = now or dt.datetime.now(dt.timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=dt.timezone.utc)
+    local_now = now.astimezone(KST)
+    return 9 <= local_now.hour < 18
+
+
+def next_business_start(now=None):
+    now = now or dt.datetime.now(dt.timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=dt.timezone.utc)
+    local_now = now.astimezone(KST)
+    start = local_now.replace(hour=9, minute=0, second=0, microsecond=0)
+    end = local_now.replace(hour=18, minute=0, second=0, microsecond=0)
+    if local_now < start:
+        return start.astimezone(dt.timezone.utc)
+    if local_now >= end:
+        return (start + dt.timedelta(days=1)).astimezone(dt.timezone.utc)
+    return now.replace(microsecond=0)
+
+
+def defer_until_business_hours(state, now=None):
+    now = now or dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+    next_start = next_business_start(now)
+    delay_seconds = max(1, int((next_start - now).total_seconds()))
+    state["nextRunDelaySeconds"] = delay_seconds
+    state["nextRunAt"] = next_start.isoformat()
+    state["lastAttemptResult"] = "outside_business_hours"
+    state["updatedAt"] = now_iso()
     return delay_seconds
 
 
@@ -3577,7 +3615,7 @@ def set_message(message, owner_key=None):
     return state
 
 
-def set_send_berry_count(count, send_all=False, owner_key=None):
+def set_send_berry_count(count, send_all=False, business_hours_only=None, owner_key=None):
     owner_key = require_owner(owner_key)
     state = get_account_state(owner_key)
     if not send_all and str(count or "").strip() == "":
@@ -3590,6 +3628,10 @@ def set_send_berry_count(count, send_all=False, owner_key=None):
         raise FruitAutoError("보낼 열매 수를 작성해주세요.")
     state["sendBerryCount"] = get_send_berry_count({"sendBerryCount": count})
     state["sendAllBerries"] = bool(send_all)
+    if business_hours_only is not None:
+        state["businessHoursOnly"] = bool(business_hours_only)
+        if state.get("enabled") and state["businessHoursOnly"] and not is_business_hours():
+            defer_until_business_hours(state)
     state["updatedAt"] = now_iso()
     save_account_state(owner_key, state)
     return state
@@ -3747,6 +3789,16 @@ def check_once(dry_run=False, force=False, owner_key=None):
         return {"action": "skipped", "reason": "disabled", "enabled": enabled, "ownerKey": owner_key}
 
     now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+    if enabled and not force and business_hours_only(state) and not is_business_hours(now):
+        remaining_seconds = defer_until_business_hours(state, now)
+        save_account_state(owner_key, state)
+        return {
+            "action": "skipped",
+            "reason": "outside_business_hours",
+            "ownerKey": owner_key,
+            "remainingSeconds": remaining_seconds,
+            "nextRunAt": state.get("nextRunAt"),
+        }
     if normalize_pending_send_schedule(state, now):
         save_account_state(owner_key, state)
     next_run = parse_iso(state.get("nextRunAt"))
@@ -4646,6 +4698,8 @@ def failed_slot_result(exc, owner_key=None):
 
 def account_next_run_delay(account, now=None):
     now = now or dt.datetime.now(dt.timezone.utc)
+    if account.get("enabled") and business_hours_only(account) and not is_business_hours(now):
+        return max(1, int((next_business_start(now) - now).total_seconds()))
     normalize_pending_send_schedule(account, now)
     interval_seconds = get_run_interval_seconds(account)
     next_run = parse_iso(account.get("nextRunAt"))

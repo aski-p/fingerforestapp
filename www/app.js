@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.15.4";
+const appVersion = "3.15.6";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -582,6 +582,7 @@ async function checkAppVersion() {
     if (info.publicHolidays && typeof info.publicHolidays === "object") {
       koreanPublicHolidays = { ...koreanPublicHolidays, ...info.publicHolidays };
       renderWorklogDates();
+      if (isModalVisible("worklogCalendarModal")) renderWorklogCalendar();
     }
   } catch (_err) {
     return false;
@@ -1089,8 +1090,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.15.4",
-        badge: "/icons/app-icon-192.png?v=3.15.4",
+        icon: "/icons/app-icon-192.png?v=3.15.6",
+        badge: "/icons/app-icon-192.png?v=3.15.6",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1249,6 +1250,15 @@ function worklogBlockedDateReason(value) {
   if (day === 0) return "주말";
   if (day === 6) return "주말";
   return koreanPublicHolidays[value] || "";
+}
+
+function calendarHolidayLabel(name) {
+  if (!name) return "";
+  if (name.includes("대체공휴일")) return "대체휴일";
+  if (name.includes("임시공휴일")) return "임시휴일";
+  if (name.includes("선거일")) return "선거일";
+  if (name.includes("연휴")) return name.replace(" 연휴", "");
+  return name;
 }
 
 function isWorklogAllowedDate(value) {
@@ -1502,6 +1512,7 @@ function setLockedState(unlocked) {
     "giftMessage",
     "sendBerryCount",
     "sendAllBerries",
+    "businessHoursToggle",
     "messageBtn",
     "autoToggle",
     "pushToggle",
@@ -1793,13 +1804,15 @@ function renderWorklogCalendar() {
       blockedReason ? "blocked" : "",
       isWeekend ? "weekend" : "",
       holidayName ? "holiday" : "",
+      holidayName.includes("대체공휴일") ? "substitute-holiday" : "",
     ].filter(Boolean).join(" ");
-    const label = approval ? (isApproved ? "승인" : "미승인") : holidayName || (isWeekend ? "휴무" : "");
+    const label = approval ? (isApproved ? "승인" : "미승인") : calendarHolidayLabel(holidayName) || (isWeekend ? "휴무" : "");
     button.innerHTML = `
       <span class="calendar-day-number">${day}</span>
       ${label ? `<small>${escapeHtml(label)}</small>` : ""}
     `;
     button.setAttribute("aria-pressed", isSelected ? "true" : "false");
+    if (holidayName) button.title = holidayName;
     if (blockedReason && !approval) {
       button.disabled = true;
       button.title = blockedReason;
@@ -2367,15 +2380,18 @@ function renderState(state) {
   $("sendBerryCount").disabled = !unlocked || sendAllBerries;
   $("sendAllBerries").checked = sendAllBerries;
   $("sendAllBerries").disabled = !unlocked;
+  $("businessHoursToggle").checked = state.businessHoursOnly === true;
+  $("businessHoursToggle").disabled = !unlocked;
   const sendModeText = sendAllBerries ? "보유 열매 전부" : `${sendCount}개`;
+  const businessHoursText = state.businessHoursOnly === true ? "업무시간 09:00~18:00 안에서만" : randomizedIntervalHint(state);
   const daemonText = state.daemonRunning ? "데몬 실행 중" : "데몬 확인 필요";
   const nextFruitRunAt = state.nextRunAt || new Date(Date.now() + intervalMinutes(state) * 60000).toISOString();
   $("fruitScheduleBadge").textContent = enabled ? `예약됨 ${fmtDate(nextFruitRunAt)} 예정` : "대기";
   $("fruitScheduleBadge").className = `badge ${enabled ? "ok" : "neutral"}`;
   $("controlHint").textContent = enabled
-    ? `켜짐 상태입니다. ${daemonText}. 다음 확인 ${fmtDate(nextFruitRunAt)}. ${randomizedIntervalHint(state)} 기준. 전송 수 ${sendModeText}`
+    ? `켜짐 상태입니다. ${daemonText}. 다음 확인 ${fmtDate(nextFruitRunAt)}. ${businessHoursText} 전송. 전송 수 ${sendModeText}`
     : hasTarget
-      ? `켜면 ${randomizedIntervalHint(state)}마다 한 번씩 보유 열매를 확인하고 ${sendModeText} 보냅니다.`
+      ? `켜면 ${businessHoursText} 보유 열매를 확인하고 ${sendModeText} 보냅니다.`
       : "대상 직원을 먼저 검색해서 선택하세요.";
   renderWorklogState(state);
   try {
@@ -3278,6 +3294,7 @@ function transferSettingsPayload() {
     countValue,
     count: Number.isFinite(count) ? Math.floor(count) : 0,
     sendAll,
+    businessHoursOnly: $("businessHoursToggle").checked,
   };
 }
 
@@ -3498,8 +3515,8 @@ async function saveTransferSettings() {
   const count = payload.count;
   $("sendBerryCount").value = count;
   await api("/api/message", { message: payload.message });
-  const state = await api("/api/send-count", { count, sendAll });
-  return { state, count, sendAll };
+  const state = await api("/api/send-count", { count, sendAll, businessHoursOnly: payload.businessHoursOnly });
+  return { state, count, sendAll, businessHoursOnly: payload.businessHoursOnly };
 }
 
 $("autoToggle").addEventListener("change", async () => {

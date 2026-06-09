@@ -3,7 +3,7 @@ plugins { id "com.android.application" }
 android {
     namespace "com.openclaw.fruitauto"
     compileSdk 35
-    defaultConfig { applicationId "com.openclaw.fruitauto"; minSdk 23; targetSdk 35; versionCode 31504; versionName "3.15.4" }
+    defaultConfig { applicationId "com.openclaw.fruitauto"; minSdk 23; targetSdk 35; versionCode 31506; versionName "3.15.6" }
     signingConfigs {
         release {
             storeFile signingConfigs.debug.storeFile
