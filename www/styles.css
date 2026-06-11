@@ -335,7 +335,7 @@ body.theme-getter.main-bg-scene {
     linear-gradient(180deg, rgba(10, 0, 3, 0.18), rgba(14, 1, 5, 0.62) 44%, rgba(14, 1, 5, 0.9)),
     radial-gradient(circle at 24% 16%, rgba(255, 230, 120, 0.18), transparent 28%),
     radial-gradient(circle at 82% 70%, rgba(255, 23, 56, 0.2), transparent 34%),
-    url("/assets/getter/getter-robo-splash.jpg?v=3.15.9") center top / cover fixed,
+    url("/assets/getter/getter-robo-splash.jpg?v=3.16.0") center top / cover fixed,
     #100205;
   background-attachment: fixed, fixed, fixed, fixed, fixed;
   background-repeat: no-repeat;
@@ -437,7 +437,7 @@ body.main-bg-scene .launch-splash {
 body.theme-getter.main-bg-scene .launch-splash {
   background:
     linear-gradient(180deg, rgba(8, 0, 2, 0.08), rgba(12, 1, 4, 0.54) 52%, rgba(12, 1, 4, 0.88)),
-    url("/assets/getter/getter-robo-splash.jpg?v=3.15.9") center top / cover no-repeat,
+    url("/assets/getter/getter-robo-splash.jpg?v=3.16.0") center top / cover no-repeat,
     #100205;
 }
 
@@ -781,7 +781,7 @@ body.theme-getter .hero {
   border-bottom-color: rgba(255, 23, 56, 0.58);
   background:
     linear-gradient(90deg, rgba(11, 2, 4, 0.98) 0%, rgba(19, 3, 7, 0.94) 62%, rgba(12, 2, 4, 0.72) 100%),
-    url("/assets/getter/getter-robo-splash.jpg?v=3.15.9") center 18% / cover;
+    url("/assets/getter/getter-robo-splash.jpg?v=3.16.0") center 18% / cover;
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.34);
 }
 
@@ -2406,6 +2406,17 @@ textarea:focus {
 
 .calendar-day.pending small {
   color: #e11d48;
+}
+
+.calendar-day.checking {
+  border-color: #ddd6fe;
+  background: #f5f3ff;
+  color: #6d28d9;
+  cursor: wait;
+}
+
+.calendar-day.checking small {
+  color: #7c3aed;
 }
 
 .calendar-day.blocked {

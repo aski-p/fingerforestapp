@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.15.9";
+const appVersion = "3.16.0";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -189,6 +189,8 @@ let selectedWorklogDays = [];
 let calendarDraftDates = [];
 let worklogApprovalsByDate = {};
 let worklogApprovalsMonthKey = "";
+let worklogApprovalsLoadingMonthKey = "";
+let worklogApprovalsPrefetchingMonthKey = "";
 let worklogCalendarMonth = new Date();
 let pendingWorklogTarget = null;
 let worklogDraftDirty = false;
@@ -1090,8 +1092,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.15.9",
-        badge: "/icons/app-icon-192.png?v=3.15.9",
+        icon: "/icons/app-icon-192.png?v=3.16.0",
+        badge: "/icons/app-icon-192.png?v=3.16.0",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1322,32 +1324,57 @@ function cacheWorklogApprovals(data, monthKey) {
 }
 
 async function refreshWorklogApprovalsForMonth(date = worklogCalendarMonth, { fastOnly = false, silent = false } = {}) {
-  if (!isUnlocked()) return;
+  if (!isUnlocked()) return false;
   const requestedMonthKey = monthValue(date);
   try {
     const query = new URLSearchParams({ month: requestedMonthKey });
     const data = await api(`/api/${fastOnly ? "worklog-approvals-local" : "worklog-approvals"}?${query.toString()}`);
-    if (requestedMonthKey !== monthValue(worklogCalendarMonth)) return;
+    if (requestedMonthKey !== monthValue(worklogCalendarMonth)) return false;
     applyWorklogApprovals(data, requestedMonthKey, { merge: true });
     cacheWorklogApprovals({ month: requestedMonthKey, items: Object.values(worklogApprovalsByDate) }, requestedMonthKey);
+    return true;
   } catch (err) {
-    if (requestedMonthKey !== monthValue(worklogCalendarMonth)) return;
-    if (!fastOnly && readCachedWorklogApprovals(requestedMonthKey)) return;
+    if (requestedMonthKey !== monthValue(worklogCalendarMonth)) return false;
+    if (!fastOnly && readCachedWorklogApprovals(requestedMonthKey)) return true;
     worklogApprovalsByDate = {};
     worklogApprovalsMonthKey = requestedMonthKey;
     if (!silent) toast(`승인 내역 조회 실패: ${err.message}`);
+    return false;
   }
 }
 
-function loadFastWorklogApprovalsForCalendar() {
+async function loadFastWorklogApprovalsForCalendar() {
   const monthKey = monthValue(worklogCalendarMonth);
+  worklogApprovalsLoadingMonthKey = monthKey;
   readCachedWorklogApprovals(monthKey);
   renderWorklogCalendar();
-  refreshWorklogApprovalsForMonth(worklogCalendarMonth, { fastOnly: true, silent: true })
-    .then(renderWorklogCalendar)
-    .finally(() => {
-      refreshWorklogApprovalsForMonth(worklogCalendarMonth, { silent: true }).finally(renderWorklogCalendar);
-    });
+  await refreshWorklogApprovalsForMonth(worklogCalendarMonth, { fastOnly: true, silent: true });
+  await refreshWorklogApprovalsForMonth(worklogCalendarMonth, { silent: true });
+  if (monthKey === monthValue(worklogCalendarMonth)) {
+    worklogApprovalsLoadingMonthKey = "";
+    renderWorklogCalendar();
+  }
+}
+
+function preloadWorklogApprovalsForCurrentMonth() {
+  if (!isUnlocked()) return;
+  if (isModalVisible("worklogCalendarModal")) return;
+  const now = new Date();
+  const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthKey = monthValue(currentMonth);
+  if (worklogApprovalsMonthKey === monthKey && Object.keys(worklogApprovalsByDate || {}).length) return;
+  if (worklogApprovalsPrefetchingMonthKey === monthKey) return;
+  const previousMonth = worklogCalendarMonth;
+  worklogCalendarMonth = currentMonth;
+  worklogApprovalsPrefetchingMonthKey = monthKey;
+  loadFastWorklogApprovalsForCalendar().finally(() => {
+    if (worklogApprovalsPrefetchingMonthKey === monthKey) {
+      worklogApprovalsPrefetchingMonthKey = "";
+    }
+    if (!isModalVisible("worklogCalendarModal")) {
+      worklogCalendarMonth = previousMonth;
+    }
+  });
 }
 
 function scheduledWorklogDateTime(dateValue, timeValue) {
@@ -1790,9 +1817,12 @@ function renderWorklogCalendar() {
     const holidayName = koreanPublicHolidays[date] || "";
     const approval = hasMonthApprovals ? worklogApprovalForDate(date) : null;
     const blockedReason = worklogBlockedDateReason(date);
-    const isSelected = !approval && calendarDraftDates.includes(date);
     const isApproved = Boolean(approval?.approved);
-    const isPending = Boolean(approval && !approval.approved);
+    const isLoadingApprovals = worklogApprovalsLoadingMonthKey === currentMonthKey;
+    const isPastOrToday = date <= todayValue;
+    const isChecking = isLoadingApprovals && !isApproved && !blockedReason && isPastOrToday;
+    const isSelected = !approval && !isChecking && calendarDraftDates.includes(date);
+    const isPending = Boolean(approval && !approval.approved && !isChecking);
     const button = document.createElement("button");
     button.type = "button";
     button.className = [
@@ -1800,13 +1830,14 @@ function renderWorklogCalendar() {
       isSelected ? "selected" : "",
       isApproved ? "approved" : "",
       isPending ? "pending" : "",
+      isChecking ? "checking" : "",
       date === todayValue ? "today" : "",
       blockedReason ? "blocked" : "",
       isWeekend ? "weekend" : "",
       holidayName ? "holiday" : "",
       holidayName.includes("대체공휴일") ? "substitute-holiday" : "",
     ].filter(Boolean).join(" ");
-    const label = approval ? (isApproved ? "승인" : "미승인") : calendarHolidayLabel(holidayName) || (isWeekend ? "휴무" : "");
+    const label = isChecking ? "확인중" : approval ? (isApproved ? "승인" : "미승인") : calendarHolidayLabel(holidayName) || (isWeekend ? "휴무" : "");
     button.innerHTML = `
       <span class="calendar-day-number">${day}</span>
       ${label ? `<small>${escapeHtml(label)}</small>` : ""}
@@ -1817,6 +1848,10 @@ function renderWorklogCalendar() {
       button.disabled = true;
       button.title = blockedReason;
       button.setAttribute("aria-label", `${date} ${blockedReason} 업무일지 작성 불가`);
+    } else if (isChecking) {
+      button.disabled = true;
+      button.title = "승인 상태 확인 중";
+      button.setAttribute("aria-label", `${date} 업무일지 승인 상태 확인 중`);
     }
     button.addEventListener("click", () => {
       if (approval) {
@@ -1845,7 +1880,8 @@ async function openWorklogCalendar() {
   if (worklogApprovalsMonthKey !== monthValue(worklogCalendarMonth)) {
     worklogApprovalsByDate = {};
   }
-  readCachedWorklogApprovals(monthValue(worklogCalendarMonth));
+  worklogApprovalsLoadingMonthKey = monthValue(worklogCalendarMonth);
+  readCachedWorklogApprovals(worklogApprovalsLoadingMonthKey);
   renderWorklogCalendar();
   $("worklogCalendarModal").classList.remove("hidden");
   document.body.classList.add("modal-open");
@@ -2394,6 +2430,7 @@ function renderState(state) {
       ? `켜면 ${businessHoursText} 보유 열매를 확인하고 ${sendModeText} 보냅니다.`
       : "대상 직원을 먼저 검색해서 선택하세요.";
   renderWorklogState(state);
+  preloadWorklogApprovalsForCurrentMonth();
   try {
     if (unlocked && state.credentialsSaved !== false && window.FruitAndroid?.saveSettings) {
       window.FruitAndroid.saveSettings(enabled, state.pushEnabled !== false, intervalMinutes(state));
@@ -3362,14 +3399,16 @@ $("worklogCalendarModal").addEventListener("click", (event) => {
 $("worklogCalendarPrevBtn").addEventListener("click", () => {
   worklogCalendarMonth = new Date(worklogCalendarMonth.getFullYear(), worklogCalendarMonth.getMonth() - 1, 1);
   worklogApprovalsByDate = {};
-  readCachedWorklogApprovals(monthValue(worklogCalendarMonth));
+  worklogApprovalsLoadingMonthKey = monthValue(worklogCalendarMonth);
+  readCachedWorklogApprovals(worklogApprovalsLoadingMonthKey);
   renderWorklogCalendar();
   loadFastWorklogApprovalsForCalendar();
 });
 $("worklogCalendarNextBtn").addEventListener("click", () => {
   worklogCalendarMonth = new Date(worklogCalendarMonth.getFullYear(), worklogCalendarMonth.getMonth() + 1, 1);
   worklogApprovalsByDate = {};
-  readCachedWorklogApprovals(monthValue(worklogCalendarMonth));
+  worklogApprovalsLoadingMonthKey = monthValue(worklogCalendarMonth);
+  readCachedWorklogApprovals(worklogApprovalsLoadingMonthKey);
   renderWorklogCalendar();
   loadFastWorklogApprovalsForCalendar();
 });
