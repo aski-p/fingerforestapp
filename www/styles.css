@@ -330,6 +330,19 @@ body.main-bg-scene {
   background-size: cover;
 }
 
+body.theme-getter.main-bg-scene {
+  background:
+    linear-gradient(180deg, rgba(5, 0, 2, 0.46), rgba(16, 2, 5, 0.92)),
+    radial-gradient(circle at 22% 14%, rgba(57, 255, 136, 0.24), transparent 26%),
+    radial-gradient(circle at 82% 72%, rgba(255, 23, 56, 0.34), transparent 34%),
+    url("/assets/getter/getter-shin.png?v=3.15.7") right -110px top 72px / min(104vw, 760px) auto no-repeat fixed,
+    url("/assets/getter/getter-arc.png?v=3.15.7") left -190px bottom 4vh / min(112vw, 820px) auto no-repeat fixed,
+    image-set(url("/assets/getter/getter-live-hero.webp?v=3.15.7") type("image/webp")) center top / cover fixed,
+    #100205;
+  background-attachment: fixed, fixed, fixed, fixed, fixed, fixed, fixed;
+  background-repeat: no-repeat;
+}
+
 body.main-bg-forest-spring {
   --season-bg: url("/assets/seasons/forest-spring.jpg?v=3.10.2");
   --season-splash-bg: url("/assets/seasons/fast/forest-spring-fast.jpg");
