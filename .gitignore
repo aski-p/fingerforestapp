@@ -17,6 +17,7 @@ data/
 .railway_environment_id
 .railway_project_id
 secrets.json
+.secrets.json.lock
 state.json
 web_token.txt
 web_url.txt

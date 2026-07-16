@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.16.0";
+const appVersion = "3.16.1";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -121,17 +121,20 @@ function hydrateStoredSession() {
   authValidated = true;
 }
 
-const params = new URLSearchParams(location.search);
-const token = params.get("token") || storeGet("fruitToken") || "";
-if (token) storeSet("fruitToken", token);
+storeRemove("fruitToken");
 
 function clearSessionStorage() {
+  sessionEpoch += 1;
   fruitSession = "";
   currentOwnerKey = "";
   authValidated = false;
   storeRemove(fruitSessionKey);
   storeRemove(fruitOwnerKey);
   storeRemove(cachedStateKey);
+  refreshRequestGate.clear();
+  notificationRequestGate.clear();
+  worklogProjectLoader.clear();
+  recoveringSession = null;
   storeSet(loggedOutKey, "1");
   try {
     if (window.FruitAndroid?.saveSession) window.FruitAndroid.saveSession("");
@@ -179,8 +182,12 @@ runSecurityMigration();
 let fruitSession = "";
 let currentOwnerKey = "";
 let authValidated = false;
+let sessionEpoch = 0;
 let recoveringSession = null;
 let pushSyncing = false;
+const refreshRequestGate = window.FingerForestRequestCoordinator.createSingleFlight();
+const notificationRequestGate = window.FingerForestRequestCoordinator.createSingleFlight();
+const worklogProjectLoader = window.FingerForestRequestCoordinator.createTtlLoader({ ttlMs: 5 * 60 * 1000 });
 let selectedHistoryDate = historyDateValue(new Date());
 let pendingAppearanceSettings = null;
 let worklogProjects = [];
@@ -877,15 +884,8 @@ function loadRememberedLogin() {
   $("loginPw").value = rememberedPw || "";
 }
 
-async function restoreSavedLoginIfNeeded() {
+function restoreSavedLoginIfNeeded() {
   loadRememberedLogin();
-  if (!isUnlocked() || $("loginId").value) return;
-  try {
-    const data = await api("/api/saved-login");
-    if (!data.saved || !data.id) return;
-  } catch (_err) {
-    // Saved-login restore is best-effort. Manual login remains available.
-  }
 }
 
 function saveRememberedLogin(id, password) {
@@ -927,23 +927,27 @@ function saveFruitSession(sessionToken, ownerKey = currentOwnerKey) {
 async function recoverSession() {
   if (storeGet(loggedOutKey) === "1") return "";
   if (!recoveringSession) {
-    recoveringSession = (async () => {
+    const recoveryPromise = (async () => {
+      const recoveryEpoch = sessionEpoch;
       const res = await resilientFetch("/api/session", {
         headers: {
           "Content-Type": "application/json",
-          "X-Fruit-Token": token,
           "X-Fruit-Session": fruitSession,
           "X-Fruit-Owner": expectedOwnerKey(),
           "X-Fruit-Device": deviceId(),
         },
       });
       const data = await res.json();
+      if (recoveryEpoch !== sessionEpoch) throw new Error("요청이 취소되었습니다.");
       if (!data.ok) throw new Error(data.error || "세션 복구 실패");
       saveFruitSession((data.result || {}).sessionToken || "", (data.result || {}).ownerKey || currentOwnerKey);
       return fruitSession;
-    })().finally(() => {
-      recoveringSession = null;
-    });
+    })();
+    recoveringSession = recoveryPromise;
+    const releaseRecovery = () => {
+      if (recoveringSession === recoveryPromise) recoveringSession = null;
+    };
+    recoveryPromise.then(releaseRecovery, releaseRecovery);
   }
   return recoveringSession;
 }
@@ -969,10 +973,10 @@ function clearAuthenticatedUi() {
 }
 
 async function api(path, payload, retrying = false, requestOptions = {}) {
+  const requestEpoch = sessionEpoch;
   const options = {
     headers: {
       "Content-Type": "application/json",
-      "X-Fruit-Token": token,
       "X-Fruit-Session": fruitSession,
       "X-Fruit-Owner": expectedOwnerKey(),
       "X-Fruit-Device": deviceId(),
@@ -985,6 +989,7 @@ async function api(path, payload, retrying = false, requestOptions = {}) {
   }
   const res = await resilientFetch(path, options);
   const data = await res.json();
+  if (requestEpoch !== sessionEpoch) throw new Error("요청이 취소되었습니다.");
   if (
     !data.ok &&
     !retrying &&
@@ -996,8 +1001,11 @@ async function api(path, payload, retrying = false, requestOptions = {}) {
       await recoverSession();
       if (fruitSession) return api(path, payload, true, requestOptions);
     } catch (_err) {
-      clearAuthenticatedUi();
-      throw new Error("로그인이 만료되었습니다. 다시 로그인하세요.");
+      if (requestEpoch === sessionEpoch) {
+        clearAuthenticatedUi();
+        throw new Error("로그인이 만료되었습니다. 다시 로그인하세요.");
+      }
+      throw new Error("요청이 취소되었습니다.");
     }
   }
   if (!data.ok && path !== "/api/login" && isAuthError(data, res)) {
@@ -1092,8 +1100,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.16.0",
-        badge: "/icons/app-icon-192.png?v=3.16.0",
+        icon: "/icons/app-icon-192.png?v=3.16.1",
+        badge: "/icons/app-icon-192.png?v=3.16.1",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1134,7 +1142,12 @@ async function syncPushSubscriptionIfPossible(state = currentState) {
   }
 }
 
-async function checkReceivedNotifications({ silent = true } = {}) {
+function checkReceivedNotifications(options = {}) {
+  if (document.hidden) return Promise.resolve();
+  return notificationRequestGate.run("notifications", () => checkReceivedNotificationsOnce(options));
+}
+
+async function checkReceivedNotificationsOnce({ silent = true } = {}) {
   if (!isUnlocked() || currentState.pushEnabled === false) return;
   try {
     const data = await api("/api/notifications");
@@ -2307,15 +2320,17 @@ function setWorklogProjects(projects, selectedId = "") {
   select.value = current;
 }
 
-async function loadWorklogProjects() {
-  if (!isUnlocked()) return;
-  try {
+function loadWorklogProjects({ force = false } = {}) {
+  if (!isUnlocked()) return Promise.resolve();
+  const ownerKey = expectedOwnerKey() || "current";
+  return worklogProjectLoader.run(ownerKey, async () => {
     const data = await api("/api/worklog-projects");
     const selectedId = hasWorklogDraft() ? $("worklogProjectSelect").value : currentState.worklogProjectId || "";
     setWorklogProjects(data.projects || [], selectedId);
-  } catch (err) {
+    return data;
+  }, { force }).catch((err) => {
     toast(`프로젝트 조회 실패: ${err.message}`);
-  }
+  });
 }
 
 function renderWorklogState(state) {
@@ -2624,7 +2639,14 @@ async function refreshRanking() {
   }
 }
 
-async function refresh({ silent = false, forceBalance = false } = {}) {
+function refresh(options = {}) {
+  if (document.hidden && options.silent) return Promise.resolve();
+  return refreshRequestGate.run("refresh", () => refreshOnce(options), {
+    force: Boolean(options.forceBalance),
+  });
+}
+
+async function refreshOnce({ silent = false, forceBalance = false } = {}) {
   try {
     const state = forceBalance && isUnlocked()
       ? await api("/api/refresh", {})

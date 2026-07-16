@@ -70,7 +70,6 @@ public class FruitNotificationReceiver extends BroadcastReceiver {
                 connection = (HttpURLConnection) new URL(base + path).openConnection();
                 connection.setConnectTimeout(15000);
                 connection.setReadTimeout(15000);
-                connection.setRequestProperty("X-Fruit-Token", MainActivity.FRUIT_TOKEN);
                 connection.setRequestProperty("X-Fruit-Session", sessionToken);
                 int responseCode = connection.getResponseCode();
                 if (responseCode == 530 || responseCode >= 500) throw new IllegalStateException("HTTP " + responseCode);

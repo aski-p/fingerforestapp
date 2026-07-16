@@ -283,9 +283,9 @@ button {
       <p id="toast" class="toast" role="status"></p>
     </main>
     <script>
-const params = new URLSearchParams(location.search);
-const token = params.get("token") || localStorage.getItem("fruitToken") || "";
-if (token) localStorage.setItem("fruitToken", token);
+const fruitSession = localStorage.getItem("fruitSessionToken") || "";
+const fruitOwner = localStorage.getItem("fruitOwnerKey") || "";
+const fruitDevice = localStorage.getItem("fruitDeviceId") || "";
 
 const $ = (id) => document.getElementById(id);
 
@@ -297,7 +297,9 @@ async function api(path, payload) {
   const options = {
     headers: {
       "Content-Type": "application/json",
-      "X-Fruit-Token": token,
+      "X-Fruit-Session": fruitSession,
+      "X-Fruit-Owner": fruitOwner,
+      "X-Fruit-Device": fruitDevice,
     },
   };
   if (payload !== undefined) {

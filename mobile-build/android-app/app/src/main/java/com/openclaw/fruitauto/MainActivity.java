@@ -23,14 +23,14 @@ import android.webkit.WebViewClient;
 
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST_CODE = 20260529;
-    private static final String APP_VERSION = "3.15.6";
+    private static final String APP_VERSION = "3.16.0";
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
-    private static final String APP_URL = "https://web-production-011c4.up.railway.app/?token=IV2d0ecXO9X50cJvmOHb-lI7wCSRiFji";
-    private static final String FALLBACK_APP_URL = "https://web-production-011c4.up.railway.app/?token=IV2d0ecXO9X50cJvmOHb-lI7wCSRiFji";
+    private static final String APP_URL = "https://web-production-011c4.up.railway.app/";
+    private static final String FALLBACK_APP_URL = "https://web-production-011c4.up.railway.app/";
     static final String BASE_URL = "https://web-production-011c4.up.railway.app";
     static final String FALLBACK_BASE_URL = "https://web-production-011c4.up.railway.app";
-    static final String FRUIT_TOKEN = "IV2d0ecXO9X50cJvmOHb-lI7wCSRiFji";
+
     private static final long PRIMARY_LOAD_TIMEOUT_MS = 8000L;
     private boolean fallbackLoaded = false;
     private boolean mainFrameLoaded = false;
@@ -48,7 +48,7 @@ public class MainActivity extends Activity {
         settings.setDatabaseEnabled(true);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
-        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         webView.addJavascriptInterface(new FruitBridge(this), "FruitAndroid");
         clearLegacySensitiveStorage();
         webView.setWebChromeClient(new WebChromeClient() {
@@ -100,7 +100,7 @@ public class MainActivity extends Activity {
                     );
                 }
                 view.evaluateJavascript(
-                    "(function(){try{if(!window.FruitAndroid)return;['fruitToken','fruitTheme','fruitFont','fruitProfilePhoto','fruitProfilePhotoCache','fruitUiLoggedOut','fruitSecurityMigrationV85'].forEach(function(k){var v=localStorage.getItem(k);if(v!==null)window.FruitAndroid.saveLocal(k,v)})}catch(e){}})();",
+                    "(function(){try{if(!window.FruitAndroid)return;['fruitTheme','fruitFont','fruitProfilePhoto','fruitProfilePhotoCache','fruitUiLoggedOut','fruitSecurityMigrationV85'].forEach(function(k){var v=localStorage.getItem(k);if(v!==null)window.FruitAndroid.saveLocal(k,v)})}catch(e){}})();",
                     null
                 );
             }

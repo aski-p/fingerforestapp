@@ -5,7 +5,6 @@ Railway deployable source for the Fingerfruit web app and fallback API.
 ## Runtime
 
 - Start command: `python3 web_server.py 0.0.0.0 $PORT`
-- Required secret: `FRUIT_AUTO_WEB_TOKEN`
 - Optional state directory: `FRUIT_AUTO_DATA_DIR`
 - Optional account/session bootstrap: `FRUIT_AUTO_SECRETS_JSON`
 

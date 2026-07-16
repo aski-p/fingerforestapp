@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import argparse
+from contextlib import contextmanager
 import datetime as dt
+import fcntl
 import hashlib
 import http.cookiejar
 import json
@@ -11,6 +13,7 @@ import signal
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -43,6 +46,13 @@ WAKE_REQUESTED = False
 QUIET_LOG_ACTIONS = {"balance", "check"}
 SESSION_SCHEMA_VERSION = 4
 SESSION_TTL_SECONDS = 60 * 60
+SESSION_REFRESH_INTERVAL_SECONDS = 5 * 60
+WORKLOG_PROJECT_CACHE_TTL_SECONDS = 5 * 60
+_WORKLOG_PROJECT_CACHE = {}
+_WORKLOG_PROJECT_CACHE_LOCK = threading.RLock()
+_WORKLOG_PROJECT_OWNER_LOCKS = {}
+_SECRETS_LOCK = threading.RLock()
+_SECRETS_LOCK_STATE = threading.local()
 KST = dt.timezone(dt.timedelta(hours=9))
 
 PMS_LOGIN_PAGE = "http://pms.fingerservice.co.kr/tms/login"
@@ -929,10 +939,13 @@ def ensure_web_push_keys():
         keys = json.loads(proc.stdout)
     except Exception as exc:
         raise FruitAutoError(f"web push key generation failed: {exc}") from exc
-    web_push["publicKey"] = keys["publicKey"]
-    web_push["privateKey"] = keys["privateKey"]
-    save_secrets(secrets)
-    return web_push
+    def store_web_push_keys(latest_secrets):
+        latest = latest_secrets.setdefault("webPush", {})
+        latest.setdefault("publicKey", keys["publicKey"])
+        latest.setdefault("privateKey", keys["privateKey"])
+        return latest
+
+    return mutate_secrets(store_web_push_keys)
 
 
 def web_push_public_key():
@@ -957,46 +970,71 @@ def save_web_push_subscription(owner_key, subscription):
         subscription["deviceId"] = device_id
     if user_agent:
         subscription["userAgent"] = user_agent
-    secrets = load_secrets()
-    subscriptions = secrets.setdefault("webPushSubscriptions", {})
-    endpoint = subscription.get("endpoint")
-    for existing_owner_key, existing_subscriptions in subscriptions.items():
-        if existing_owner_key == owner_key:
-            continue
-        existing_subscriptions[:] = [
-            item for item in existing_subscriptions
+    def store_subscription(secrets):
+        if owner_key not in secrets.get("accounts", {}):
+            raise FruitAutoError("저장된 로그인 세션이 없습니다. 다시 로그인하세요.")
+        subscriptions = secrets.setdefault("webPushSubscriptions", {})
+        endpoint = subscription.get("endpoint")
+        for existing_owner_key, existing_subscriptions in subscriptions.items():
+            if existing_owner_key == owner_key:
+                continue
+            existing_subscriptions[:] = [
+                item for item in existing_subscriptions
+                if item.get("endpoint") != endpoint
+                and not (device_id and item.get("deviceId") == device_id)
+                and not (device_id and user_agent and not item.get("deviceId") and item.get("userAgent") == user_agent)
+            ]
+        owner_subscriptions = subscriptions.setdefault(owner_key, [])
+        owner_subscriptions[:] = [
+            item for item in owner_subscriptions
             if item.get("endpoint") != endpoint
             and not (device_id and item.get("deviceId") == device_id)
             and not (device_id and user_agent and not item.get("deviceId") and item.get("userAgent") == user_agent)
         ]
-    owner_subscriptions = subscriptions.setdefault(owner_key, [])
-    owner_subscriptions[:] = [
-        item for item in owner_subscriptions
-        if item.get("endpoint") != endpoint
-        and not (device_id and item.get("deviceId") == device_id)
-        and not (device_id and user_agent and not item.get("deviceId") and item.get("userAgent") == user_agent)
-    ]
-    owner_subscriptions.append(subscription)
-    owner_subscriptions[:] = owner_subscriptions[-3:]
-    save_secrets(secrets)
+        owner_subscriptions.append(subscription)
+        owner_subscriptions[:] = owner_subscriptions[-3:]
+        return len(owner_subscriptions)
+
+    subscription_count = mutate_secrets(store_subscription)
     log_event({"action": "web_push_subscribed", "ownerKey": owner_key})
-    return {"subscribed": True, "count": len(owner_subscriptions)}
+    return {"subscribed": True, "count": subscription_count}
 
 
 def remove_web_push_subscription(owner_key, endpoint=None):
     owner_key = require_owner(owner_key)
-    secrets = load_secrets()
-    owner_subscriptions = secrets.setdefault("webPushSubscriptions", {}).setdefault(owner_key, [])
-    before = len(owner_subscriptions)
-    if endpoint:
-        owner_subscriptions[:] = [
-            item for item in owner_subscriptions if item.get("endpoint") != endpoint
-        ]
-    else:
-        owner_subscriptions.clear()
-    save_secrets(secrets)
-    log_event({"action": "web_push_unsubscribed", "ownerKey": owner_key, "removed": before - len(owner_subscriptions)})
-    return {"subscribed": False, "count": len(owner_subscriptions)}
+
+    def remove_subscription(secrets):
+        if owner_key not in secrets.get("accounts", {}):
+            raise FruitAutoError("저장된 로그인 세션이 없습니다. 다시 로그인하세요.")
+        subscriptions = secrets.setdefault("webPushSubscriptions", {})
+        owner_subscriptions = subscriptions.get(owner_key, [])
+        before = len(owner_subscriptions)
+        if endpoint:
+            owner_subscriptions[:] = [
+                item for item in owner_subscriptions if item.get("endpoint") != endpoint
+            ]
+        else:
+            owner_subscriptions.clear()
+        return len(owner_subscriptions), before - len(owner_subscriptions)
+
+    subscription_count, removed = mutate_secrets(remove_subscription)
+    log_event({"action": "web_push_unsubscribed", "ownerKey": owner_key, "removed": removed})
+    return {"subscribed": False, "count": subscription_count}
+
+
+def remove_stale_web_push_subscriptions(stale_subscriptions):
+    if not stale_subscriptions:
+        return
+
+    def remove_exact_snapshots(latest_secrets):
+        latest = latest_secrets.setdefault("webPushSubscriptions", {})
+        for owner_key, stale_snapshot in stale_subscriptions:
+            latest[owner_key] = [
+                item for item in latest.get(owner_key, [])
+                if item != stale_snapshot
+            ]
+
+    mutate_secrets(remove_exact_snapshots)
 
 
 def notify_web_push(payload, owner_keys):
@@ -1017,7 +1055,7 @@ def notify_web_push(payload, owner_keys):
             continue
         for subscription in list(subscriptions_by_owner.get(owner_key, [])):
             if not subscription.get("deviceId"):
-                stale.append((owner_key, subscription.get("endpoint")))
+                stale.append((owner_key, dict(subscription)))
                 log_event({"action": "web_push_legacy_subscription_removed", "ownerKey": owner_key})
                 continue
             request = {
@@ -1043,18 +1081,13 @@ def notify_web_push(payload, owner_keys):
                 except json.JSONDecodeError:
                     pass
                 if status in (404, 410):
-                    stale.append((owner_key, subscription.get("endpoint")))
+                    stale.append((owner_key, dict(subscription)))
                 log_event({"action": "web_push_error", "ownerKey": owner_key, "statusCode": status, "error": (proc.stderr or proc.stdout)[-400:]})
             except Exception as exc:
                 log_event({"action": "web_push_error", "ownerKey": owner_key, "error": str(exc)})
 
     if stale:
-        for owner_key, endpoint in stale:
-            subscriptions_by_owner[owner_key] = [
-                item for item in subscriptions_by_owner.get(owner_key, [])
-                if item.get("endpoint") != endpoint
-            ]
-        save_secrets(secrets)
+        remove_stale_web_push_subscriptions(stale)
     if sent:
         log_event({"action": "web_push_notified", "count": sent})
     return sent > 0
@@ -1184,11 +1217,12 @@ def save_credentials(pms_id, pms_password):
     token, dataset = pms_login(client, pms_id, pms_password)
     forest_login(client, token)
     data = {"pms_id": pms_id, "pms_password": pms_password}
-    save_json(SECRETS_PATH, data)
-    try:
-        SECRETS_PATH.chmod(0o600)
-    except OSError:
-        pass
+    with secrets_transaction():
+        save_json(SECRETS_PATH, data)
+        try:
+            SECRETS_PATH.chmod(0o600)
+        except OSError:
+            pass
     log_event({"action": "credentials_saved", "user": dataset.get("SESS_USERNAME")})
     state = load_json(STATE_PATH, DEFAULT_STATE)
     previous_login_id = state.get("loginUserId")
@@ -3128,8 +3162,9 @@ def set_message(message):
 
 
 def logout():
-    if SECRETS_PATH.exists():
-        SECRETS_PATH.unlink()
+    with secrets_transaction():
+        if SECRETS_PATH.exists():
+            SECRETS_PATH.unlink()
     state = load_json(STATE_PATH, DEFAULT_STATE)
     state.update(
         {
@@ -3246,12 +3281,44 @@ def load_secrets():
     return secrets
 
 
+@contextmanager
+def secrets_transaction():
+    with _SECRETS_LOCK:
+        depth = getattr(_SECRETS_LOCK_STATE, "depth", 0)
+        if depth:
+            _SECRETS_LOCK_STATE.depth = depth + 1
+            try:
+                yield
+            finally:
+                _SECRETS_LOCK_STATE.depth = depth
+            return
+        lock_path = SECRETS_PATH.with_name(f".{SECRETS_PATH.name}.lock")
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+") as lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            _SECRETS_LOCK_STATE.depth = 1
+            try:
+                yield
+            finally:
+                _SECRETS_LOCK_STATE.depth = 0
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
 def save_secrets(secrets):
-    save_json(SECRETS_PATH, secrets)
-    try:
-        SECRETS_PATH.chmod(0o600)
-    except OSError:
-        pass
+    with secrets_transaction():
+        save_json(SECRETS_PATH, secrets)
+        try:
+            SECRETS_PATH.chmod(0o600)
+        except OSError:
+            pass
+
+
+def mutate_secrets(mutator):
+    with secrets_transaction():
+        secrets = load_secrets()
+        result = mutator(secrets)
+        save_secrets(secrets)
+        return result
 
 
 def load_all_state():
@@ -3301,9 +3368,9 @@ def save_single_account_state(owner_key, account):
 
 def remove_account_state(owner_key):
     state = load_all_state()
-    state["accounts"] = {}
-    if state.get("activeOwnerKey") == owner_key:
-        state["activeOwnerKey"] = None
+    accounts = state.setdefault("accounts", {})
+    accounts.pop(owner_key, None)
+    removed_active_owner = state.get("activeOwnerKey") == owner_key
     logged_out = dict(ACCOUNT_DEFAULT)
     logged_out.update(
         {
@@ -3314,7 +3381,16 @@ def remove_account_state(owner_key):
             "updatedAt": now_iso(),
         }
     )
-    state.update({key: logged_out.get(key) for key in ACCOUNT_DEFAULT})
+    if removed_active_owner:
+        next_owner_key = next(iter(accounts), None)
+        state["activeOwnerKey"] = next_owner_key
+        if next_owner_key:
+            next_account = accounts[next_owner_key]
+            state.update({key: next_account.get(key) for key in ACCOUNT_DEFAULT})
+            state.update({key: value for key, value in next_account.items() if key != "ownerKey"})
+        else:
+            state.update({key: logged_out.get(key) for key in ACCOUNT_DEFAULT})
+    state["accounts"] = accounts
     save_json(STATE_PATH, state)
     return logged_out
 
@@ -3348,50 +3424,76 @@ def session_expired(session):
 
 
 def new_session_record(owner_key):
+    refreshed_at = now_iso()
     return {
         "version": SESSION_SCHEMA_VERSION,
         "ownerKey": owner_key,
-        "createdAt": now_iso(),
+        "createdAt": refreshed_at,
+        "refreshedAt": refreshed_at,
         "expiresAt": session_expires_at(),
     }
+
+
+def session_refresh_due(session):
+    refreshed_at = session.get("refreshedAt") or session.get("createdAt")
+    if not refreshed_at:
+        return True
+    age = seconds_since(refreshed_at)
+    return age is None or age >= SESSION_REFRESH_INTERVAL_SECONDS
 
 
 def owner_from_session(session_token, device_id=None):
     if not session_token:
         return None
-    secrets = load_secrets()
-    sessions = secrets.setdefault("sessions", {})
-    session = sessions.get(session_token)
-    if session_expired(session):
-        sessions.pop(session_token, None)
-        save_secrets(secrets)
+    with secrets_transaction():
+        secrets = load_secrets()
+        sessions = secrets.setdefault("sessions", {})
+        if session_token not in sessions:
+            return None
+        session = sessions[session_token]
+        if session_expired(session):
+            sessions.pop(session_token, None)
+            save_secrets(secrets)
+            return None
+        owner_key = session_owner_key(session)
+        if owner_key and owner_key in secrets.get("accounts", {}):
+            if session_refresh_due(session):
+                session["refreshedAt"] = now_iso()
+                session["expiresAt"] = session_expires_at()
+                save_secrets(secrets)
+            return owner_key
         return None
-    owner_key = session_owner_key(session)
-    if owner_key and owner_key in secrets.get("accounts", {}):
-        session["expiresAt"] = session_expires_at()
-        save_secrets(secrets)
-        return owner_key
-    return None
 
 
 def issue_session(owner_key=None, device_id=None):
     owner_key = require_owner(owner_key)
-    secrets = load_secrets()
-    sessions = secrets.setdefault("sessions", {})
-    changed = False
-    for session_token, session_owner in list(sessions.items()):
-        if session_expired(session_owner):
-            sessions.pop(session_token, None)
-            changed = True
-            continue
-        if session_owner_key(session_owner) == owner_key:
-            session_owner["expiresAt"] = session_expires_at()
-            save_secrets(secrets)
+    with secrets_transaction():
+        secrets = load_secrets()
+        if owner_key not in secrets.get("accounts", {}):
+            raise FruitAutoError("저장된 로그인 세션이 없습니다. 다시 로그인하세요.")
+        sessions = secrets.setdefault("sessions", {})
+        changed = False
+        active_session = None
+        for session_token, session_owner in list(sessions.items()):
+            if session_expired(session_owner):
+                sessions.pop(session_token, None)
+                changed = True
+                continue
+            if active_session is None and session_owner_key(session_owner) == owner_key:
+                active_session = (session_token, session_owner)
+        if active_session is not None:
+            session_token, session_owner = active_session
+            if session_refresh_due(session_owner):
+                session_owner["refreshedAt"] = now_iso()
+                session_owner["expiresAt"] = session_expires_at()
+                changed = True
+            if changed:
+                save_secrets(secrets)
             return {"sessionToken": session_token, "ownerKey": owner_key}
-    session_token = uuid.uuid4().hex
-    sessions[session_token] = new_session_record(owner_key)
-    save_secrets(secrets)
-    return {"sessionToken": session_token, "ownerKey": owner_key}
+        session_token = uuid.uuid4().hex
+        sessions[session_token] = new_session_record(owner_key)
+        save_secrets(secrets)
+        return {"sessionToken": session_token, "ownerKey": owner_key}
 
 
 def require_owner(owner_key):
@@ -3442,38 +3544,40 @@ def save_credentials(pms_id, pms_password, device_id=None):
     )
     if not owner_key:
         raise FruitAutoError("Forest employee id를 확인하지 못했습니다.")
+    store_worklog_project_cache(owner_key, worklog_projects_from_employee_info(employee_info))
 
-    account = get_account_state(owner_key)
-    secrets = load_secrets()
-    secrets.setdefault("accounts", {})
-    existing_secret = secrets["accounts"].get(owner_key) or {}
-    secrets["accounts"][owner_key] = {
-        **existing_secret,
-        "pms_id": pms_id,
-        "pms_password": pms_password,
-    }
-    secrets["sessions"] = {
-        token: session
-        for token, session in secrets.get("sessions", {}).items()
-        if session_owner_key(session) != owner_key
-    }
-    session_token = uuid.uuid4().hex
-    secrets["sessions"][session_token] = new_session_record(owner_key)
-    save_secrets(secrets)
-
-    account.update(
-        {
-            "loginSavedAt": now_iso(),
-            "loginUser": dataset.get("SESS_USERNAME"),
-            "loginUserId": dataset.get("SESS_USERID"),
-            "loginEmployeeNo": dataset.get("SESS_EMPNO"),
-            "senderEmployeeId": sender_employee_id,
-            "senderEmployeeName": sender_employee_name,
-            "ownerKey": owner_key,
-            "updatedAt": now_iso(),
+    with secrets_transaction():
+        account = get_account_state(owner_key)
+        secrets = load_secrets()
+        secrets.setdefault("accounts", {})
+        existing_secret = secrets["accounts"].get(owner_key) or {}
+        secrets["accounts"][owner_key] = {
+            **existing_secret,
+            "pms_id": pms_id,
+            "pms_password": pms_password,
         }
-    )
-    save_account_state(owner_key, account)
+        secrets["sessions"] = {
+            existing_token: session
+            for existing_token, session in secrets.get("sessions", {}).items()
+            if session_owner_key(session) != owner_key
+        }
+        session_token = uuid.uuid4().hex
+        secrets["sessions"][session_token] = new_session_record(owner_key)
+        save_secrets(secrets)
+
+        account.update(
+            {
+                "loginSavedAt": now_iso(),
+                "loginUser": dataset.get("SESS_USERNAME"),
+                "loginUserId": dataset.get("SESS_USERID"),
+                "loginEmployeeNo": dataset.get("SESS_EMPNO"),
+                "senderEmployeeId": sender_employee_id,
+                "senderEmployeeName": sender_employee_name,
+                "ownerKey": owner_key,
+                "updatedAt": now_iso(),
+            }
+        )
+        save_account_state(owner_key, account)
     log_event({"action": "credentials_saved", "ownerKey": owner_key, "user": dataset.get("SESS_USERNAME")})
     return {
         "success": True,
@@ -3690,28 +3794,17 @@ def set_enabled(enabled, owner_key=None):
 
 def logout(owner_key=None, session_token=None):
     owner_key = require_owner(owner_key)
-    secrets = load_secrets()
-    if session_token:
-        secrets.setdefault("sessions", {}).pop(session_token, None)
-    else:
+    clear_worklog_project_cache(owner_key)
+    with secrets_transaction():
+        secrets = load_secrets()
+        if owner_key not in secrets.get("accounts", {}):
+            raise FruitAutoError("저장된 로그인 세션이 없습니다. 다시 로그인하세요.")
         revoke_sessions_for_owner(secrets, owner_key)
         secrets.setdefault("accounts", {}).pop(owner_key, None)
-    save_secrets(secrets)
-    if owner_key in secrets.get("accounts", {}):
-        state = get_account_state(owner_key)
-        state.update(
-            {
-                "enabled": False,
-                "status": "off",
-                "lastResult": "logged_out",
-                "lastAttemptResult": "logged_out",
-                "updatedAt": now_iso(),
-            }
-        )
-        save_account_state(owner_key, state)
-    else:
+        secrets.setdefault("webPushSubscriptions", {}).pop(owner_key, None)
+        save_secrets(secrets)
         state = remove_account_state(owner_key)
-    log_event({"action": "logged_out", "ownerKey": owner_key})
+    log_event({"action": "logged_out", "ownerKey": owner_key, "allSessionsRevoked": True})
     return state
 
 
@@ -4111,9 +4204,29 @@ def check_once(dry_run=False, force=False, owner_key=None):
         raise
 
 
-def list_worklog_projects(owner_key=None):
-    owner_key = require_owner(owner_key)
-    _client, employee_info, _login_dataset, _employee, _sender_id, _sender_name = account_login(owner_key)
+def clear_worklog_project_cache(owner_key=None):
+    with _WORKLOG_PROJECT_CACHE_LOCK:
+        if owner_key is None:
+            _WORKLOG_PROJECT_CACHE.clear()
+            _WORKLOG_PROJECT_OWNER_LOCKS.clear()
+        else:
+            _WORKLOG_PROJECT_CACHE.pop(owner_key, None)
+
+
+def worklog_project_owner_lock(owner_key):
+    with _WORKLOG_PROJECT_CACHE_LOCK:
+        return _WORKLOG_PROJECT_OWNER_LOCKS.setdefault(owner_key, threading.Lock())
+
+
+def cached_worklog_projects(owner_key):
+    with _WORKLOG_PROJECT_CACHE_LOCK:
+        cached = _WORKLOG_PROJECT_CACHE.get(owner_key)
+        if not cached or time.monotonic() - cached["storedAt"] >= WORKLOG_PROJECT_CACHE_TTL_SECONDS:
+            return None
+        return [dict(project) for project in cached["projects"]]
+
+
+def worklog_projects_from_employee_info(employee_info):
     projects = []
     seen = set()
     for key in ("projEmp", "projInner"):
@@ -4125,6 +4238,29 @@ def list_worklog_projects(owner_key=None):
             seen.add(project_id)
             projects.append({"id": project_id, "name": project_name, "source": key})
     return projects
+
+
+def store_worklog_project_cache(owner_key, projects):
+    with _WORKLOG_PROJECT_CACHE_LOCK:
+        _WORKLOG_PROJECT_CACHE[owner_key] = {
+            "storedAt": time.monotonic(),
+            "projects": [dict(project) for project in projects],
+        }
+
+
+def list_worklog_projects(owner_key=None):
+    owner_key = require_owner(owner_key)
+    cached = cached_worklog_projects(owner_key)
+    if cached is not None:
+        return cached
+    with worklog_project_owner_lock(owner_key):
+        cached = cached_worklog_projects(owner_key)
+        if cached is not None:
+            return cached
+        _client, employee_info, _login_dataset, _employee, _sender_id, _sender_name = account_login(owner_key)
+        projects = worklog_projects_from_employee_info(employee_info)
+        store_worklog_project_cache(owner_key, projects)
+        return projects
 
 
 def set_worklog_target(emp_id, name=None, duty_id=None, dept_nm=None, pos_nm=None, owner_key=None):

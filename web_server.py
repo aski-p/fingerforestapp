@@ -9,6 +9,7 @@ import sqlite3
 import subprocess
 import sys
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -23,14 +24,18 @@ import fruit_auto
 BASE_DIR = Path(__file__).resolve().parent
 WWW_DIR = BASE_DIR / "www"
 DATA_DIR = fruit_auto.DATA_DIR
-TOKEN_PATH = DATA_DIR / "web_token.txt"
 WEB_PID_PATH = DATA_DIR / "web_server.pid"
 CHAT_DB_PATH = DATA_DIR / "chat_memory.sqlite3"
 TICK_WAKE_PATH = DATA_DIR / "tick_worker.wake"
 TICK_HEARTBEAT_PATH = DATA_DIR / "tick_worker.heartbeat.json"
 PORT = 8765
 CHECK_LOCK = threading.Lock()
-APP_VERSION = "3.16.0"
+PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
+_PROFILE_LOOKUP_CACHE = {}
+_PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
+APP_VERSION = "3.16.1"
+ANDROID_APP_VERSION = "3.16.0"
+IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
 CHAT_CONTEXT_MESSAGE_LIMIT = 8
 CHAT_HISTORY_MESSAGE_LIMIT = CHAT_CONTEXT_MESSAGE_LIMIT
@@ -50,6 +55,9 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "API 상태·알림 요청의 중복 실행을 합치고 백그라운드 polling을 줄여 앱 반응 속도를 개선했습니다.",
+    "업무일지 프로젝트와 프로필 사진을 안전하게 캐시하고 세션 파일 저장 빈도를 줄였습니다.",
+    "버전 자산 캐시를 적용해 앱을 다시 열 때 JS, CSS, 글꼴, 배경 다운로드를 줄였습니다.",
     "업무일지 달력에서 대체공휴일과 임시공휴일을 짧은 휴일 라벨로 확실히 표시합니다.",
     "업무일지 달력에서 이미 승인된 날짜가 빠른 로컬 조회 때문에 다시 미승인으로 보이는 지연을 줄였습니다.",
     "열매 순환 카드에 '7명중 x명 순환(n번 완료)' 진행 문구를 추가하고 현재 순번 숫자를 빨간색으로 표시합니다.",
@@ -167,10 +175,37 @@ def profile_url_with_version(url, updated_at):
     return f"{url}{'&' if '?' in url else '?'}v={urllib.parse.quote(str(updated_at))}"
 
 
+def clear_profile_photo_cache():
+    with _PROFILE_LOOKUP_CACHE_LOCK:
+        _PROFILE_LOOKUP_CACHE.clear()
+
+
+def cached_profile_lookup(cache_key):
+    with _PROFILE_LOOKUP_CACHE_LOCK:
+        cached = _PROFILE_LOOKUP_CACHE.get(cache_key)
+        if not cached or time.monotonic() - cached["storedAt"] >= PROFILE_LOOKUP_CACHE_TTL_SECONDS:
+            return None
+        return {key: dict(value) for key, value in cached["value"].items()}
+
+
+def store_profile_lookup(cache_key, value):
+    with _PROFILE_LOOKUP_CACHE_LOCK:
+        _PROFILE_LOOKUP_CACHE[cache_key] = {
+            "storedAt": time.monotonic(),
+            "value": {key: dict(item) for key, item in value.items()},
+        }
+
+
 def list_profile_photos(employee_ids):
-    config = supabase_config()
     ids = sorted({str(item) for item in employee_ids if item})
-    if not config or not ids:
+    if not ids:
+        return {}
+    cache_key = ("employee_ids", tuple(ids))
+    cached = cached_profile_lookup(cache_key)
+    if cached is not None:
+        return cached
+    config = supabase_config()
+    if not config:
         return {}
     quoted_ids = ",".join(urllib.parse.quote(item, safe="") for item in ids)
     table = urllib.parse.quote(config["table"], safe="")
@@ -195,13 +230,20 @@ def list_profile_photos(employee_ids):
             "url": profile_url_with_version(url, row.get("updated_at")),
             "name": row.get("name") or "",
         }
+    store_profile_lookup(cache_key, result)
     return result
 
 
 def list_profile_photos_by_name(names):
-    config = supabase_config()
     safe_names = sorted({str(item).strip() for item in names if str(item or "").strip()})
-    if not config or not safe_names:
+    if not safe_names:
+        return {}
+    cache_key = ("names", tuple(safe_names))
+    cached = cached_profile_lookup(cache_key)
+    if cached is not None:
+        return cached
+    config = supabase_config()
+    if not config:
         return {}
     quoted_names = ",".join(urllib.parse.quote(item, safe="") for item in safe_names)
     table = urllib.parse.quote(config["table"], safe="")
@@ -226,6 +268,7 @@ def list_profile_photos_by_name(names):
             "url": profile_url_with_version(url, row.get("updated_at")),
             "employeeId": str(row.get("employee_id") or ""),
         }
+    store_profile_lookup(cache_key, result)
     return result
 
 
@@ -711,6 +754,7 @@ def upload_profile_photo(owner_key, data_url):
         state.pop("profilePhotoUrl", None)
         state["profilePhotoUpdatedAt"] = fruit_auto.now_iso()
         fruit_auto.save_account_state(owner_key, state)
+        clear_profile_photo_cache()
         return {"enabled": True, "employeeId": employee_id, "profilePhotoUrl": ""}
     if not isinstance(data_url, str) or not data_url.startswith("data:image/") or "," not in data_url:
         raise fruit_auto.FruitAutoError("지원하지 않는 이미지 형식입니다.")
@@ -726,6 +770,7 @@ def upload_profile_photo(owner_key, data_url):
     state["profilePhotoUrl"] = data_url
     state["profilePhotoUpdatedAt"] = fruit_auto.now_iso()
     fruit_auto.save_account_state(owner_key, state)
+    clear_profile_photo_cache()
 
     config = supabase_config()
     if not config:
@@ -762,6 +807,7 @@ def upload_profile_photo(owner_key, data_url):
     state["profilePhotoUrl"] = profile_url
     state["profilePhotoUpdatedAt"] = row["updated_at"]
     fruit_auto.save_account_state(owner_key, state)
+    clear_profile_photo_cache()
     return {"enabled": True, "employeeId": employee_id, "profilePhotoUrl": profile_url}
 
 mimetypes.add_type("application/vnd.android.package-archive", ".apk")
@@ -797,14 +843,6 @@ def state_response(owner_key):
     return public_state(owner_key)
 
 
-def read_token():
-    if not TOKEN_PATH.exists() and os.environ.get("FRUIT_AUTO_WEB_TOKEN"):
-        TOKEN_PATH.write_text(os.environ["FRUIT_AUTO_WEB_TOKEN"].strip() + "\n", encoding="utf-8")
-    if not TOKEN_PATH.exists():
-        raise RuntimeError("web token does not exist")
-    return TOKEN_PATH.read_text(encoding="utf-8").strip()
-
-
 def sanitize_error(exc):
     text = str(exc)
     for secret_name in ("pms_password", "token", "cookie"):
@@ -835,11 +873,13 @@ def app_public_base_url(_handler=None):
 def app_info(handler):
     base_url = app_public_base_url(handler)
     install_url = f"{base_url}/install.html" if base_url else "/install.html"
-    android_name = f"fingerfruit-android-v{APP_VERSION}.apk"
-    ios_name = f"fingerfruit-ios-v{APP_VERSION}.mobileconfig"
+    android_name = f"fingerfruit-android-v{ANDROID_APP_VERSION}.apk"
+    ios_name = f"fingerfruit-ios-v{IOS_APP_VERSION}.mobileconfig"
     return {
         "latestVersion": APP_VERSION,
-        "minSupportedVersion": APP_VERSION,
+        "minSupportedVersion": ANDROID_APP_VERSION,
+        "androidVersion": ANDROID_APP_VERSION,
+        "iosVersion": IOS_APP_VERSION,
         "releaseNotesVersion": APP_VERSION,
         "installUrl": install_url,
         "androidApkUrl": f"{base_url}/downloads/{android_name}" if base_url else f"/downloads/{android_name}",
@@ -867,7 +907,8 @@ def latest_download_file(prefix, suffix):
 
 
 def versioned_download_file(kind, extension):
-    path = WWW_DIR / "downloads" / f"{kind}-v{APP_VERSION}.{extension}"
+    version = ANDROID_APP_VERSION if kind == "fingerfruit-android" else IOS_APP_VERSION
+    path = WWW_DIR / "downloads" / f"{kind}-v{version}.{extension}"
     return path if path.exists() and path.is_file() else None
 
 
@@ -1357,6 +1398,24 @@ def send_no_cache_headers(handler):
     handler.send_header("Expires", "0")
 
 
+def static_cache_control(path, query):
+    versioned_assets = {"/app.js", "/styles.css", "/request_coordinator.js"}
+    query_version = urllib.parse.parse_qs(query or "").get("v", [None])[0]
+    if path in versioned_assets and query_version == APP_VERSION:
+        return "public, max-age=31536000, immutable"
+    if path.startswith(("/assets/", "/icons/", "/fonts/")):
+        return "public, max-age=86400, stale-while-revalidate=604800"
+    return "no-store, no-cache, max-age=0, must-revalidate"
+
+
+def send_static_cache_headers(handler, path, query):
+    policy = static_cache_control(path, query)
+    handler.send_header("Cache-Control", policy)
+    if policy.startswith("no-store"):
+        handler.send_header("Pragma", "no-cache")
+        handler.send_header("Expires", "0")
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "FruitAuto/1.0"
 
@@ -1369,7 +1428,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         send_no_cache_headers(self)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Fruit-Token, X-Fruit-Session, X-Fruit-Owner, X-Fruit-Device")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Fruit-Session, X-Fruit-Owner, X-Fruit-Device")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -1378,16 +1437,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Fruit-Token, X-Fruit-Session, X-Fruit-Owner, X-Fruit-Device")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Fruit-Session, X-Fruit-Owner, X-Fruit-Device")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         send_no_cache_headers(self)
         self.end_headers()
-
-    def require_auth(self):
-        parsed = urllib.parse.urlparse(self.path)
-        query = urllib.parse.parse_qs(parsed.query)
-        token = self.headers.get("X-Fruit-Token") or (query.get("token") or [""])[0]
-        return token and token == read_token()
 
     def device_id(self):
         return (self.headers.get("X-Fruit-Device") or "").strip()
@@ -1443,7 +1496,7 @@ class Handler(BaseHTTPRequestHandler):
             ctype += "; charset=utf-8"
         self.send_response(200)
         self.send_header("Content-Type", ctype)
-        send_no_cache_headers(self)
+        send_static_cache_headers(self, parsed.path, parsed.query)
         self.send_header("Content-Length", str(len(data)))
         if is_mobileconfig:
             self.send_header("Content-Disposition", f'inline; filename="{path.name}"')
@@ -1465,9 +1518,6 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/"):
             if parsed.path == "/api/app-info":
                 self.send_json(200, {"ok": True, "result": app_info(self)})
-                return
-            if not self.require_auth():
-                self.send_json(401, {"ok": False, "error": "unauthorized"})
                 return
             try:
                 if parsed.path == "/api/status":
@@ -1523,6 +1573,7 @@ class Handler(BaseHTTPRequestHandler):
                     owner_key, _session_token = self.require_session_owner()
                     self.send_json(200, {"ok": True, "result": {"items": fruit_auto.notification_items(owner_key=owner_key)}})
                 elif parsed.path == "/api/push/public-key":
+                    self.require_session_owner()
                     self.send_json(200, {"ok": True, "result": {"publicKey": fruit_auto.web_push_public_key()}})
                 else:
                     self.send_json(404, {"ok": False, "error": "not found"})
@@ -1535,7 +1586,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
-        if not parsed.path.startswith("/api/") or not self.require_auth():
+        if not parsed.path.startswith("/api/"):
             self.send_json(401, {"ok": False, "error": "unauthorized"})
             return
         try:
