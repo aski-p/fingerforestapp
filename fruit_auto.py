@@ -247,12 +247,23 @@ def business_hours_only(state=None):
     return bool((state or {}).get("businessHoursOnly"))
 
 
+def is_business_day(value=None):
+    value = value or dt.datetime.now(KST)
+    if isinstance(value, dt.datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=dt.timezone.utc)
+        local_date = value.astimezone(KST).date()
+    else:
+        local_date = value
+    return local_date.weekday() < 5 and local_date.isoformat() not in KOREAN_PUBLIC_HOLIDAYS
+
+
 def is_business_hours(now=None):
     now = now or dt.datetime.now(dt.timezone.utc)
     if now.tzinfo is None:
         now = now.replace(tzinfo=dt.timezone.utc)
     local_now = now.astimezone(KST)
-    return 9 <= local_now.hour < 18
+    return is_business_day(local_now) and 9 <= local_now.hour < 18
 
 
 def next_business_start(now=None):
@@ -262,11 +273,15 @@ def next_business_start(now=None):
     local_now = now.astimezone(KST)
     start = local_now.replace(hour=9, minute=0, second=0, microsecond=0)
     end = local_now.replace(hour=18, minute=0, second=0, microsecond=0)
-    if local_now < start:
-        return start.astimezone(dt.timezone.utc)
-    if local_now >= end:
-        return (start + dt.timedelta(days=1)).astimezone(dt.timezone.utc)
-    return now.replace(microsecond=0)
+    if is_business_day(local_now):
+        if local_now < start:
+            return start.astimezone(dt.timezone.utc)
+        if local_now < end:
+            return now.replace(microsecond=0)
+    candidate = start + (dt.timedelta(days=1) if local_now >= start else dt.timedelta())
+    while not is_business_day(candidate):
+        candidate += dt.timedelta(days=1)
+    return candidate.astimezone(dt.timezone.utc)
 
 
 def defer_until_business_hours(state, now=None):
