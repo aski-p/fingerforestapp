@@ -31,6 +31,11 @@ def write(path, text):
     path.write_text(text, encoding="utf-8")
 
 
+def strip_trailing_whitespace(text):
+    trailing_newline = "\n" if text.endswith("\n") else ""
+    return "\n".join(line.rstrip() for line in text.splitlines()) + trailing_newline
+
+
 def current_version():
     match = re.search(r'APP_VERSION\s*=\s*"([^"]+)"', read(ROOT / "web_server.py"))
     if not match:
@@ -148,6 +153,7 @@ def rebuild_ios_profile(old, new):
         count=1,
         flags=re.S,
     )
+    text = strip_trailing_whitespace(text)
     (downloads / f"fingerfruit-ios-v{new}.mobileconfig").write_text(text, encoding="utf-8")
 
 

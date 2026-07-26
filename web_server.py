@@ -33,7 +33,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.16.1"
+APP_VERSION = "3.16.2"
 ANDROID_APP_VERSION = "3.16.0"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -55,22 +55,8 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "API 상태·알림 요청의 중복 실행을 합치고 백그라운드 polling을 줄여 앱 반응 속도를 개선했습니다.",
-    "업무일지 프로젝트와 프로필 사진을 안전하게 캐시하고 세션 파일 저장 빈도를 줄였습니다.",
-    "버전 자산 캐시를 적용해 앱을 다시 열 때 JS, CSS, 글꼴, 배경 다운로드를 줄였습니다.",
-    "업무일지 달력에서 대체공휴일과 임시공휴일을 짧은 휴일 라벨로 확실히 표시합니다.",
-    "업무일지 달력에서 이미 승인된 날짜가 빠른 로컬 조회 때문에 다시 미승인으로 보이는 지연을 줄였습니다.",
-    "열매 순환 카드에 '7명중 x명 순환(n번 완료)' 진행 문구를 추가하고 현재 순번 숫자를 빨간색으로 표시합니다.",
-    "로그인 화면 상단에 FingerForest 로고를 추가하고 로그인 카드를 아래로 내려 배경 여백을 정리했습니다.",
-    "열매 자동전송 대상을 여러 명 추가해 순서대로 순환 전송할 수 있게 했고, 사이클 카드에서 X 버튼으로 개별 제외할 수 있습니다.",
-    "씨앗선물 받은 내역은 5분 체크에서 열매 +3 증가가 새로 잡힌 그 시각을 표시합니다.",
-    "로그인 화면 제목 옆 마스코트 아이콘을 제거하고 시작 캐릭터 낙하 애니메이션을 더 부드럽게 조정했습니다.",
-    "메인 화면 배경을 첨부받은 고화질 봄/여름/가을/겨울 이미지로 교체했습니다.",
-    "승인된 업무일지 팝업에서 기존 전송 기록에 본문이 없으면 저장된 업무 내용을 보강해 표시합니다.",
-    "씨앗선물 수신 내역은 열매 증가가 5분 체크에서 새로 잡힌 시각을 우선 표시합니다.",
-    "기존 씨앗선물 내역은 확실한 관측 시간이 없으면 받음/보냄만 표시합니다.",
-    "당일 날짜 선택과 오늘 예약 시간 보정 로직을 안정화했습니다.",
-    "시작 화면 FingerForest 표기와 캐릭터 첫 프레임 표시를 반영했습니다.",
+    "업무시간에만 자동전송을 켜면 주말과 공휴일에는 보내지 않고 다음 업무일로 연기합니다.",
+    "열매선물 랭킹에서 내 순위와 선물한 열매 수가 0으로 표시되던 문제를 수정했습니다.",
 ]
 VALID_THEMES = {
     "default",

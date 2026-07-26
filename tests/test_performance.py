@@ -415,9 +415,10 @@ class StaticCachePolicyTests(unittest.TestCase):
     def test_versioned_assets_are_immutable_but_html_is_not(self):
         immutable = "public, max-age=31536000, immutable"
         no_store = "no-store, no-cache, max-age=0, must-revalidate"
-        self.assertEqual(web_server.static_cache_control("/app.js", "v=3.16.1"), immutable)
-        self.assertEqual(web_server.static_cache_control("/styles.css", "v=3.16.1"), immutable)
-        self.assertEqual(web_server.static_cache_control("/request_coordinator.js", "v=3.16.1"), immutable)
+        version_query = f"v={web_server.APP_VERSION}"
+        self.assertEqual(web_server.static_cache_control("/app.js", version_query), immutable)
+        self.assertEqual(web_server.static_cache_control("/styles.css", version_query), immutable)
+        self.assertEqual(web_server.static_cache_control("/request_coordinator.js", version_query), immutable)
         self.assertEqual(web_server.static_cache_control("/app.js", "v=0.0.0"), no_store)
         self.assertEqual(web_server.static_cache_control("/app.js", "v=999.999.999"), no_store)
         self.assertEqual(web_server.static_cache_control("/app.js", ""), no_store)

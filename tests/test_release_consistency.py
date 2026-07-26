@@ -13,12 +13,21 @@ import web_server
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "3.16.1"
+EXPECTED_VERSION = "3.16.2"
 ANDROID_VERSION = "3.16.0"
 EXPECTED_ANDROID_SIGNER = "b2f3480a6d039ec381884e01a57e00c0ee1e31bcf1fe5d76ded97a4c2db47aec"
 
 
 class ReleaseConsistencyTests(unittest.TestCase):
+    def test_release_notes_only_describe_current_update(self):
+        self.assertEqual(
+            [
+                "업무시간에만 자동전송을 켜면 주말과 공휴일에는 보내지 않고 다음 업무일로 연기합니다.",
+                "열매선물 랭킹에서 내 순위와 선물한 열매 수가 0으로 표시되던 문제를 수정했습니다.",
+            ],
+            web_server.RELEASE_NOTES,
+        )
+
     def test_canonical_sources_use_expected_platform_versions(self):
         checks = {
             "web_server.py": f'APP_VERSION = "{EXPECTED_VERSION}"',
@@ -33,7 +42,7 @@ class ReleaseConsistencyTests(unittest.TestCase):
             self.assertIn(expected, text, relative)
         self.assertIn("versionCode 31600", (ROOT / "mobile-build/android-app/app/build.gradle").read_text(encoding="utf-8"))
         for relative in ("www/app.js", "www/index.html", "www/sw.js", "www/styles.css"):
-            self.assertNotIn("3.16.0", (ROOT / relative).read_text(encoding="utf-8"), relative)
+            self.assertNotIn("3.16.1", (ROOT / relative).read_text(encoding="utf-8"), relative)
 
     def test_app_info_and_install_page_reference_existing_platform_artifacts(self):
         info = web_server.app_info(None)
@@ -57,6 +66,14 @@ class ReleaseConsistencyTests(unittest.TestCase):
             manifest = archive.read("AndroidManifest.xml")
         self.assertIn(ANDROID_VERSION.encode("utf-16le"), manifest)
 
+    def test_ios_profiles_have_no_trailing_whitespace(self):
+        for path in (
+            ROOT / f"www/downloads/fingerfruit-ios-v{EXPECTED_VERSION}.mobileconfig",
+            ROOT / "fruit-auto-ios.mobileconfig",
+        ):
+            lines = path.read_text(encoding="utf-8").splitlines()
+            self.assertEqual(lines, [line.rstrip() for line in lines], path)
+
     def test_convenience_artifacts_match_advertised_downloads(self):
         self.assertEqual(
             (ROOT / "fruit-auto-android.apk").read_bytes(),
@@ -74,7 +91,7 @@ class ReleaseConsistencyTests(unittest.TestCase):
         )
         public_clients = [
             android_sources,
-            (ROOT / "www/downloads/fingerfruit-ios-v3.16.1.mobileconfig").read_text(encoding="utf-8"),
+            (ROOT / "www/downloads/fingerfruit-ios-v3.16.2.mobileconfig").read_text(encoding="utf-8"),
             (ROOT / "fruit-auto-ios.mobileconfig").read_text(encoding="utf-8"),
             (ROOT / "www/app.js").read_text(encoding="utf-8"),
             (ROOT / "www/single.html").read_text(encoding="utf-8"),

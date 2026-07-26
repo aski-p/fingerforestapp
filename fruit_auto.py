@@ -1342,7 +1342,7 @@ def forest_ranking(kind="berry", month=None, owner_key=None, limit=None):
     if kind == "berry":
         my_row = rows[0] if rows else None
         ranking_rows = rows[1:]
-    elif kind == "level":
+    elif kind in {"gift", "level"}:
         for row in rows:
             if str(row.get("empId") or row.get("emp_id") or "") == str(sender_employee_id):
                 my_row = row
