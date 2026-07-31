@@ -3183,22 +3183,10 @@ def logout():
     state = load_json(STATE_PATH, DEFAULT_STATE)
     state.update(
         {
-            "enabled": False,
             "status": "off",
-            "targetEmployeeName": None,
-            "targetEmployeeId": None,
-            "targetDutyId": None,
-            "targetDeptName": None,
-            "targetPositionName": None,
             "loginSavedAt": None,
-            "loginUser": None,
-            "loginUserId": None,
-            "loginEmployeeNo": None,
-            "senderEmployeeId": None,
-            "senderEmployeeName": None,
             "lastResult": "logged_out",
             "lastAttemptResult": "logged_out",
-            "nextRunAt": None,
             "updatedAt": now_iso(),
         }
     )
