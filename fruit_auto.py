@@ -3352,7 +3352,10 @@ def save_account_state(owner_key, account):
     accounts[owner_key] = account
     state["activeOwnerKey"] = owner_key
     # Keep top-level mirrors for older CLI/status callers.
-    state.update({key: account.get(key) for key in ACCOUNT_DEFAULT})
+    # Include known profile-setting keys that are NOT in ACCOUNT_DEFAULT.
+    EXTRA_MIRROR_KEYS = {"theme", "font", "profilePhotoUrl", "profilePhotoUpdatedAt", "senderProfilePhotoUrl"}
+    all_keys = set(ACCOUNT_DEFAULT) | EXTRA_MIRROR_KEYS
+    state.update({key: account.get(key) for key in all_keys if key in account})
     state["accounts"] = accounts
     save_json(STATE_PATH, state)
     return account
@@ -3364,7 +3367,9 @@ def save_single_account_state(owner_key, account):
     account["ownerKey"] = owner_key
     state["accounts"] = {owner_key: account}
     state["activeOwnerKey"] = owner_key
-    state.update({key: account.get(key) for key in ACCOUNT_DEFAULT})
+    EXTRA_MIRROR_KEYS = {"theme", "font", "profilePhotoUrl", "profilePhotoUpdatedAt", "senderProfilePhotoUrl"}
+    all_keys = set(ACCOUNT_DEFAULT) | EXTRA_MIRROR_KEYS
+    state.update({key: account.get(key) for key in all_keys if key in account})
     save_json(STATE_PATH, state)
     return account
 

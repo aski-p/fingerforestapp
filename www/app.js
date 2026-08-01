@@ -1100,8 +1100,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.16.2",
-        badge: "/icons/app-icon-192.png?v=3.16.2",
+        icon: "/icons/app-icon-192.png?v=3.16.3",
+        badge: "/icons/app-icon-192.png?v=3.16.3",
         data: { url: item.url || "/" },
       });
       return true;
