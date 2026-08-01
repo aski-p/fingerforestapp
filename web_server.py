@@ -33,7 +33,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.16.4"
+APP_VERSION = "3.16.5"
 ANDROID_APP_VERSION = "3.16.0"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -345,6 +345,15 @@ def profile_settings_fallback(owner_key):
     return {
         "theme": state.get("theme") or "default",
         "font": state.get("font") or "pretendard",
+        "skin": state.get("skin"),
+        "deliveryCycle": state.get("deliveryCycle"),
+        "deliveryCycleIndex": state.get("deliveryCycleIndex"),
+        "deliveryCycleCompletedCount": state.get("deliveryCycleCompletedCount"),
+        "giftMessage": state.get("giftMessage"),
+        "sendBerryCount": state.get("sendBerryCount"),
+        "sendAllBerries": state.get("sendAllBerries"),
+        "businessHoursOnly": state.get("businessHoursOnly"),
+        "pushEnabled": state.get("pushEnabled"),
         "synced": False,
     }
 
@@ -355,6 +364,15 @@ def load_profile_settings(owner_key):
     fallback = {
         "theme": state.get("theme") or "default",
         "font": state.get("font") or "pretendard",
+        "skin": state.get("skin"),
+        "deliveryCycle": state.get("deliveryCycle"),
+        "deliveryCycleIndex": state.get("deliveryCycleIndex"),
+        "deliveryCycleCompletedCount": state.get("deliveryCycleCompletedCount"),
+        "giftMessage": state.get("giftMessage"),
+        "sendBerryCount": state.get("sendBerryCount"),
+        "sendAllBerries": state.get("sendAllBerries"),
+        "businessHoursOnly": state.get("businessHoursOnly"),
+        "pushEnabled": state.get("pushEnabled"),
         "synced": False,
     }
     if not config:
@@ -376,6 +394,15 @@ def load_profile_settings(owner_key):
     return {
         "theme": row.get("theme") or settings.get("theme") or fallback["theme"],
         "font": row.get("font") or settings.get("font") or fallback["font"],
+        "skin": settings.get("skin", fallback["skin"]),
+        "deliveryCycle": settings.get("deliveryCycle", fallback["deliveryCycle"]),
+        "deliveryCycleIndex": settings.get("deliveryCycleIndex", fallback["deliveryCycleIndex"]),
+        "deliveryCycleCompletedCount": settings.get("deliveryCycleCompletedCount", fallback["deliveryCycleCompletedCount"]),
+        "giftMessage": settings.get("giftMessage", fallback["giftMessage"]),
+        "sendBerryCount": settings.get("sendBerryCount", fallback["sendBerryCount"]),
+        "sendAllBerries": settings.get("sendAllBerries", fallback["sendAllBerries"]),
+        "businessHoursOnly": settings.get("businessHoursOnly", fallback["businessHoursOnly"]),
+        "pushEnabled": settings.get("pushEnabled", fallback["pushEnabled"]),
         "synced": True,
     }
 
@@ -388,21 +415,36 @@ def save_profile_settings(owner_key, payload):
         theme = "default"
     if font not in VALID_FONTS:
         font = "pretendard"
-    state["theme"] = theme
-    state["font"] = font
+
+    # Save all UI settings to state
+    ui_keys = {
+        "theme": theme, "font": font,
+        "skin": payload.get("skin"), "deliveryCycle": payload.get("deliveryCycle"),
+        "deliveryCycleIndex": payload.get("deliveryCycleIndex"),
+        "deliveryCycleCompletedCount": payload.get("deliveryCycleCompletedCount"),
+        "giftMessage": payload.get("giftMessage"),
+        "sendBerryCount": payload.get("sendBerryCount"),
+        "sendAllBerries": payload.get("sendAllBerries"),
+        "businessHoursOnly": payload.get("businessHoursOnly"),
+        "pushEnabled": payload.get("pushEnabled"),
+    }
+    for k, v in ui_keys.items():
+        if v is not None:
+            state[k] = v
     state["updatedAt"] = fruit_auto.now_iso()
     fruit_auto.save_account_state(owner_key, state)
 
     config = supabase_config()
     if not config:
-        return {"theme": theme, "font": font, "synced": False}
+        return {**ui_keys, "synced": False}
     table = urllib.parse.quote(config["table"], safe="")
+    # Build ui_settings JSON blob with all keys
+    ui_settings = {k: v for k, v in ui_keys.items() if v is not None}
     row = {
         "employee_id": employee_id,
         "name": state.get("senderEmployeeName") or state.get("loginUser") or employee_id,
-        "theme": theme,
-        "font": font,
-        "ui_settings": {"theme": theme, "font": font},
+        "theme": theme, "font": font,
+        "ui_settings": ui_settings,
         "updated_at": fruit_auto.now_iso(),
     }
     try:
@@ -412,9 +454,9 @@ def save_profile_settings(owner_key, payload):
             body=row,
             extra_headers={"Prefer": "resolution=merge-duplicates,return=representation"},
         )
-        return {"theme": theme, "font": font, "synced": True}
+        return {**ui_keys, "synced": True}
     except Exception:
-        return {"theme": theme, "font": font, "synced": False}
+        return {**ui_keys, "synced": False}
 
 
 def saved_login_hint(owner_key=None):

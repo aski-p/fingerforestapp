@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.16.4";
+const appVersion = "3.16.5";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -798,9 +798,22 @@ function appearanceSettings() {
 function setAppearanceSettings(settings = {}) {
   const theme = themes.some((item) => item.id === settings.theme) ? settings.theme : "default";
   const font = fonts.some((item) => item.id === settings.font) ? settings.font : "pretendard";
-  activeAppearanceSettings = { theme, font };
+  activeAppearanceSettings = {
+    theme, font,
+    skin: settings.skin,
+    deliveryCycle: settings.deliveryCycle,
+    deliveryCycleIndex: settings.deliveryCycleIndex,
+    deliveryCycleCompletedCount: settings.deliveryCycleCompletedCount,
+    giftMessage: settings.giftMessage,
+    sendBerryCount: settings.sendBerryCount,
+    sendAllBerries: settings.sendAllBerries,
+    businessHoursOnly: settings.businessHoursOnly,
+    pushEnabled: settings.pushEnabled,
+  };
   storeSet(themeKey, theme);
   storeSet(fontKey, font);
+  if (settings.skin) storeSet("skin", settings.skin);
+  if (settings.deliveryCycle) storeSet("deliveryCycle", settings.deliveryCycle);
   applyAppearance();
 }
 
