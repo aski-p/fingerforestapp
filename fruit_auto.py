@@ -3181,6 +3181,16 @@ def logout():
         if SECRETS_PATH.exists():
             SECRETS_PATH.unlink()
     state = load_json(STATE_PATH, DEFAULT_STATE)
+    # Preserve UI settings across logout/login cycle
+    preserved = {}
+    for key in ("theme", "font", "profilePhotoUrl", "profilePhotoUpdatedAt",
+                "senderProfilePhotoUrl", "skin", "deliveryCycle", "deliveryCycleIndex",
+                "deliveryCycleCompletedCount", "giftMessage", "sendBerryCount",
+                "sendAllBerries", "businessHoursOnly", "pushEnabled"):
+        if key in state and key not in DEFAULT_STATE:
+            preserved[key] = state[key]
+        elif key in state and state[key] != DEFAULT_STATE.get(key):
+            preserved[key] = state[key]
     state.update(
         {
             "status": "off",
@@ -3190,6 +3200,8 @@ def logout():
             "updatedAt": now_iso(),
         }
     )
+    # Restore preserved UI settings
+    state.update(preserved)
     save_json(STATE_PATH, state)
     log_event({"action": "logged_out"})
     return state
@@ -3353,7 +3365,7 @@ def save_account_state(owner_key, account):
     state["activeOwnerKey"] = owner_key
     # Keep top-level mirrors for older CLI/status callers.
     # Include known profile-setting keys that are NOT in ACCOUNT_DEFAULT.
-    EXTRA_MIRROR_KEYS = {"theme", "font", "profilePhotoUrl", "profilePhotoUpdatedAt", "senderProfilePhotoUrl"}
+    EXTRA_MIRROR_KEYS = {"theme", "font", "profilePhotoUrl", "profilePhotoUpdatedAt", "senderProfilePhotoUrl", "skin", "deliveryCycle", "giftMessage", "sendBerryCount", "sendAllBerries", "businessHoursOnly", "pushEnabled"}
     all_keys = set(ACCOUNT_DEFAULT) | EXTRA_MIRROR_KEYS
     state.update({key: account.get(key) for key in all_keys if key in account})
     state["accounts"] = accounts
@@ -3367,7 +3379,7 @@ def save_single_account_state(owner_key, account):
     account["ownerKey"] = owner_key
     state["accounts"] = {owner_key: account}
     state["activeOwnerKey"] = owner_key
-    EXTRA_MIRROR_KEYS = {"theme", "font", "profilePhotoUrl", "profilePhotoUpdatedAt", "senderProfilePhotoUrl"}
+    EXTRA_MIRROR_KEYS = {"theme", "font", "profilePhotoUrl", "profilePhotoUpdatedAt", "senderProfilePhotoUrl", "skin", "deliveryCycle", "giftMessage", "sendBerryCount", "sendAllBerries", "businessHoursOnly", "pushEnabled"}
     all_keys = set(ACCOUNT_DEFAULT) | EXTRA_MIRROR_KEYS
     state.update({key: account.get(key) for key in all_keys if key in account})
     save_json(STATE_PATH, state)
