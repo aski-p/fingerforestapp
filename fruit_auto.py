@@ -3389,9 +3389,35 @@ def save_single_account_state(owner_key, account):
 def remove_account_state(owner_key):
     state = load_all_state()
     accounts = state.setdefault("accounts", {})
-    accounts.pop(owner_key, None)
     removed_active_owner = state.get("activeOwnerKey") == owner_key
+
+    # Preserve UI settings from the account being removed BEFORE deletion.
+    # Collect ALL known UI/custom keys from the account, not just those in ACCOUNT_DEFAULT.
+    removed_account = accounts.get(owner_key, {})
+    preserved = {}
+    UI_SETTING_KEYS = {
+        "theme", "font", "skin",
+        "deliveryCycle", "deliveryCycleIndex", "deliveryCycleCompletedCount",
+        "profilePhotoUrl", "profilePhotoUpdatedAt", "senderProfilePhotoUrl",
+        "giftMessage", "sendBerryCount", "sendAllBerries",
+        "businessHoursOnly", "pushEnabled",
+    }
+    # Include every key from the removed account that is NOT in ACCOUNT_DEFAULT
+    # (i.e. it's a custom/UI-only setting like theme, font, skin, etc.)
+    for key in UI_SETTING_KEYS:
+        if key in removed_account:
+            preserved[key] = removed_account[key]
+    # Also include any account-level keys not in ACCOUNT_DEFAULT that might be present
+    for key in removed_account:
+        if key not in ACCOUNT_DEFAULT and key not in preserved:
+            preserved[key] = removed_account[key]
+
+    # Remove the account
+    accounts.pop(owner_key, None)
+
     logged_out = dict(ACCOUNT_DEFAULT)
+    # Restore preserved UI settings so they survive logout (mirrored to top-level)
+    logged_out.update(preserved)
     logged_out.update(
         {
             "enabled": False,
@@ -3410,6 +3436,8 @@ def remove_account_state(owner_key):
             state.update({key: value for key, value in next_account.items() if key != "ownerKey"})
         else:
             state.update({key: logged_out.get(key) for key in ACCOUNT_DEFAULT})
+    # Persist preserved UI settings to top-level state.json.
+    state.update(preserved)
     state["accounts"] = accounts
     save_json(STATE_PATH, state)
     return logged_out
