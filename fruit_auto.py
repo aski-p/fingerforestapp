@@ -3568,14 +3568,23 @@ def mutate_secrets(mutator):
 
 def load_all_state():
     # 1. Try Supabase first (persistent across Railway restarts)
-    state = load_json(STATE_PATH, DEFAULT_STATE)
-    db_state = _load_secrets_from_supabase()
+    db_state = _load_state_from_supabase()
+    local_state = load_json(STATE_PATH, DEFAULT_STATE)
+
     if db_state and db_state.get("accounts"):
-        # Merge: DB accounts take priority over empty local state
-        if not state.get("accounts") or not state["accounts"]:
-            state["accounts"] = dict(db_state["accounts"])
-        else:
-            state["accounts"].update(db_state["accounts"])
+        state = dict(db_state)  # start with DB data
+    elif local_state and local_state.get("accounts"):
+        state = dict(local_state)  # fallback to local
+    else:
+        state = dict(DEFAULT_STATE)
+        state.update(local_state)
+
+    # Merge non-account keys: local-only settings fill into DB state
+    for key, val in local_state.items():
+        if key not in ("accounts",):
+            if key not in state or not state[key]:
+                state[key] = val
+
     state.setdefault("accounts", {})
     if not state["accounts"] and state.get("ownerKey"):
         state["accounts"][state["ownerKey"]] = {
