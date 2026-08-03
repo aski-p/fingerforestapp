@@ -3568,7 +3568,12 @@ def mutate_secrets(mutator):
 
 def load_all_state():
     # 1. Try Supabase first (persistent across Railway restarts)
-    owner_key = get_owner_key()  # safe: returns str or empty str
+    # Read owner_key from secrets.json (needs secrets loading)
+    owner_key = ""
+    try:
+        owner_key = load_json(SECRETS_PATH, {}).get("ownerKey", "")
+    except Exception:
+        owner_key = ""
     db_state = _load_state_from_supabase(owner_key) if owner_key else None
     local_state = load_json(STATE_PATH, DEFAULT_STATE)
 
