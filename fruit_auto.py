@@ -496,6 +496,219 @@ def advance_target_cycle(state):
     return apply_cycle_target(state, cycle[next_index], cycle, next_index)
 
 
+# ---------------------------------------------------------------------------
+# Supabase sync helpers  (used by load_all_state / save_account_state /
+#                        load_secrets / save_secrets so that Railway restart
+#                        does NOT wipe account configuration.)
+# ---------------------------------------------------------------------------
+_SUPABASE_CACHE = {}  # {cache_key: (timestamp, data)}
+_SUPABASE_CACHE_TTL = 60  # seconds
+
+
+def _supabase_config():
+    """Return Supabase config dict or None.  Uses ONLY env vars to avoid
+    circular dependency with load_secrets() which needs these same env vars.
+    """
+    url = os.environ.get("SUPABASE_URL") or ""
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or ""
+    if not url or not key:
+        return None
+    return {
+        "url": url.rstrip("/"),
+        "key": key,
+        "bucket": os.environ.get("SUPABASE_PROFILE_BUCKET") or "",
+        "table": os.environ.get("SUPABASE_PROFILE_TABLE") or "profiles",
+        "chat_messages_table": os.environ.get("SUPABASE_CHAT_MESSAGES_TABLE") or "fruit_chat_messages",
+        "chat_memories_table": os.environ.get("SUPABASE_CHAT_MEMORIES_TABLE") or "fruit_chat_memories",
+    }
+
+
+def _supabase_request(method, path, body=None, content_type="application/json", extra_headers=None):
+    """Issue a Supabase REST request (copied from web_server.py)."""
+    config = _supabase_config()
+    if not config:
+        return None
+    data = None
+    if body is not None:
+        data = body if isinstance(body, bytes) else json.dumps(body, ensure_ascii=False).encode("utf-8")
+    headers = {
+        "apikey": config["key"],
+        "Authorization": f"Bearer {config['key']}",
+    }
+    if content_type:
+        headers["Content-Type"] = content_type
+    if extra_headers:
+        headers.update(extra_headers)
+    request = urllib.request.Request(config["url"] + path, data=data, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            raw = response.read()
+    except Exception:
+        return None
+    if not raw:
+        return None
+    text = raw.decode("utf-8", errors="replace")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return text
+
+
+def _profile_employee_id(owner_key):
+    """Convert owner_key -> (employee_id, state) by reading from Supabase."""
+    config = _supabase_config()
+    if not config:
+        return None, None
+    table = urllib.parse.quote(config["table"], safe="")
+    oid_quoted = urllib.parse.quote(str(owner_key), safe="")
+    path = f"/rest/v1/{table}?employee_id=eq.{oid_quoted}&select=*&limit=1"
+    rows = _supabase_request("GET", path)
+    if not rows or not isinstance(rows, list) or len(rows) == 0:
+        return None, None
+    row = rows[0]
+    employee_id = row.get("employee_id") or ""
+    state = row.get("state") or row.get("ui_settings") or {}
+    if isinstance(state, str):
+        try:
+            state = json.loads(state)
+        except (TypeError, json.JSONDecodeError):
+            state = {}
+    return employee_id, state
+
+
+def _load_state_from_supabase(owner_key):
+    """Load state data from Supabase profiles table. Returns dict or None."""
+    config = _supabase_config()
+    if not config:
+        return None
+    table = urllib.parse.quote(config["table"], safe="")
+    oid_quoted = urllib.parse.quote(str(owner_key), safe="")
+    path = f"/rest/v1/{table}?employee_id=eq.{oid_quoted}&select=*&limit=1"
+    rows = _supabase_request("GET", path)
+    if not rows or not isinstance(rows, list) or len(rows) == 0:
+        return None
+    row = rows[0]
+    # State is stored in the 'state' column (JSONB) or 'ui_settings' (JSONB)
+    state_data = row.get("state") or row.get("ui_settings") or {}
+    if isinstance(state_data, str):
+        try:
+            state_data = json.loads(state_data)
+        except (TypeError, json.JSONDecodeError):
+            return None
+    if not isinstance(state_data, dict):
+        return None
+    return state_data
+
+
+def _save_state_to_supabase(owner_key, state):
+    """Save state dict to Supabase profiles table (UPSERT via employee_id)."""
+    config = _supabase_config()
+    if not config:
+        return False
+    table = urllib.parse.quote(config["table"], safe="")
+    oid_quoted = urllib.parse.quote(str(owner_key), safe="")
+
+    # Build minimal state blob: only keys that matter for config
+    account_state = state.get("accounts", {}).get(owner_key, {})
+    ui_settings = {}
+    UI_KEYS = {"theme", "font", "skin", "deliveryCycle", "deliveryCycleIndex",
+               "deliveryCycleCompletedCount", "giftMessage", "sendBerryCount",
+               "sendAllBerries", "businessHoursOnly", "pushEnabled"}
+    for k in UI_KEYS:
+        if k in account_state:
+            ui_settings[k] = account_state[k]
+
+    body = {
+        "employee_id": str(owner_key),
+        "name": str(account_state.get("senderEmployeeName") or account_state.get("loginUser") or owner_key),
+        "state": ui_settings if ui_settings else None,
+        "updated_at": now_iso(),
+    }
+    # Upsert: merge-duplicates
+    try:
+        _supabase_request(
+            "POST",
+            f"/rest/v1/{table}",
+            body=body,
+            extra_headers={
+                "Prefer": "resolution=merge-duplicates,return=representation",
+                "apikey": config["key"],
+                "Authorization": f"Bearer {config['key']}",
+            },
+        )
+        return True
+    except Exception:
+        return False
+
+
+def _load_secrets_from_supabase():
+    """Load secrets (accounts + sessions) from Supabase. Returns dict or None."""
+    config = _supabase_config()
+    if not config:
+        return None
+    table = urllib.parse.quote(config["table"], safe="")
+    rows = _supabase_request("GET", f"/rest/v1/{table}?select=employee_id,state")
+    if not rows or not isinstance(rows, list):
+        return None
+    accounts = {}
+    sessions = {}
+    for row in rows:
+        oid = row.get("employee_id") or ""
+        state_data = row.get("state") or row.get("ui_settings") or {}
+        if isinstance(state_data, str):
+            try:
+                state_data = json.loads(state_data)
+            except (TypeError, json.JSONDecodeError):
+                continue
+        if not isinstance(state_data, dict):
+            continue
+        # Extract credentials from state if present
+        account = state_data.get("accounts", {}).get(oid, state_data)
+        if account:
+            accounts[oid] = account
+            # We can't reconstruct sessions from state alone
+            # Sessions must be maintained locally or stored separately
+    if not accounts:
+        return None
+    return {"accounts": accounts, "sessions": sessions}
+
+
+def _save_secrets_to_supabase(secrets):
+    """Save secrets (accounts) to Supabase. Returns bool."""
+    config = _supabase_config()
+    if not config:
+        return False
+    accounts = secrets.get("accounts", {})
+    saved = 0
+    for owner_key, account in accounts.items():
+        if not account or not isinstance(account, dict):
+            continue
+        # Only store account-level data (not sessions)
+        account_copy = {k: v for k, v in account.items() if k != "sessions"}
+        if not account_copy:
+            continue
+        try:
+            _supabase_request(
+                "POST",
+                f"/rest/v1/{urllib.parse.quote(config['table'], safe='?')}",
+                body={
+                    "employee_id": str(owner_key),
+                    "name": str(account_copy.get("senderEmployeeName") or account_copy.get("loginUser") or owner_key),
+                    "state": account_copy,
+                    "updated_at": now_iso(),
+                },
+                extra_headers={
+                    "Prefer": "resolution=merge-duplicates,return=representation",
+                    "apikey": config["key"],
+                    "Authorization": f"Bearer {config['key']}",
+                },
+            )
+            saved += 1
+        except Exception:
+            pass
+    return saved > 0
+
+
 def load_json(path, default):
     if path == STATE_PATH and not path.exists() and os.environ.get("FRUIT_AUTO_STATE_JSON"):
         try:
@@ -3281,6 +3494,18 @@ ACCOUNT_DEFAULT = {
 
 
 def load_secrets():
+    # 1. Try Supabase first (persistent across Railway restarts)
+    db_secrets = _load_secrets_from_supabase()
+    if db_secrets and db_secrets.get("accounts"):
+        local = load_json(SECRETS_PATH, {})
+        # Merge: local sessions persist, DB accounts take priority
+        merged = {
+            "accounts": {**db_secrets["accounts"], **local.get("accounts", {})},
+            "sessions": local.get("sessions") or db_secrets.get("sessions", {}),
+            "supabase": local.get("supabase"),
+        }
+        return merged
+    # 2. Fallback to local only
     secrets = load_json(SECRETS_PATH, {})
     if "accounts" not in secrets:
         accounts = {}
@@ -3326,6 +3551,11 @@ def save_secrets(secrets):
             SECRETS_PATH.chmod(0o600)
         except OSError:
             pass
+    # Sync to Supabase (best-effort, non-blocking)
+    try:
+        _save_secrets_to_supabase(secrets)
+    except Exception:
+        pass
 
 
 def mutate_secrets(mutator):
@@ -3337,7 +3567,15 @@ def mutate_secrets(mutator):
 
 
 def load_all_state():
+    # 1. Try Supabase first (persistent across Railway restarts)
     state = load_json(STATE_PATH, DEFAULT_STATE)
+    db_state = _load_secrets_from_supabase()
+    if db_state and db_state.get("accounts"):
+        # Merge: DB accounts take priority over empty local state
+        if not state.get("accounts") or not state["accounts"]:
+            state["accounts"] = dict(db_state["accounts"])
+        else:
+            state["accounts"].update(db_state["accounts"])
     state.setdefault("accounts", {})
     if not state["accounts"] and state.get("ownerKey"):
         state["accounts"][state["ownerKey"]] = {
@@ -3370,6 +3608,11 @@ def save_account_state(owner_key, account):
     state.update({key: account.get(key) for key in all_keys if key in account})
     state["accounts"] = accounts
     save_json(STATE_PATH, state)
+    # Sync to Supabase (best-effort, non-blocking)
+    try:
+        _save_state_to_supabase(owner_key, state)
+    except Exception:
+        pass
     return account
 
 
