@@ -55,6 +55,8 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "앱 버전 3.16.6으로 업그레이드했습니다.",
+    "로그아웃 시 사용하던 설정(테마, 폰트, 스킨, push 알림 등)이 보존되도록 개선했습니다. 재로그인 시 설정이 초기화되지 않습니다.",
     "업무시간에만 자동전송을 켜면 주말과 공휴일에는 보내지 않고 다음 업무일로 연기합니다.",
     "열매선물 랭킹에서 내 순위와 선물한 열매 수가 0으로 표시되던 문제를 수정했습니다.",
 ]
