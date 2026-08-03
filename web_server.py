@@ -745,6 +745,20 @@ def load_settings_supabase(user_key, setting_type, default=None):
     return default
 
 
+def delete_settings_supabase(user_key):
+    """Delete all settings (state/secrets) for a user from Supabase."""
+    config = supabase_config()
+    if not config:
+        return False
+    table = urllib.parse.quote(config["settings_table"], safe="")
+    safe_key = urllib.parse.quote(user_key, safe="")
+    try:
+        supabase_request("DELETE", f"/rest/v1/{table}?user_key=eq.{safe_key}")
+        return True
+    except Exception:
+        return False
+
+
 def load_chat_context(owner_key):
     user_key, _name = chat_user_identity(owner_key)
     try:
@@ -1736,6 +1750,11 @@ class Handler(BaseHTTPRequestHandler):
                 pass
             elif parsed.path == "/api/logout":
                 result = fruit_auto.logout(owner_key=owner_key, session_token=session_token)
+                # Also clear settings from Supabase
+                try:
+                    delete_settings_supabase(owner_key)
+                except Exception:
+                    pass  # non-critical
             elif parsed.path == "/api/search":
                 result = {"results": fruit_auto.search_employees(payload.get("query", ""), owner_key=owner_key)}
             elif parsed.path == "/api/target":
