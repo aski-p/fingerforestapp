@@ -506,9 +506,7 @@ _SUPABASE_CACHE_TTL = 60  # seconds
 
 
 def _supabase_config():
-    """Return Supabase config dict or None.  Uses ONLY env vars to avoid
-    circular dependency with load_secrets() which needs these same env vars.
-    """
+    """Return Supabase config dict or None.  Uses ONLY env vars, no imports."""
     url = os.environ.get("SUPABASE_URL") or ""
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or ""
     if not url or not key:
