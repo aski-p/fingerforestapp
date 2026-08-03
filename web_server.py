@@ -55,8 +55,6 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "앱 버전 3.16.6으로 업그레이드했습니다.",
-    "로그아웃 시 사용하던 설정(테마, 폰트, 스킨, push 알림 등)이 보존되도록 개선했습니다. 재로그인 시 설정이 초기화되지 않습니다.",
     "업무시간에만 자동전송을 켜면 주말과 공휴일에는 보내지 않고 다음 업무일로 연기합니다.",
     "열매선물 랭킹에서 내 순위와 선물한 열매 수가 0으로 표시되던 문제를 수정했습니다.",
 ]
@@ -116,9 +114,6 @@ def supabase_config():
         "chat_memories_table": os.environ.get("SUPABASE_CHAT_MEMORIES_TABLE")
         or config.get("chatMemoriesTable")
         or "fruit_chat_memories",
-        "settings_table": os.environ.get("SUPABASE_SETTINGS_TABLE")
-        or config.get("settingsTable")
-        or "fruit_settings",
     }
 
 
@@ -437,7 +432,7 @@ def save_profile_settings(owner_key, payload):
         if v is not None:
             state[k] = v
     state["updatedAt"] = fruit_auto.now_iso()
-    save_account_state_sync(owner_key, state)
+    fruit_auto.save_account_state(owner_key, state)
 
     config = supabase_config()
     if not config:
@@ -689,76 +684,6 @@ def save_chat_message(owner_key, role, content, model="", metadata=None):
         chat_insert_local(user_key, role, content, model, metadata)
 
 
-def save_settings_supabase(user_key, setting_type, data):
-    """Save settings (state or secrets) to Supabase."""
-    config = supabase_config()
-    if not config:
-        raise fruit_auto.FruitAutoError("Supabase 설정이 없습니다.")
-    table = urllib.parse.quote(config["settings_table"], safe="")
-    safe_type = urllib.parse.quote(setting_type, safe="")
-    safe_key = urllib.parse.quote(user_key, safe="")
-    # Upsert: if row exists, merge; otherwise insert
-    existing = supabase_request(
-        "GET",
-        f"/rest/v1/{table}?select=version&user_key=eq.{safe_key}&setting_type=eq.{safe_type}",
-        content_type=None,
-    )
-    row = {
-        "user_key": user_key,
-        "setting_type": setting_type,
-        "setting_data": data,
-    }
-    prefer = "resolution=merge-duplicates,return=representation"
-    if existing and len(existing) > 0:
-        row["version"] = existing[0].get("version", 0) + 1
-        supabase_request(
-            "PATCH",
-            f"/rest/v1/{table}?user_key=eq.{safe_key}&setting_type=eq.{safe_type}",
-            body=row,
-            extra_headers={"Prefer": prefer},
-        )
-    else:
-        row["version"] = 1
-        supabase_request(
-            "POST",
-            f"/rest/v1/{table}",
-            body=row,
-            extra_headers={"Prefer": prefer},
-        )
-
-
-def load_settings_supabase(user_key, setting_type, default=None):
-    """Load settings from Supabase. Returns dict or default."""
-    config = supabase_config()
-    if not config:
-        return default
-    table = urllib.parse.quote(config["settings_table"], safe="")
-    safe_type = urllib.parse.quote(setting_type, safe="")
-    safe_key = urllib.parse.quote(user_key, safe="")
-    rows = supabase_request(
-        "GET",
-        f"/rest/v1/{table}?select=setting_data,user_key,version&user_key=eq.{safe_key}&setting_type=eq.{safe_type}",
-        content_type=None,
-    ) or []
-    if rows:
-        return rows[0].get("setting_data", default if default is not None else {})
-    return default
-
-
-def delete_settings_supabase(user_key):
-    """Delete all settings (state/secrets) for a user from Supabase."""
-    config = supabase_config()
-    if not config:
-        return False
-    table = urllib.parse.quote(config["settings_table"], safe="")
-    safe_key = urllib.parse.quote(user_key, safe="")
-    try:
-        supabase_request("DELETE", f"/rest/v1/{table}?user_key=eq.{safe_key}")
-        return True
-    except Exception:
-        return False
-
-
 def load_chat_context(owner_key):
     user_key, _name = chat_user_identity(owner_key)
     try:
@@ -775,32 +700,6 @@ def load_chat_context(owner_key):
         ],
         "memorySummary": clean_chat_text(memory.get("summary"), CHAT_MEMORY_SUMMARY_CHAR_LIMIT),
     }
-
-
-def save_account_state_sync(owner_key, state):
-    """Save account state to both local file and Supabase (dual-write)."""
-    try:
-        fruit_auto.save_account_state(owner_key, state)
-    except Exception:
-        pass  # fallback to local-only
-
-    try:
-        save_settings_supabase(owner_key, "state", state)
-    except Exception:
-        pass  # fallback to Supabase-only failure
-
-
-def save_secrets_sync(owner_key, secrets_data):
-    """Save secrets to both local file and Supabase (dual-write)."""
-    try:
-        fruit_auto.save_secrets()  # saves secrets.json
-    except Exception:
-        pass  # fallback to local-only
-
-    try:
-        save_settings_supabase(owner_key, "secrets", secrets_data)
-    except Exception:
-        pass  # fallback to Supabase-only failure
 
 
 def summarize_chat_memory(existing_summary, rows, api_key):
@@ -882,7 +781,7 @@ def upload_profile_photo(owner_key, data_url):
         state.pop("senderProfilePhotoUrl", None)
         state.pop("profilePhotoUrl", None)
         state["profilePhotoUpdatedAt"] = fruit_auto.now_iso()
-        save_account_state_sync(owner_key, state)
+        fruit_auto.save_account_state(owner_key, state)
         clear_profile_photo_cache()
         return {"enabled": True, "employeeId": employee_id, "profilePhotoUrl": ""}
     if not isinstance(data_url, str) or not data_url.startswith("data:image/") or "," not in data_url:
@@ -898,7 +797,7 @@ def upload_profile_photo(owner_key, data_url):
     state["senderProfilePhotoUrl"] = data_url
     state["profilePhotoUrl"] = data_url
     state["profilePhotoUpdatedAt"] = fruit_auto.now_iso()
-    save_account_state_sync(owner_key, state)
+    fruit_auto.save_account_state(owner_key, state)
     clear_profile_photo_cache()
 
     config = supabase_config()
@@ -935,7 +834,7 @@ def upload_profile_photo(owner_key, data_url):
     state["senderProfilePhotoUrl"] = profile_url
     state["profilePhotoUrl"] = profile_url
     state["profilePhotoUpdatedAt"] = row["updated_at"]
-    save_account_state_sync(owner_key, state)
+    fruit_auto.save_account_state(owner_key, state)
     clear_profile_photo_cache()
     return {"enabled": True, "employeeId": employee_id, "profilePhotoUrl": profile_url}
 
@@ -945,20 +844,13 @@ mimetypes.add_type("application/x-apple-aspen-config", ".mobileconfig")
 
 def public_state(owner_key=None, refresh_balance=False):
     if owner_key:
-        # Try Supabase first, fall back to local file
-        supabase_state = load_settings_supabase(owner_key, "state")
-        supabase_secrets = load_settings_supabase(owner_key, "secrets")
-        if supabase_state is not None:
-            state = supabase_state.copy()
-            state["credentialsSaved"] = owner_key in (supabase_secrets.get("accounts", {}) if isinstance(supabase_secrets, dict) else {})
+        secrets = fruit_auto.load_secrets()
+        if owner_key not in secrets.get("accounts", {}):
+            state = dict(fruit_auto.DEFAULT_STATE)
+            state["credentialsSaved"] = False
         else:
-            secrets = fruit_auto.load_secrets()
-            if owner_key not in secrets.get("accounts", {}):
-                state = dict(fruit_auto.DEFAULT_STATE)
-                state["credentialsSaved"] = False
-            else:
-                state = fruit_auto.get_account_state(owner_key)
-                state["credentialsSaved"] = True
+            state = fruit_auto.get_account_state(owner_key)
+            state["credentialsSaved"] = True
         missing_balance = state.get("lastSeedCount") is None or state.get("lastBerryCount") is None
         if (refresh_balance or missing_balance) and state["credentialsSaved"]:
             try:
@@ -1729,32 +1621,17 @@ class Handler(BaseHTTPRequestHandler):
             payload = self.read_json()
             if parsed.path == "/api/login":
                 result = fruit_auto.save_credentials(payload.get("id"), payload.get("password"), device_id=self.device_id())
-                # Sync saved state/secrets to Supabase after login
-                owner_key = result.get("ownerKey") if isinstance(result, dict) else None
-                if owner_key:
-                    try:
-                        state = fruit_auto.get_account_state(owner_key)
-                        save_settings_supabase(owner_key, "state", state)
-                        secrets = fruit_auto.load_secrets()
-                        save_settings_supabase(owner_key, "secrets", secrets)
-                    except Exception:
-                        pass  # non-critical
             elif parsed.path == "/api/chat":
                 owner_key, _session_token = self.require_session_owner()
                 result = claude_chat(payload, owner_key)
             else:
                 owner_key, session_token = self.require_session_owner()
             if parsed.path == "/api/login":
-                pass
+                owner_key = result.get("ownerKey") if isinstance(result, dict) else None
             elif parsed.path == "/api/chat":
                 pass
             elif parsed.path == "/api/logout":
                 result = fruit_auto.logout(owner_key=owner_key, session_token=session_token)
-                # Also clear settings from Supabase
-                try:
-                    delete_settings_supabase(owner_key)
-                except Exception:
-                    pass  # non-critical
             elif parsed.path == "/api/search":
                 result = {"results": fruit_auto.search_employees(payload.get("query", ""), owner_key=owner_key)}
             elif parsed.path == "/api/target":
