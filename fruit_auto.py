@@ -576,8 +576,10 @@ def _profile_employee_id(owner_key):
     return employee_id, state
 
 
-def _load_state_from_supabase(owner_key):
+def _load_state_from_supabase(owner_key=None):
     """Load state data from Supabase profiles table. Returns dict or None."""
+    if not owner_key:
+        return None
     config = _supabase_config()
     if not config:
         return None
@@ -3568,7 +3570,8 @@ def mutate_secrets(mutator):
 
 def load_all_state():
     # 1. Try Supabase first (persistent across Railway restarts)
-    db_state = _load_state_from_supabase()
+    owner_key = get_owner_key()  # safe: returns str or empty str
+    db_state = _load_state_from_supabase(owner_key) if owner_key else None
     local_state = load_json(STATE_PATH, DEFAULT_STATE)
 
     if db_state and db_state.get("accounts"):
