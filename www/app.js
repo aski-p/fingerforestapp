@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV86";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.16.6";
+const appVersion = "3.16.7";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -178,6 +178,7 @@ const historyTimeZone = "Asia/Seoul";
 const historyTimezoneOffsetMinutes = -540;
 let currentState = {};
 let busy = false;
+let busyDepth = 0;
 runSecurityMigration();
 let fruitSession = "";
 let currentOwnerKey = "";
@@ -885,8 +886,15 @@ function renderAppearanceOptions() {
 }
 
 function setBusy(nextBusy) {
-  busy = nextBusy;
+  if (nextBusy) {
+    busyDepth += 1;
+  } else {
+    busyDepth = Math.max(0, busyDepth - 1);
+  }
+  busy = busyDepth > 0;
   document.body.classList.toggle("busy", busy);
+  $("busyOverlay").hidden = !busy;
+  $("busyOverlay").setAttribute("aria-hidden", String(!busy));
 }
 
 function loadRememberedLogin() {
@@ -1113,8 +1121,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.16.6",
-        badge: "/icons/app-icon-192.png?v=3.16.6",
+        icon: "/icons/app-icon-192.png?v=3.16.7",
+        badge: "/icons/app-icon-192.png?v=3.16.7",
         data: { url: item.url || "/" },
       });
       return true;

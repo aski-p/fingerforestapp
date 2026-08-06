@@ -122,7 +122,6 @@ DEFAULT_STATE = {
 # session data and credentials must never be included in this snapshot.
 PERSISTED_ACCOUNT_SETTING_KEYS = {
     "targetEmployeeName", "targetEmployeeId", "targetCycle",
-    "targetCycleIndex", "targetCycleCompletedCount",
     "giftMessage", "sendBerryCount", "sendAllBerries",
     "businessHoursOnly", "runIntervalMinutes", "pushEnabled",
     "worklogScheduleDays", "worklogScheduleDates", "worklogScheduleTime",
@@ -130,8 +129,7 @@ PERSISTED_ACCOUNT_SETTING_KEYS = {
     "worklogTargetDutyId", "worklogTargetDeptName",
     "worklogTargetPositionName", "worklogSeedCount", "worklogSeedMessage",
     "worklogProjectId", "worklogProjectName", "worklogContent",
-    "theme", "font", "skin", "deliveryCycle", "deliveryCycleIndex",
-    "deliveryCycleCompletedCount", "profilePhotoUrl",
+    "theme", "font", "skin", "deliveryCycle", "profilePhotoUrl",
     "profilePhotoUpdatedAt", "senderProfilePhotoUrl",
 }
 
@@ -599,10 +597,20 @@ def _load_state_from_supabase(owner_key=None):
     if not config:
         return None
     table = urllib.parse.quote(config["table"], safe="")
-    employee_id = employee_id_from_owner_key(owner_key) or str(owner_key)
-    oid_quoted = urllib.parse.quote(employee_id, safe="")
-    path = f"/rest/v1/{table}?employee_id=eq.{oid_quoted}&select=*&limit=1"
-    rows = _supabase_request("GET", path)
+    employee_id = str(employee_id_from_owner_key(owner_key) or owner_key)
+
+    def load_rows(row_id):
+        oid_quoted = urllib.parse.quote(str(row_id), safe="")
+        path = f"/rest/v1/{table}?employee_id=eq.{oid_quoted}&select=*&limit=1"
+        return _supabase_request("GET", path)
+
+    rows = load_rows(employee_id)
+    # Releases before v3.16.6 used the full owner key (for example
+    # ``forest:1001``) as employee_id. Keep a read fallback so upgrading does
+    # not silently discard settings saved by those releases.
+    legacy_employee_id = str(owner_key)
+    if (not rows or not isinstance(rows, list)) and legacy_employee_id != employee_id:
+        rows = load_rows(legacy_employee_id)
     if not rows or not isinstance(rows, list) or len(rows) == 0:
         return None
     row = rows[0]
@@ -3543,13 +3551,25 @@ def load_all_state(owner_key=None):
             db_state = _load_state_from_supabase(owner_key)
         except Exception:
             db_state = None
-        if isinstance(db_state, dict):
-            account = dict(state["accounts"].get(owner_key, {}))
-            account.update({
-                key: db_state[key]
-                for key in PERSISTED_ACCOUNT_SETTING_KEYS
-                if key in db_state
-            })
+        local_snapshot = state.get("persistedAccountSettings", {}).get(owner_key, {})
+        local_account = state["accounts"].get(owner_key, {})
+        if isinstance(db_state, dict) or isinstance(local_snapshot, dict) or local_account:
+            account = {}
+            if isinstance(db_state, dict):
+                account.update({
+                    key: db_state[key]
+                    for key in PERSISTED_ACCOUNT_SETTING_KEYS
+                    if key in db_state
+                })
+            # The local snapshot is captured at logout and may be newer than
+            # Supabase when the last best-effort write failed, so it wins.
+            if isinstance(local_snapshot, dict):
+                account.update({
+                    key: local_snapshot[key]
+                    for key in PERSISTED_ACCOUNT_SETTING_KEYS
+                    if key in local_snapshot
+                })
+            account.update(local_account)
             account["ownerKey"] = owner_key
             state["accounts"][owner_key] = account
     return state
@@ -3616,6 +3636,8 @@ def remove_account_state(owner_key):
     for key in UI_SETTING_KEYS:
         if key in removed_account:
             preserved[key] = removed_account[key]
+    if preserved:
+        state.setdefault("persistedAccountSettings", {})[owner_key] = dict(preserved)
     # Remove the account
     accounts.pop(owner_key, None)
 

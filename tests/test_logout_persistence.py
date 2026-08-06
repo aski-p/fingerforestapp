@@ -337,6 +337,56 @@ class TestLogoutPersistence(TestCase):
             restored = fa.get_account_state(owner_key, hydrate_remote=True)
         self.assertEqual(restored["theme"], "local-dark")
 
+    def test_runtime_progress_fields_are_never_persisted(self):
+        runtime_fields = {
+            "targetCycleIndex",
+            "targetCycleCompletedCount",
+            "deliveryCycleIndex",
+            "deliveryCycleCompletedCount",
+        }
+        self.assertTrue(runtime_fields.isdisjoint(fa.PERSISTED_ACCOUNT_SETTING_KEYS))
+
+    def test_offline_relogin_restores_safe_settings_after_actual_logout(self):
+        owner_key = "forest:1001"
+        fa.save_account_state(owner_key, {
+            "ownerKey": owner_key,
+            "theme": "local-dark",
+            "giftMessage": "오프라인에서도 유지",
+            "targetCycleIndex": 7,
+            "deliveryCycleCompletedCount": 11,
+        })
+        fa.remove_account_state(owner_key)
+
+        with mock.patch.object(fa, "_load_state_from_supabase", side_effect=OSError("offline")):
+            restored = fa.get_account_state(owner_key, hydrate_remote=True)
+
+        self.assertEqual(restored["theme"], "local-dark")
+        self.assertEqual(restored["giftMessage"], "오프라인에서도 유지")
+        self.assertEqual(restored["targetCycleIndex"], 0)
+        self.assertEqual(restored.get("deliveryCycleCompletedCount", 0), 0)
+        self.assertNotIn("deliveryCycleCompletedCount", restored)
+        self.assertNotIn(owner_key, fa.load_json(STATE_PATH, fa.DEFAULT_STATE).get("accounts", {}))
+
+    def test_remote_loader_falls_back_to_legacy_owner_key_row(self):
+        owner_key = "forest:1001"
+        calls = []
+
+        def fake_request(method, path, **_kwargs):
+            calls.append(path)
+            if "employee_id=eq.forest%3A1001" in path:
+                return [{"employee_id": owner_key, "state": {"theme": "legacy-dark"}}]
+            return []
+
+        with mock.patch.object(fa, "_supabase_config", return_value={
+            "table": "profiles", "key": "service-key"
+        }), mock.patch.object(fa, "_supabase_request", side_effect=fake_request):
+            restored = fa._load_state_from_supabase(owner_key)
+
+        self.assertEqual(restored["theme"], "legacy-dark")
+        self.assertEqual(len(calls), 2)
+        self.assertIn("employee_id=eq.1001", calls[0])
+        self.assertIn("employee_id=eq.forest%3A1001", calls[1])
+
     def test_profile_settings_rows_are_not_misread_as_login_credentials(self):
         rows = [{"employee_id": "1001", "state": {
             "theme": "dark",

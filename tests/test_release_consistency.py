@@ -13,8 +13,8 @@ import web_server
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "3.16.6"
-ANDROID_VERSION = "3.16.6"
+EXPECTED_VERSION = "3.16.7"
+ANDROID_VERSION = "3.16.0"
 EXPECTED_ANDROID_SIGNER = "b2f3480a6d039ec381884e01a57e00c0ee1e31bcf1fe5d76ded97a4c2db47aec"
 
 
@@ -25,11 +25,46 @@ class ReleaseConsistencyTests(unittest.TestCase):
         self.assertIn("body .toast {\n  color: #ffffff;", css)
         self.assertIn(".toast:empty {\n  display: none;", css)
 
+    def test_busy_overlay_uses_the_eight_frame_loading_gif(self):
+        html = (ROOT / "www/index.html").read_text(encoding="utf-8")
+        css = (ROOT / "www/styles.css").read_text(encoding="utf-8")
+        app = (ROOT / "www/app.js").read_text(encoding="utf-8")
+        gif = ROOT / "www/assets/fingerfruit-loading.gif"
+
+        self.assertTrue(gif.is_file())
+        self.assertEqual(b"GIF89a", gif.read_bytes()[:6])
+        self.assertIn('id="busyOverlay"', html)
+        self.assertIn('/assets/fingerfruit-loading.gif', html)
+        self.assertIn('role="status"', html)
+        self.assertIn('.busy-overlay', css)
+        self.assertIn('$("busyOverlay").hidden = !busy', app)
+        self.assertIn('$("busyOverlay").setAttribute("aria-hidden", String(!busy))', app)
+
+    def test_login_id_fields_allow_text_keyboard_input(self):
+        for relative_path in ("www/index.html", "www/single.html"):
+            html = (ROOT / relative_path).read_text(encoding="utf-8")
+            login_input = re.search(r'<input\s+[^>]*id="loginId"[^>]*>', html)
+            self.assertIsNotNone(login_input, relative_path)
+            markup = login_input.group(0)
+            self.assertIn('type="text"', markup, relative_path)
+            self.assertIn('inputmode="text"', markup, relative_path)
+            self.assertNotIn('inputmode="numeric"', markup, relative_path)
+
+    def test_nested_busy_operations_keep_overlay_visible_until_all_finish(self):
+        app = (ROOT / "www/app.js").read_text(encoding="utf-8")
+        self.assertIn("let busyDepth = 0;", app)
+        self.assertIn("busyDepth += 1", app)
+        self.assertIn("busyDepth = Math.max(0, busyDepth - 1)", app)
+        self.assertIn("busy = busyDepth > 0", app)
+
     def test_release_notes_only_describe_current_update(self):
         self.assertEqual(
             [
-                "업무시간에만 자동전송을 켜면 주말과 공휴일에는 보내지 않고 다음 업무일로 연기합니다.",
-                "열매선물 랭킹에서 내 순위와 선물한 열매 수가 0으로 표시되던 문제를 수정했습니다.",
+                "작업 중에는 새 달리기 캐릭터 GIF 로딩바가 표시되고 완료하거나 실패하면 자동으로 사라집니다.",
+                "PMS 아이디 입력칸에서 숫자뿐 아니라 문자 아이디도 입력할 수 있습니다.",
+                "로그아웃 후 다시 로그인해도 계정별 테마와 자동전송 설정은 유지하며 세션·진행 상태·비밀값은 안전하게 초기화합니다.",
+                "이전 버전에서 저장한 계정 설정도 다시 불러올 수 있도록 호환성을 개선했습니다.",
+                "화려한 배경에서도 상태 안내 문구가 선명하게 보이도록 대비를 높였습니다.",
             ],
             web_server.RELEASE_NOTES,
         )
