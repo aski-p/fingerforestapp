@@ -10,8 +10,9 @@ import json
 import os
 import sys
 import tempfile
+import urllib.parse
 from pathlib import Path
-from unittest import TestCase, main
+from unittest import TestCase, main, mock
 
 # Setup paths before importing fruit_auto
 TEST_DIR = tempfile.mkdtemp()
@@ -194,6 +195,159 @@ class TestLogoutPersistence(TestCase):
         self.assertIsInstance(result, dict, "Should return a dict even for nonexistent users")
         self.assertEqual(result.get("enabled"), False)
         self.assertEqual(result.get("status"), "off")
+
+    def test_relogin_restores_persisted_account_settings_from_supabase(self):
+        """A fresh login must hydrate settings instead of relying on local state."""
+        owner_key = "forest:1001"
+        persisted = {
+            "theme": "dark",
+            "giftMessage": "수고했어!",
+            "targetEmployeeId": "2002",
+            "targetEmployeeName": "테스트 대상",
+            "targetCycle": [{"emp_id": "2002", "emp_nm": "테스트 대상"}],
+            "sendBerryCount": 3,
+            "sendAllBerries": True,
+            "businessHoursOnly": True,
+            "runIntervalMinutes": 90,
+            "pushEnabled": False,
+            "worklogScheduleDays": [1, 3, 5],
+            "worklogScheduleTime": "10:15",
+            "worklogProjectId": "project-7",
+            "worklogContent": "주간 보고",
+        }
+
+        with mock.patch.object(fa, "_load_state_from_supabase", return_value=persisted) as load_remote:
+            restored = fa.get_account_state(owner_key, hydrate_remote=True)
+
+        load_remote.assert_called_once_with(owner_key)
+        for key, value in persisted.items():
+            self.assertEqual(restored.get(key), value, f"{key} should be restored after relogin")
+        self.assertFalse(restored["enabled"], "automation must not restart just because settings were restored")
+
+    def test_fresh_remote_round_trip_restores_only_the_authenticated_owner(self):
+        rows = {}
+
+        def fake_request(method, path, body=None, extra_headers=None):
+            if method == "POST":
+                rows[str(body["employee_id"])] = dict(body)
+                return [body]
+            query = urllib.parse.urlparse(path).query
+            employee_filter = urllib.parse.parse_qs(query).get("employee_id", [""])[0]
+            employee_id = urllib.parse.unquote(employee_filter.removeprefix("eq."))
+            return [rows[employee_id]] if employee_id in rows else []
+
+        first_owner = "forest:1001"
+        second_owner = "forest:2002"
+        with mock.patch.object(fa, "_supabase_config", return_value={
+            "url": "https://example.supabase.co",
+            "key": "test-service-key",
+            "table": "profiles",
+        }), mock.patch.object(fa, "_supabase_request", side_effect=fake_request):
+            fa._save_state_to_supabase(first_owner, {"accounts": {first_owner: {
+                "theme": "dark",
+                "giftMessage": "첫 번째 계정",
+                "pms_password": "must-not-persist",
+                "enabled": True,
+            }}})
+            fa._save_state_to_supabase(second_owner, {"accounts": {second_owner: {
+                "theme": "light",
+                "giftMessage": "두 번째 계정",
+                "pms_password": "must-not-persist-either",
+            }}})
+
+            fa.save_json(fa.STATE_PATH, fa.DEFAULT_STATE)
+            first = fa.get_account_state(first_owner, hydrate_remote=True)
+            second = fa.get_account_state(second_owner, hydrate_remote=True)
+
+        self.assertEqual(first["theme"], "dark")
+        self.assertEqual(first["giftMessage"], "첫 번째 계정")
+        self.assertEqual(second["theme"], "light")
+        self.assertEqual(second["giftMessage"], "두 번째 계정")
+        self.assertFalse(first["enabled"])
+        self.assertNotIn("pms_password", rows["1001"]["state"])
+        self.assertNotIn("pms_password", rows["2002"]["state"])
+
+    def test_supabase_state_snapshot_uses_employee_id_and_excludes_runtime_and_secrets(self):
+        owner_key = "forest:1001"
+        account = {
+            "ownerKey": owner_key,
+            "senderEmployeeId": "1001",
+            "senderEmployeeName": "테스트 사용자",
+            "targetEmployeeId": "2002",
+            "giftMessage": "고마워!",
+            "worklogScheduleTime": "10:15",
+            "theme": "dark",
+            "enabled": True,
+            "lastAttemptAt": "2026-08-06T00:00:00+00:00",
+            "pms_id": "private-id",
+            "pms_password": "private-password",
+        }
+        state = {"accounts": {owner_key: account}}
+        calls = []
+
+        with mock.patch.object(fa, "_supabase_config", return_value={"table": "profiles", "key": "service-key"}), mock.patch.object(
+            fa, "_supabase_request", side_effect=lambda method, path, **kwargs: calls.append((method, path, kwargs)) or []
+        ):
+            self.assertTrue(fa._save_state_to_supabase(owner_key, state))
+
+        body = calls[0][2]["body"]
+        self.assertEqual(body["employee_id"], "1001")
+        self.assertEqual(body["state"]["targetEmployeeId"], "2002")
+        self.assertEqual(body["state"]["worklogScheduleTime"], "10:15")
+        self.assertEqual(body["state"]["theme"], "dark")
+        self.assertNotIn("enabled", body["state"])
+        self.assertNotIn("lastAttemptAt", body["state"])
+        self.assertNotIn("pms_id", body["state"])
+        self.assertNotIn("pms_password", body["state"])
+
+    def test_supabase_row_identity_comes_only_from_owner_key(self):
+        owner_key = "forest:1001"
+        state = {"accounts": {owner_key: {
+            "senderEmployeeId": "9999",
+            "senderEmployeeName": "테스트 사용자",
+            "theme": "dark",
+        }}}
+        calls = []
+        with mock.patch.object(fa, "_supabase_config", return_value={"table": "profiles", "key": "service-key"}), mock.patch.object(
+            fa, "_supabase_request", side_effect=lambda method, path, **kwargs: calls.append((method, path, kwargs)) or []
+        ):
+            self.assertTrue(fa._save_state_to_supabase(owner_key, state))
+        self.assertEqual(calls[0][2]["body"]["employee_id"], "1001")
+
+    def test_logout_never_copies_unexpected_credentials_into_state(self):
+        owner_key = "forest:1001"
+        account = {
+            "ownerKey": owner_key,
+            "theme": "dark",
+            "pms_id": "private-id",
+            "pms_password": "private-password",
+            "access_token": "private-token",
+        }
+        fa.save_account_state(owner_key, account)
+        logged_out = fa.remove_account_state(owner_key)
+        on_disk = json.loads(fa.STATE_PATH.read_text())
+        for key in ("pms_id", "pms_password", "access_token"):
+            self.assertNotIn(key, logged_out)
+            self.assertNotIn(key, on_disk)
+
+    def test_remote_hydration_failure_falls_back_to_local_state(self):
+        owner_key = "forest:1001"
+        fa.save_account_state(owner_key, {"ownerKey": owner_key, "theme": "local-dark"})
+        with mock.patch.object(fa, "_load_state_from_supabase", side_effect=OSError("offline")):
+            restored = fa.get_account_state(owner_key, hydrate_remote=True)
+        self.assertEqual(restored["theme"], "local-dark")
+
+    def test_profile_settings_rows_are_not_misread_as_login_credentials(self):
+        rows = [{"employee_id": "1001", "state": {
+            "theme": "dark",
+            "giftMessage": "고마워!",
+            "pms_id": "legacy-private-id",
+            "pms_password": "legacy-private-password",
+        }}]
+        with mock.patch.object(fa, "_supabase_config", return_value={"table": "profiles", "key": "service-key"}), mock.patch.object(
+            fa, "_supabase_request", return_value=rows
+        ):
+            self.assertIsNone(fa._load_secrets_from_supabase())
 
 
 if __name__ == "__main__":

@@ -118,6 +118,23 @@ DEFAULT_STATE = {
     "worklogLastError": None,
 }
 
+# User choices that are safe to restore after logout/relogin. Runtime state,
+# session data and credentials must never be included in this snapshot.
+PERSISTED_ACCOUNT_SETTING_KEYS = {
+    "targetEmployeeName", "targetEmployeeId", "targetCycle",
+    "targetCycleIndex", "targetCycleCompletedCount",
+    "giftMessage", "sendBerryCount", "sendAllBerries",
+    "businessHoursOnly", "runIntervalMinutes", "pushEnabled",
+    "worklogScheduleDays", "worklogScheduleDates", "worklogScheduleTime",
+    "worklogTargetEmployeeName", "worklogTargetEmployeeId",
+    "worklogTargetDutyId", "worklogTargetDeptName",
+    "worklogTargetPositionName", "worklogSeedCount", "worklogSeedMessage",
+    "worklogProjectId", "worklogProjectName", "worklogContent",
+    "theme", "font", "skin", "deliveryCycle", "deliveryCycleIndex",
+    "deliveryCycleCompletedCount", "profilePhotoUrl",
+    "profilePhotoUpdatedAt", "senderProfilePhotoUrl",
+}
+
 KOREAN_PUBLIC_HOLIDAYS = {
     "2025-01-01": "신정",
     "2025-01-27": "임시공휴일",
@@ -575,14 +592,15 @@ def _profile_employee_id(owner_key):
 
 
 def _load_state_from_supabase(owner_key=None):
-    """Load state data from Supabase profiles table. Returns dict or None."""
+    """Load persisted account settings from the employee's profile row."""
     if not owner_key:
         return None
     config = _supabase_config()
     if not config:
         return None
     table = urllib.parse.quote(config["table"], safe="")
-    oid_quoted = urllib.parse.quote(str(owner_key), safe="")
+    employee_id = employee_id_from_owner_key(owner_key) or str(owner_key)
+    oid_quoted = urllib.parse.quote(employee_id, safe="")
     path = f"/rest/v1/{table}?employee_id=eq.{oid_quoted}&select=*&limit=1"
     rows = _supabase_request("GET", path)
     if not rows or not isinstance(rows, list) or len(rows) == 0:
@@ -601,27 +619,26 @@ def _load_state_from_supabase(owner_key=None):
 
 
 def _save_state_to_supabase(owner_key, state):
-    """Save state dict to Supabase profiles table (UPSERT via employee_id)."""
+    """Persist only non-secret user choices in the employee profile row."""
     config = _supabase_config()
     if not config:
         return False
     table = urllib.parse.quote(config["table"], safe="")
-    oid_quoted = urllib.parse.quote(str(owner_key), safe="")
 
-    # Build minimal state blob: only keys that matter for config
     account_state = state.get("accounts", {}).get(owner_key, {})
-    ui_settings = {}
-    UI_KEYS = {"theme", "font", "skin", "deliveryCycle", "deliveryCycleIndex",
-               "deliveryCycleCompletedCount", "giftMessage", "sendBerryCount",
-               "sendAllBerries", "businessHoursOnly", "pushEnabled"}
-    for k in UI_KEYS:
-        if k in account_state:
-            ui_settings[k] = account_state[k]
+    persisted_settings = {
+        key: account_state[key]
+        for key in PERSISTED_ACCOUNT_SETTING_KEYS
+        if key in account_state
+    }
+    # Row identity must be immutable and derived from the authenticated owner,
+    # never from mutable profile/account fields supplied by a client.
+    employee_id = str(employee_id_from_owner_key(owner_key) or owner_key)
 
     body = {
-        "employee_id": str(owner_key),
+        "employee_id": employee_id,
         "name": str(account_state.get("senderEmployeeName") or account_state.get("loginUser") or owner_key),
-        "state": ui_settings if ui_settings else None,
+        "state": persisted_settings,
         "updated_at": now_iso(),
     }
     # Upsert: merge-duplicates
@@ -642,71 +659,13 @@ def _save_state_to_supabase(owner_key, state):
 
 
 def _load_secrets_from_supabase():
-    """Load secrets (accounts + sessions) from Supabase. Returns dict or None."""
-    config = _supabase_config()
-    if not config:
-        return None
-    table = urllib.parse.quote(config["table"], safe="")
-    rows = _supabase_request("GET", f"/rest/v1/{table}?select=employee_id,state")
-    if not rows or not isinstance(rows, list):
-        return None
-    accounts = {}
-    sessions = {}
-    for row in rows:
-        oid = row.get("employee_id") or ""
-        state_data = row.get("state") or row.get("ui_settings") or {}
-        if isinstance(state_data, str):
-            try:
-                state_data = json.loads(state_data)
-            except (TypeError, json.JSONDecodeError):
-                continue
-        if not isinstance(state_data, dict):
-            continue
-        # Extract credentials from state if present
-        account = state_data.get("accounts", {}).get(oid, state_data)
-        if account:
-            accounts[oid] = account
-            # We can't reconstruct sessions from state alone
-            # Sessions must be maintained locally or stored separately
-    if not accounts:
-        return None
-    return {"accounts": accounts, "sessions": sessions}
+    """Never restore credentials or sessions from profile rows."""
+    return None
 
 
 def _save_secrets_to_supabase(secrets):
-    """Save secrets (accounts) to Supabase. Returns bool."""
-    config = _supabase_config()
-    if not config:
-        return False
-    accounts = secrets.get("accounts", {})
-    saved = 0
-    for owner_key, account in accounts.items():
-        if not account or not isinstance(account, dict):
-            continue
-        # Only store account-level data (not sessions)
-        account_copy = {k: v for k, v in account.items() if k != "sessions"}
-        if not account_copy:
-            continue
-        try:
-            _supabase_request(
-                "POST",
-                f"/rest/v1/{urllib.parse.quote(config['table'], safe='?')}",
-                body={
-                    "employee_id": str(owner_key),
-                    "name": str(account_copy.get("senderEmployeeName") or account_copy.get("loginUser") or owner_key),
-                    "state": account_copy,
-                    "updated_at": now_iso(),
-                },
-                extra_headers={
-                    "Prefer": "resolution=merge-duplicates,return=representation",
-                    "apikey": config["key"],
-                    "Authorization": f"Bearer {config['key']}",
-                },
-            )
-            saved += 1
-        except Exception:
-            pass
-    return saved > 0
+    """Credentials and sessions are intentionally local-only."""
+    return False
 
 
 def load_json(path, default):
@@ -3566,30 +3525,11 @@ def mutate_secrets(mutator):
         return result
 
 
-def load_all_state():
-    # 1. Try Supabase first (persistent across Railway restarts)
-    # Read owner_key from secrets.json (needs secrets loading)
-    owner_key = ""
-    try:
-        owner_key = load_json(SECRETS_PATH, {}).get("ownerKey", "")
-    except Exception:
-        owner_key = ""
-    db_state = _load_state_from_supabase(owner_key) if owner_key else None
+def load_all_state(owner_key=None):
+    """Load local state and hydrate one account's saved choices when known."""
     local_state = load_json(STATE_PATH, DEFAULT_STATE)
-
-    if db_state and db_state.get("accounts"):
-        state = dict(db_state)  # start with DB data
-    elif local_state and local_state.get("accounts"):
-        state = dict(local_state)  # fallback to local
-    else:
-        state = dict(DEFAULT_STATE)
-        state.update(local_state)
-
-    # Merge non-account keys: local-only settings fill into DB state
-    for key, val in local_state.items():
-        if key not in ("accounts",):
-            if key not in state or not state[key]:
-                state[key] = val
+    state = dict(DEFAULT_STATE)
+    state.update(local_state or {})
 
     state.setdefault("accounts", {})
     if not state["accounts"] and state.get("ownerKey"):
@@ -3598,11 +3538,28 @@ def load_all_state():
             for key in ACCOUNT_DEFAULT
             if key in state
         }
+    if owner_key:
+        try:
+            db_state = _load_state_from_supabase(owner_key)
+        except Exception:
+            db_state = None
+        if isinstance(db_state, dict):
+            account = dict(state["accounts"].get(owner_key, {}))
+            account.update({
+                key: db_state[key]
+                for key in PERSISTED_ACCOUNT_SETTING_KEYS
+                if key in db_state
+            })
+            account["ownerKey"] = owner_key
+            state["accounts"][owner_key] = account
     return state
 
 
-def get_account_state(owner_key):
-    state = load_all_state()
+def get_account_state(owner_key, hydrate_remote=False):
+    # Remote hydration is intentionally limited to fresh login. Reading it on
+    # every request would add latency and could overwrite a newer local change
+    # after a transient Supabase write failure.
+    state = load_all_state(owner_key if hydrate_remote else None)
     account = dict(ACCOUNT_DEFAULT)
     account.update(state.get("accounts", {}).get(owner_key, {}))
     account["ownerKey"] = owner_key
@@ -3653,23 +3610,12 @@ def remove_account_state(owner_key):
     # Collect ALL known UI/custom keys from the account, not just those in ACCOUNT_DEFAULT.
     removed_account = accounts.get(owner_key, {})
     preserved = {}
-    UI_SETTING_KEYS = {
-        "theme", "font", "skin",
-        "deliveryCycle", "deliveryCycleIndex", "deliveryCycleCompletedCount",
-        "profilePhotoUrl", "profilePhotoUpdatedAt", "senderProfilePhotoUrl",
-        "giftMessage", "sendBerryCount", "sendAllBerries",
-        "businessHoursOnly", "pushEnabled",
-    }
+    UI_SETTING_KEYS = PERSISTED_ACCOUNT_SETTING_KEYS
     # Include every key from the removed account that is NOT in ACCOUNT_DEFAULT
     # (i.e. it's a custom/UI-only setting like theme, font, skin, etc.)
     for key in UI_SETTING_KEYS:
         if key in removed_account:
             preserved[key] = removed_account[key]
-    # Also include any account-level keys not in ACCOUNT_DEFAULT that might be present
-    for key in removed_account:
-        if key not in ACCOUNT_DEFAULT and key not in preserved:
-            preserved[key] = removed_account[key]
-
     # Remove the account
     accounts.pop(owner_key, None)
 
@@ -3853,7 +3799,7 @@ def save_credentials(pms_id, pms_password, device_id=None):
     store_worklog_project_cache(owner_key, worklog_projects_from_employee_info(employee_info))
 
     with secrets_transaction():
-        account = get_account_state(owner_key)
+        account = get_account_state(owner_key, hydrate_remote=True)
         secrets = load_secrets()
         secrets.setdefault("accounts", {})
         existing_secret = secrets["accounts"].get(owner_key) or {}

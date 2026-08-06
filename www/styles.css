@@ -3696,11 +3696,24 @@ body.logged-out .chat-popup {
 
 .toast {
   min-height: 24px;
-  margin: 12px 2px 0;
-  color: #344054;
+  margin: 12px 0 0;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  border-left: 4px solid var(--accent-bright, #ffd166);
+  border-radius: 10px;
+  padding: 11px 13px;
+  background: rgba(15, 23, 42, 0.9);
+  color: #ffffff;
   font-size: 14px;
   font-weight: 900;
   line-height: 1.45;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.72);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(10px) saturate(0.8);
+  -webkit-backdrop-filter: blur(10px) saturate(0.8);
+}
+
+.toast:empty {
+  display: none;
 }
 
 .app-footer {
@@ -4092,6 +4105,12 @@ body .toast,
 body .app-footer,
 body .muted {
   color: var(--muted);
+}
+
+/* Status messages sit directly over illustrated skins, so they need a
+   theme-independent contrast surface rather than the muted body color. */
+body .toast {
+  color: #ffffff;
 }
 
 body .support-link {

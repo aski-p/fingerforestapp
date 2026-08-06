@@ -19,6 +19,12 @@ EXPECTED_ANDROID_SIGNER = "b2f3480a6d039ec381884e01a57e00c0ee1e31bcf1fe5d76ded97
 
 
 class ReleaseConsistencyTests(unittest.TestCase):
+    def test_status_messages_remain_legible_over_illustrated_skins(self):
+        css = (ROOT / "www/styles.css").read_text(encoding="utf-8")
+        self.assertIn("background: rgba(15, 23, 42, 0.9);", css)
+        self.assertIn("body .toast {\n  color: #ffffff;", css)
+        self.assertIn(".toast:empty {\n  display: none;", css)
+
     def test_release_notes_only_describe_current_update(self):
         self.assertEqual(
             [
@@ -40,7 +46,10 @@ class ReleaseConsistencyTests(unittest.TestCase):
         for relative, expected in checks.items():
             text = (ROOT / relative).read_text(encoding="utf-8")
             self.assertIn(expected, text, relative)
-        self.assertIn("versionCode 31600", (ROOT / "mobile-build/android-app/app/build.gradle").read_text(encoding="utf-8"))
+        self.assertIn(
+            f"versionCode {release_builder.version_code(ANDROID_VERSION)}",
+            (ROOT / "mobile-build/android-app/app/build.gradle").read_text(encoding="utf-8"),
+        )
         for relative in ("www/app.js", "www/index.html", "www/sw.js", "www/styles.css"):
             self.assertNotIn("3.16.1", (ROOT / relative).read_text(encoding="utf-8"), relative)
 
@@ -91,7 +100,7 @@ class ReleaseConsistencyTests(unittest.TestCase):
         )
         public_clients = [
             android_sources,
-            (ROOT / "www/downloads/fingerfruit-ios-v3.16.2.mobileconfig").read_text(encoding="utf-8"),
+            (ROOT / f"www/downloads/fingerfruit-ios-v{EXPECTED_VERSION}.mobileconfig").read_text(encoding="utf-8"),
             (ROOT / "fruit-auto-ios.mobileconfig").read_text(encoding="utf-8"),
             (ROOT / "www/app.js").read_text(encoding="utf-8"),
             (ROOT / "www/single.html").read_text(encoding="utf-8"),
