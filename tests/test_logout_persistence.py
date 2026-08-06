@@ -300,6 +300,14 @@ class TestLogoutPersistence(TestCase):
         self.assertNotIn("pms_id", body["state"])
         self.assertNotIn("pms_password", body["state"])
 
+    def test_supabase_state_save_reports_swallowed_request_failure(self):
+        owner_key = "forest:1001"
+        state = {"accounts": {owner_key: {"theme": "dark"}}}
+        with mock.patch.object(
+            fa, "_supabase_config", return_value={"table": "profiles", "key": "service-key"}
+        ), mock.patch.object(fa, "_supabase_request", return_value=None):
+            self.assertFalse(fa._save_state_to_supabase(owner_key, state))
+
     def test_supabase_row_identity_comes_only_from_owner_key(self):
         owner_key = "forest:1001"
         state = {"accounts": {owner_key: {

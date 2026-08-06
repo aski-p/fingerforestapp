@@ -33,7 +33,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.16.7"
+APP_VERSION = "3.16.8"
 ANDROID_APP_VERSION = "3.16.0"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -55,11 +55,8 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "작업 중에는 새 달리기 캐릭터 GIF 로딩바가 표시되고 완료하거나 실패하면 자동으로 사라집니다.",
-    "PMS 아이디 입력칸에서 숫자뿐 아니라 문자 아이디도 입력할 수 있습니다.",
-    "로그아웃 후 다시 로그인해도 계정별 테마와 자동전송 설정은 유지하며 세션·진행 상태·비밀값은 안전하게 초기화합니다.",
-    "이전 버전에서 저장한 계정 설정도 다시 불러올 수 있도록 호환성을 개선했습니다.",
-    "화려한 배경에서도 상태 안내 문구가 선명하게 보이도록 대비를 높였습니다.",
+    "로그아웃하면 저장된 PMS 아이디와 비밀번호까지 모든 기기에서 안전하게 삭제합니다.",
+    "계정 설정의 원격 저장이 실패했을 때 성공으로 표시하지 않도록 안정성을 높였습니다.",
 ]
 VALID_THEMES = {
     "default",

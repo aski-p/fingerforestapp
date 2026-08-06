@@ -13,7 +13,7 @@ import web_server
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "3.16.7"
+EXPECTED_VERSION = "3.16.8"
 ANDROID_VERSION = "3.16.0"
 EXPECTED_ANDROID_SIGNER = "b2f3480a6d039ec381884e01a57e00c0ee1e31bcf1fe5d76ded97a4c2db47aec"
 
@@ -60,11 +60,8 @@ class ReleaseConsistencyTests(unittest.TestCase):
     def test_release_notes_only_describe_current_update(self):
         self.assertEqual(
             [
-                "작업 중에는 새 달리기 캐릭터 GIF 로딩바가 표시되고 완료하거나 실패하면 자동으로 사라집니다.",
-                "PMS 아이디 입력칸에서 숫자뿐 아니라 문자 아이디도 입력할 수 있습니다.",
-                "로그아웃 후 다시 로그인해도 계정별 테마와 자동전송 설정은 유지하며 세션·진행 상태·비밀값은 안전하게 초기화합니다.",
-                "이전 버전에서 저장한 계정 설정도 다시 불러올 수 있도록 호환성을 개선했습니다.",
-                "화려한 배경에서도 상태 안내 문구가 선명하게 보이도록 대비를 높였습니다.",
+                "로그아웃하면 저장된 PMS 아이디와 비밀번호까지 모든 기기에서 안전하게 삭제합니다.",
+                "계정 설정의 원격 저장이 실패했을 때 성공으로 표시하지 않도록 안정성을 높였습니다.",
             ],
             web_server.RELEASE_NOTES,
         )
@@ -161,6 +158,28 @@ class ReleaseConsistencyTests(unittest.TestCase):
         self.assertIn("requestEpoch !== sessionEpoch", app)
         self.assertIn("recoveringSession = null", clear_body)
         self.assertIn("if (requestEpoch === sessionEpoch)", app)
+
+    def test_frontend_logout_clears_remembered_credentials_and_visible_password(self):
+        app = (ROOT / "www/app.js").read_text(encoding="utf-8")
+
+        remembered_start = app.index("function clearRememberedLogin()")
+        remembered_end = app.index("\n}\n", remembered_start)
+        remembered_body = app[remembered_start:remembered_end]
+        for key in ("rememberLoginKey", "rememberedLoginIdKey", "rememberedLoginPwKey"):
+            self.assertIn(f"storeRemove({key})", remembered_body)
+        self.assertIn('$("rememberLogin").checked = false', remembered_body)
+        self.assertIn('$("loginId").value = ""', remembered_body)
+        self.assertIn('$("loginPw").value = ""', remembered_body)
+
+        authenticated_start = app.index("function clearAuthenticatedUi()")
+        authenticated_end = app.index("\n}\n", authenticated_start)
+        self.assertIn("clearRememberedLogin()", app[authenticated_start:authenticated_end])
+
+        logout_start = app.index('$("logoutBtn").addEventListener')
+        logout_end = app.index("\n});", logout_start)
+        logout_body = app[logout_start:logout_end]
+        self.assertIn("clearRememberedLogin()", logout_body)
+        self.assertNotIn("loadRememberedLogin()", logout_body)
 
     def test_android_artifact_retains_update_compatible_signer(self):
         apksigner = Path(

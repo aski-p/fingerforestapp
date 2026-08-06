@@ -651,7 +651,7 @@ def _save_state_to_supabase(owner_key, state):
     }
     # Upsert: merge-duplicates
     try:
-        _supabase_request(
+        result = _supabase_request(
             "POST",
             f"/rest/v1/{table}",
             body=body,
@@ -661,7 +661,7 @@ def _save_state_to_supabase(owner_key, state):
                 "Authorization": f"Bearer {config['key']}",
             },
         )
-        return True
+        return result is not None
     except Exception:
         return False
 
