@@ -13,7 +13,7 @@ import web_server
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "3.16.8"
+EXPECTED_VERSION = "3.17.0"
 ANDROID_VERSION = "3.16.0"
 EXPECTED_ANDROID_SIGNER = "b2f3480a6d039ec381884e01a57e00c0ee1e31bcf1fe5d76ded97a4c2db47aec"
 
@@ -25,7 +25,7 @@ class ReleaseConsistencyTests(unittest.TestCase):
         self.assertIn("body .toast {\n  color: #ffffff;", css)
         self.assertIn(".toast:empty {\n  display: none;", css)
 
-    def test_busy_overlay_uses_the_eight_frame_loading_gif(self):
+    def test_busy_overlay_uses_a_character_only_transparent_loading_gif(self):
         html = (ROOT / "www/index.html").read_text(encoding="utf-8")
         css = (ROOT / "www/styles.css").read_text(encoding="utf-8")
         app = (ROOT / "www/app.js").read_text(encoding="utf-8")
@@ -34,9 +34,38 @@ class ReleaseConsistencyTests(unittest.TestCase):
         self.assertTrue(gif.is_file())
         self.assertEqual(b"GIF89a", gif.read_bytes()[:6])
         self.assertIn('id="busyOverlay"', html)
-        self.assertIn('/assets/fingerfruit-loading.gif', html)
+        self.assertIn(f'/assets/fingerfruit-loading.gif?v={EXPECTED_VERSION}', html)
+        self.assertIn('<strong>로딩중이에요</strong>', html)
+        self.assertNotIn('작업 중이에요', html)
         self.assertIn('role="status"', html)
         self.assertIn('.busy-overlay', css)
+        self.assertRegex(
+            css,
+            r"\.busy-overlay-card\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;",
+        )
+
+        probe = subprocess.check_output(
+            [
+                "ffprobe", "-v", "error", "-select_streams", "v:0",
+                "-show_entries", "stream=width,height,nb_frames", "-of", "csv=p=0", str(gif),
+            ],
+            text=True,
+        ).strip().split(",")
+        width, height, frame_count = map(int, probe)
+        self.assertEqual(frame_count, 8)
+        self.assertLessEqual(width, 272)
+        self.assertLessEqual(height, 320)
+
+        rgba = subprocess.check_output(
+            [
+                "ffmpeg", "-v", "error", "-i", str(gif), "-vf", "select=eq(n\\,0)",
+                "-frames:v", "1", "-pix_fmt", "rgba", "-f", "rawvideo", "-",
+            ]
+        )
+        self.assertEqual(len(rgba), width * height * 4)
+        alpha = rgba[3::4]
+        self.assertGreater(alpha.count(0), width * height // 3)
+        self.assertTrue(all(alpha[index] == 0 for index in (0, width - 1, width * (height - 1), width * height - 1)))
         self.assertIn('$("busyOverlay").hidden = !busy', app)
         self.assertIn('$("busyOverlay").setAttribute("aria-hidden", String(!busy))', app)
 
@@ -60,11 +89,16 @@ class ReleaseConsistencyTests(unittest.TestCase):
     def test_release_notes_only_describe_current_update(self):
         self.assertEqual(
             [
-                "로그아웃하면 저장된 PMS 아이디와 비밀번호까지 모든 기기에서 안전하게 삭제합니다.",
-                "계정 설정의 원격 저장이 실패했을 때 성공으로 표시하지 않도록 안정성을 높였습니다.",
+                "로딩 안내 문구를 ‘로딩중이에요’로 더 자연스럽게 바꿨습니다.",
+                "로딩 캐릭터의 흰 배경과 진행 막대를 제거해 캐릭터만 깔끔하게 표시합니다.",
+                "웹 화면에서 ‘아이디/비밀번호 기억하기’를 켜면 로그아웃 후에도 로그인 정보를 유지합니다.",
             ],
             web_server.RELEASE_NOTES,
         )
+        remembered_login_note = web_server.RELEASE_NOTES[-1]
+        self.assertIn("웹 화면에서", remembered_login_note)
+        self.assertNotIn("앱을 업데이트", remembered_login_note)
+        self.assertNotIn("Android", remembered_login_note)
 
     def test_canonical_sources_use_expected_platform_versions(self):
         checks = {
@@ -159,7 +193,7 @@ class ReleaseConsistencyTests(unittest.TestCase):
         self.assertIn("recoveringSession = null", clear_body)
         self.assertIn("if (requestEpoch === sessionEpoch)", app)
 
-    def test_frontend_logout_clears_remembered_credentials_and_visible_password(self):
+    def test_frontend_logout_preserves_valid_opted_in_credentials_and_clears_others(self):
         app = (ROOT / "www/app.js").read_text(encoding="utf-8")
 
         remembered_start = app.index("function clearRememberedLogin()")
@@ -171,14 +205,21 @@ class ReleaseConsistencyTests(unittest.TestCase):
         self.assertIn('$("loginId").value = ""', remembered_body)
         self.assertIn('$("loginPw").value = ""', remembered_body)
 
+        preserve_start = app.index("function shouldPreserveRememberedLogin()")
+        preserve_end = app.index("\n}\n", preserve_start)
+        preserve_body = app[preserve_start:preserve_end]
+        for key in ("rememberLoginKey", "rememberedLoginIdKey", "rememberedLoginPwKey"):
+            self.assertIn(f"storeGet({key})", preserve_body)
+
+        guarded_clear = "if (!shouldPreserveRememberedLogin()) clearRememberedLogin();"
         authenticated_start = app.index("function clearAuthenticatedUi()")
         authenticated_end = app.index("\n}\n", authenticated_start)
-        self.assertIn("clearRememberedLogin()", app[authenticated_start:authenticated_end])
+        self.assertIn(guarded_clear, app[authenticated_start:authenticated_end])
 
         logout_start = app.index('$("logoutBtn").addEventListener')
         logout_end = app.index("\n});", logout_start)
         logout_body = app[logout_start:logout_end]
-        self.assertIn("clearRememberedLogin()", logout_body)
+        self.assertIn(guarded_clear, logout_body)
         self.assertNotIn("loadRememberedLogin()", logout_body)
 
     def test_android_artifact_retains_update_compatible_signer(self):

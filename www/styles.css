@@ -335,7 +335,7 @@ body.theme-getter.main-bg-scene {
     linear-gradient(180deg, rgba(10, 0, 3, 0.18), rgba(14, 1, 5, 0.62) 44%, rgba(14, 1, 5, 0.9)),
     radial-gradient(circle at 24% 16%, rgba(255, 230, 120, 0.18), transparent 28%),
     radial-gradient(circle at 82% 70%, rgba(255, 23, 56, 0.2), transparent 34%),
-    url("/assets/getter/getter-robo-splash.jpg?v=3.16.8") center top / cover fixed,
+    url("/assets/getter/getter-robo-splash.jpg?v=3.17.0") center top / cover fixed,
     #100205;
   background-attachment: fixed, fixed, fixed, fixed, fixed;
   background-repeat: no-repeat;
@@ -437,7 +437,7 @@ body.main-bg-scene .launch-splash {
 body.theme-getter.main-bg-scene .launch-splash {
   background:
     linear-gradient(180deg, rgba(8, 0, 2, 0.08), rgba(12, 1, 4, 0.54) 52%, rgba(12, 1, 4, 0.88)),
-    url("/assets/getter/getter-robo-splash.jpg?v=3.16.8") center top / cover no-repeat,
+    url("/assets/getter/getter-robo-splash.jpg?v=3.17.0") center top / cover no-repeat,
     #100205;
 }
 
@@ -781,7 +781,7 @@ body.theme-getter .hero {
   border-bottom-color: rgba(255, 23, 56, 0.58);
   background:
     linear-gradient(90deg, rgba(11, 2, 4, 0.98) 0%, rgba(19, 3, 7, 0.94) 62%, rgba(12, 2, 4, 0.72) 100%),
-    url("/assets/getter/getter-robo-splash.jpg?v=3.16.8") center 18% / cover;
+    url("/assets/getter/getter-robo-splash.jpg?v=3.17.0") center 18% / cover;
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.34);
 }
 
@@ -4781,11 +4781,11 @@ body .modal {
   justify-items: center;
   width: min(82vw, 310px);
   padding: 18px 18px 20px;
-  border: 1px solid rgba(255, 255, 255, 0.82);
-  border-radius: 28px;
-  background: rgba(255, 255, 255, 0.96);
-  color: #27312b;
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.34);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #ffffff;
+  box-shadow: none;
   text-align: center;
 }
 
@@ -4793,18 +4793,21 @@ body .modal {
   display: block;
   width: min(100%, 218px);
   height: auto;
-  margin: -8px 0 -4px;
+  margin: -8px 0 8px;
+  filter: drop-shadow(0 14px 18px rgba(15, 23, 42, 0.34));
 }
 
 .busy-overlay-card strong {
   font-size: 18px;
   line-height: 1.35;
+  text-shadow: 0 2px 8px rgba(15, 23, 42, 0.9);
 }
 
 .busy-overlay-card span {
   margin-top: 4px;
-  color: #52615a;
+  color: rgba(255, 255, 255, 0.92);
   font-size: 13px;
+  text-shadow: 0 2px 8px rgba(15, 23, 42, 0.9);
 }
 
 @media (min-width: 860px) {

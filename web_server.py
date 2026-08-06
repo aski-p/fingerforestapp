@@ -33,7 +33,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.16.8"
+APP_VERSION = "3.17.0"
 ANDROID_APP_VERSION = "3.16.0"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -55,8 +55,9 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "로그아웃하면 저장된 PMS 아이디와 비밀번호까지 모든 기기에서 안전하게 삭제합니다.",
-    "계정 설정의 원격 저장이 실패했을 때 성공으로 표시하지 않도록 안정성을 높였습니다.",
+    "로딩 안내 문구를 ‘로딩중이에요’로 더 자연스럽게 바꿨습니다.",
+    "로딩 캐릭터의 흰 배경과 진행 막대를 제거해 캐릭터만 깔끔하게 표시합니다.",
+    "웹 화면에서 ‘아이디/비밀번호 기억하기’를 켜면 로그아웃 후에도 로그인 정보를 유지합니다.",
 ]
 VALID_THEMES = {
     "default",

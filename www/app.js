@@ -14,10 +14,10 @@ const fontKey = "fruitFont";
 const profilePhotoKey = "fruitProfilePhoto";
 const profilePhotoCacheKey = "fruitProfilePhotoCache";
 const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
-const securityMigrationKey = "fruitSecurityMigrationV86";
+const securityMigrationKey = "fruitSecurityMigrationV87";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.16.8";
+const appVersion = "3.17.0";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -145,28 +145,32 @@ function clearSessionStorage() {
 
 function runSecurityMigration() {
   if (storeGet(securityMigrationKey) === "1") return;
+  const preserveRememberedLogin = shouldPreserveRememberedLogin();
   storeRemove(fruitSessionKey);
   storeRemove(fruitOwnerKey);
   storeRemove(cachedStateKey);
-  storeRemove(rememberedLoginIdKey);
-  storeRemove(rememberedLoginPwKey);
-  storeRemove(rememberLoginKey);
+  if (!preserveRememberedLogin) {
+    storeRemove(rememberedLoginIdKey);
+    storeRemove(rememberedLoginPwKey);
+    storeRemove(rememberLoginKey);
+  }
   storeRemove(loggedOutKey);
   storeSet(securityMigrationKey, "1");
   try {
     if (window.FruitAndroid?.saveSession) window.FruitAndroid.saveSession("");
     if (window.FruitAndroid?.removeLocal) {
-      [
+      const nativeKeysToRemove = [
         fruitSessionKey,
         cachedStateKey,
-        rememberedLoginIdKey,
-        rememberedLoginPwKey,
-        rememberLoginKey,
         fruitOwnerKey,
         "fruitSecurityMigrationV70",
         "fruitSecurityMigrationV58",
         "fruitSecurityMigrationV62",
-      ].forEach((key) => window.FruitAndroid.removeLocal(key));
+      ];
+      if (!preserveRememberedLogin) {
+        nativeKeysToRemove.push(rememberedLoginIdKey, rememberedLoginPwKey, rememberLoginKey);
+      }
+      nativeKeysToRemove.forEach((key) => window.FruitAndroid.removeLocal(key));
     }
   } catch (_err) {
     // Native migration is best-effort.
@@ -919,6 +923,12 @@ function saveRememberedLogin(id, password) {
   storeSet(rememberedLoginPwKey, password);
 }
 
+function shouldPreserveRememberedLogin() {
+  return storeGet(rememberLoginKey) === "1"
+    && !!storeGet(rememberedLoginIdKey)
+    && !!storeGet(rememberedLoginPwKey);
+}
+
 function clearRememberedLogin() {
   storeRemove(rememberLoginKey);
   storeRemove(rememberedLoginIdKey);
@@ -983,7 +993,7 @@ function isAuthError(data, response) {
 
 function clearAuthenticatedUi() {
   clearSessionStorage();
-  clearRememberedLogin();
+  if (!shouldPreserveRememberedLogin()) clearRememberedLogin();
   sessionStorage.removeItem(sessionKey);
   toast("");
   $("results").innerHTML = "";
@@ -1125,8 +1135,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.16.8",
-        badge: "/icons/app-icon-192.png?v=3.16.8",
+        icon: "/icons/app-icon-192.png?v=3.17.0",
+        badge: "/icons/app-icon-192.png?v=3.17.0",
         data: { url: item.url || "/" },
       });
       return true;
@@ -2871,27 +2881,29 @@ $("resumeBtn").addEventListener("click", async () => {
 });
 
 $("logoutBtn").addEventListener("click", async () => {
+  let state = {};
+  let logoutError = null;
   try {
     setBusy(true);
-    const state = await api("/api/logout", {});
+    state = await api("/api/logout", {});
+  } catch (err) {
+    logoutError = err;
+  } finally {
     clearSessionStorage();
-    clearRememberedLogin();
+    if (!shouldPreserveRememberedLogin()) clearRememberedLogin();
     sessionStorage.removeItem(sessionKey);
-    renderState(state);
     $("results").innerHTML = "";
     $("searchInput").value = "";
     closeHistoryModal();
-    toast("로그아웃했습니다. 이 계정의 모든 기기 세션을 종료했습니다.");
-  } catch (err) {
-    if (String(err.message || "").includes("로그인") || String(err.message || "").includes("세션")) {
-      clearAuthenticatedUi();
-      toast("이미 로그아웃된 세션입니다.");
-    } else {
-      toast(`로그아웃 실패: ${err.message}`);
-    }
-  } finally {
     setBusy(false);
   }
+
+  renderState(state);
+  if (logoutError) {
+    toast(`이 기기에서 로그아웃했습니다. 서버의 다른 기기 세션 종료는 확인하지 못했습니다: ${logoutError.message}`);
+    return;
+  }
+  toast("로그아웃했습니다. 이 계정의 모든 기기 세션을 종료했습니다.");
 });
 
 function openHistoryModal() {
