@@ -713,6 +713,20 @@ input:disabled {
   overflow-x: hidden;
 }
 
+.app-notice {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #fff1f0;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.55;
+  word-break: keep-all;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
 .hero {
   position: sticky;
   top: 0;

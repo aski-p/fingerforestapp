@@ -589,10 +589,31 @@ async function fetchLatestAppInfo() {
   return candidates[0].info;
 }
 
+function renderUrgentNotice(info = latestAppInfo) {
+  const el = $("appNotice");
+  if (!el) return;
+  const notice = info?.notice;
+  const text = notice?.text || "";
+  const maxVersion = notice?.maxVersion || "3.16.0";
+  const installed = installedAppVersion();
+  const show =
+    notice?.enabled &&
+    text &&
+    installed &&
+    compareVersions(installed, maxVersion) <= 0;
+  if (!show) {
+    el.classList.add("hidden");
+    return;
+  }
+  el.innerHTML = text;
+  el.classList.remove("hidden");
+}
+
 async function checkAppVersion() {
   try {
     const info = await fetchLatestAppInfo();
     latestAppInfo = info;
+    renderUrgentNotice(info);
     if (info.publicHolidays && typeof info.publicHolidays === "object") {
       koreanPublicHolidays = { ...koreanPublicHolidays, ...info.publicHolidays };
       renderWorklogDates();

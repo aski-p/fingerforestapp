@@ -913,6 +913,11 @@ def app_info(handler):
         "androidApkUrl": f"{base_url}/downloads/{android_name}" if base_url else f"/downloads/{android_name}",
         "iosProfileUrl": f"{base_url}/downloads/{ios_name}" if base_url else f"/downloads/{ios_name}",
         "message": "새 버전이 있습니다. 업데이트 후 다시 실행해주세요.",
+        "notice": {
+            "enabled": True,
+            "maxVersion": "3.16.0",
+            "text": "⚠️ 안드로이드 <b>3.16.0 이하</b> 버전 사용자 알림: 앱 서명 키가 변경되어 기존 설치본으로는 새 버전 업데이트가 불가능합니다. 설치 페이지(<b>install.html</b>)에서 <b>새 APK</b>를 받아 기존 앱을 <b>삭제</b>한 뒤 재설치해 주세요.",
+        },
         "releaseNotes": RELEASE_NOTES,
         "publicHolidays": fruit_auto.KOREAN_PUBLIC_HOLIDAYS,
     }
