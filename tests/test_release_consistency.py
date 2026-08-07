@@ -14,8 +14,8 @@ import web_server
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_VERSION = "3.17.1"
-ANDROID_VERSION = "3.16.0"
-EXPECTED_ANDROID_SIGNER = "b2f3480a6d039ec381884e01a57e00c0ee1e31bcf1fe5d76ded97a4c2db47aec"
+ANDROID_VERSION = "3.17.1"
+EXPECTED_ANDROID_SIGNER = "19657138bba6fb9186d885c42eab5142710b147401e49abb2bbc0f12d01b50e7"
 
 
 class ReleaseConsistencyTests(unittest.TestCase):

@@ -14,7 +14,7 @@ WWW = ROOT / "www"
 ANDROID = ROOT / "mobile-build" / "android-app"
 LOCAL_MOBILE_BUILD = ROOT / "mobile-build"
 STATE_MOBILE_BUILD = ROOT.parent / "state" / "fruit-auto" / "mobile-build"
-EXPECTED_ANDROID_SIGNER_SHA256 = "b2f3480a6d039ec381884e01a57e00c0ee1e31bcf1fe5d76ded97a4c2db47aec"
+EXPECTED_ANDROID_SIGNER_SHA256 = "19657138bba6fb9186d885c42eab5142710b147401e49abb2bbc0f12d01b50e7"
 GRADLE = Path(os.environ.get("GRADLE_HOME") or LOCAL_MOBILE_BUILD / "gradle") / "bin" / "gradle"
 JAVA_HOME = Path(os.environ.get("JAVA_HOME") or LOCAL_MOBILE_BUILD / "jdk21")
 if not GRADLE.exists():
