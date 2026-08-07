@@ -13,7 +13,7 @@ import web_server
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "3.17.0"
+EXPECTED_VERSION = "3.17.1"
 ANDROID_VERSION = "3.16.0"
 EXPECTED_ANDROID_SIGNER = "b2f3480a6d039ec381884e01a57e00c0ee1e31bcf1fe5d76ded97a4c2db47aec"
 
@@ -89,16 +89,11 @@ class ReleaseConsistencyTests(unittest.TestCase):
     def test_release_notes_only_describe_current_update(self):
         self.assertEqual(
             [
-                "로딩 안내 문구를 ‘로딩중이에요’로 더 자연스럽게 바꿨습니다.",
-                "로딩 캐릭터의 흰 배경과 진행 막대를 제거해 캐릭터만 깔끔하게 표시합니다.",
-                "웹 화면에서 ‘아이디/비밀번호 기억하기’를 켜면 로그아웃 후에도 로그인 정보를 유지합니다.",
+                "열매선물 랭킹을 조회 목록 순서대로 1등부터 5등까지만 표시합니다.",
+                "5위 밖의 사용자는 순위 대신 본인의 열매선물 갯수를 안내합니다.",
             ],
             web_server.RELEASE_NOTES,
         )
-        remembered_login_note = web_server.RELEASE_NOTES[-1]
-        self.assertIn("웹 화면에서", remembered_login_note)
-        self.assertNotIn("앱을 업데이트", remembered_login_note)
-        self.assertNotIn("Android", remembered_login_note)
 
     def test_canonical_sources_use_expected_platform_versions(self):
         checks = {

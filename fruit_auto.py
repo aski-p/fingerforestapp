@@ -1518,14 +1518,16 @@ def forest_ranking(kind="berry", month=None, owner_key=None, limit=None):
     rows = content if isinstance(content, list) else content.get("resultMap") or []
     rows = list(rows or [])
     my_row = None
+    my_position = 0
     ranking_rows = rows
     if kind == "berry":
         my_row = rows[0] if rows else None
         ranking_rows = rows[1:]
     elif kind in {"gift", "level"}:
-        for row in rows:
+        for position, row in enumerate(rows, 1):
             if str(row.get("empId") or row.get("emp_id") or "") == str(sender_employee_id):
                 my_row = row
+                my_position = position
                 break
 
     def int_text(value):
@@ -1552,6 +1554,12 @@ def forest_ranking(kind="berry", month=None, owner_key=None, limit=None):
                 "level": forest_level_label(row.get("lvl")),
                 "count": count,
             })
+        elif kind == "gift":
+            items.append({
+                "rank": index if index <= 5 else 0,
+                "name": row_name(row),
+                "count": int_text(row.get("sumBerry") or row.get("yrBryCnt")),
+            })
         else:
             items.append({
                 "rank": int_text(row.get("rnk") or row.get("rankNo") or index) or index,
@@ -1566,6 +1574,12 @@ def forest_ranking(kind="berry", month=None, owner_key=None, limit=None):
                 "name": sender_employee_name,
                 "level": forest_level_label(my_row.get("lvl")),
                 "count": int_text(my_row.get("yrBryCnt") or my_row.get("sumBerry")),
+            }
+        elif kind == "gift":
+            my = {
+                "rank": my_position if 1 <= my_position <= 5 else 0,
+                "name": sender_employee_name,
+                "count": int_text(my_row.get("sumBerry") or my_row.get("yrBryCnt")),
             }
         else:
             my = {

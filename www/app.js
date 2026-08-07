@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV87";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.17.0";
+const appVersion = "3.17.1";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1135,8 +1135,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.17.0",
-        badge: "/icons/app-icon-192.png?v=3.17.0",
+        icon: "/icons/app-icon-192.png?v=3.17.1",
+        badge: "/icons/app-icon-192.png?v=3.17.1",
         data: { url: item.url || "/" },
       });
       return true;
@@ -2601,21 +2601,24 @@ function renderRankingTabs() {
 
 function renderRanking(data) {
   const my = data.my || {};
-  const items = data.items || [];
+  const kind = data.kind || rankingKind;
+  const items = window.RankingPresenter.visibleRankingItems(kind, data.items || []);
   const body = $("rankingBody");
-  const unit = rankingUnit(data.kind || rankingKind);
+  const unit = rankingUnit(kind);
   renderRankingTabs();
-  if ((data.kind || rankingKind) === "level") {
+  if (kind === "level") {
     $("rankingSummary").innerHTML = `${escapeHtml(data.userName || my.name || "사용자")}님의 <strong>회원레벨 랭킹은 ${fmtNumber(my.rank || 0)}등</strong> 이며<br><strong>${escapeHtml(my.level || "-")} (${unit} ${fmtNumber(my.count || 0)}개)</strong>입니다.`;
+  } else if (kind === "gift") {
+    $("rankingSummary").textContent = window.RankingPresenter.giftRankingSummary(data);
   } else {
-    $("rankingSummary").innerHTML = `${escapeHtml(data.userName || my.name || "사용자")}님의 <strong>${rankingKind === "gift" ? "열매선물 랭킹" : "열매랭킹"}은 ${fmtNumber(my.rank || 0)}등</strong> <strong>(${unit} ${fmtNumber(my.count || 0)}개)</strong> 입니다.`;
+    $("rankingSummary").innerHTML = `${escapeHtml(data.userName || my.name || "사용자")}님의 <strong>열매랭킹은 ${fmtNumber(my.rank || 0)}등</strong> <strong>(${unit} ${fmtNumber(my.count || 0)}개)</strong> 입니다.`;
   }
   if (!items.length) {
     body.innerHTML = '<div class="ranking-empty">조회된 랭킹이 없습니다.</div>';
     return;
   }
   body.innerHTML = items.map((item) => {
-    const hasLevel = (data.kind || rankingKind) === "level";
+    const hasLevel = kind === "level";
     return `
       <div class="ranking-row${hasLevel ? " has-level" : ""}">
         ${renderRankingMedal(item.rank)}
