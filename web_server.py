@@ -33,7 +33,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.19.0"
+APP_VERSION = "3.19.1"
 ANDROID_APP_VERSION = "3.17.2"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -55,9 +55,8 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "홈 위쪽에 보이던 스킨 이름 띠를 없앴어요.",
-    "왕관 페이지의 '‹ 홈' 버튼을 작고 깔끔한 버튼으로 바꿨어요.",
-    "전송 순환에서 다음 사람이 위쪽일 때 화살표가 '나'와 '다음' 표시를 가리던 문제를 고쳤어요.",
+    "전송 순환의 화살표가 이글거리는 불기둥으로 바뀌었어요. 불꽃이 일렁이고 불티가 다음 사람에게 날아가요.",
+    "이번 차례인 사람은 황금 불꽃 오라에 휩싸여 타오르고, 불티가 위로 튀어요.",
 ]
 VALID_THEMES = {
     "diary",

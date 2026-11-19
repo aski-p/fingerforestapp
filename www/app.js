@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV87";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.19.0";
+const appVersion = "3.19.1";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -849,7 +849,7 @@ const skinBannerText = {
 const SKIN_IDS = new Set(Object.keys(skinBannerText));
 
 function migratedTheme(theme) {
-  // 3.19.0 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
+  // 3.19.1 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
   if ((!theme || theme === "default") && storeGet(skinMigrationKey) !== "1") {
     storeSet(skinMigrationKey, "1");
     return DEFAULT_SKIN;
@@ -1205,8 +1205,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.19.0",
-        badge: "/icons/app-icon-192.png?v=3.19.0",
+        icon: "/icons/app-icon-192.png?v=3.19.1",
+        badge: "/icons/app-icon-192.png?v=3.19.1",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1801,29 +1801,59 @@ function cycleRingSvg(total, currentIndex) {
   const len = Math.hypot(dx, dy) || 1;
   const ux = dx / len;
   const uy = dy / len;
-  const sx = 50 + ux * 12;
-  const sy = 50 + uy * 12;
-  // 다음 사람이 위쪽에 있으면 이름표·'다음' 배지가 화살표 길목(아바타 아래)에 있으므로 그 앞에서 멈춘다.
-  const stopBefore = target.y < 46 ? 21 : 12.5;
+  const sx = 50 + ux * 9.6;
+  const sy = 50 + uy * 9.6;
+  // 불기둥은 아바타·이름표 아래층에 그려지므로 다음 사람 아바타 바로 앞까지 뻗는다.
+  const stopBefore = 9;
   const ex = target.x - ux * stopBefore;
   const ey = target.y - uy * stopBefore;
-  const headAngle = (Math.atan2(dy, dx) * 180) / Math.PI;
+  const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+  const L = Math.max(4, Math.hypot(ex - sx, ey - sy));
+  const f = (n) => n.toFixed(2);
+  const flame = (w0, w1, w2, tip) =>
+    `M0 ${f(-w0)} C${f(L * 0.35)} ${f(-w1)} ${f(L * 0.7)} ${f(-w1)} ${f(L)} ${f(-w2)} L${f(L + tip)} 0 L${f(L)} ${f(w2)} C${f(L * 0.7)} ${f(w1)} ${f(L * 0.35)} ${f(w1)} 0 ${f(w0)} Z`;
+  const embers = [0, 0.45, 0.9, 1.35, 1.8]
+    .map((delay, i) => `<circle class="fire-ember" r="${(0.55 + (i % 3) * 0.2).toFixed(2)}" cy="${f(((i % 2) ? 1 : -1) * (0.6 + i * 0.25))}">
+          <animate attributeName="cx" from="0" to="${f(L + 2)}" dur="1.1s" begin="${delay / 2}s" repeatCount="indefinite"></animate>
+          <animate attributeName="opacity" values="0;1;1;0" dur="1.1s" begin="${delay / 2}s" repeatCount="indefinite"></animate>
+        </circle>`)
+    .join("");
   return `
     <svg viewBox="0 0 100 100" focusable="false">
-      <defs>
-        <linearGradient id="cycleBeam" gradientUnits="userSpaceOnUse" x1="${sx.toFixed(2)}" y1="${sy.toFixed(2)}" x2="${ex.toFixed(2)}" y2="${ey.toFixed(2)}">
-          <stop offset="0" stop-color="#d9f99d" stop-opacity=".25"></stop>
-          <stop offset="1" stop-color="#bef264"></stop>
-        </linearGradient>
-      </defs>
       ${segments.join("")}
     </svg>
     <svg class="cycle-beam-layer" viewBox="0 0 100 100" focusable="false">
-      <g class="cycle-beam">
-        <line class="cycle-beam-glow" x1="${sx.toFixed(2)}" y1="${sy.toFixed(2)}" x2="${ex.toFixed(2)}" y2="${ey.toFixed(2)}"></line>
-        <line class="cycle-beam-line" stroke="url(#cycleBeam)" x1="${sx.toFixed(2)}" y1="${sy.toFixed(2)}" x2="${ex.toFixed(2)}" y2="${ey.toFixed(2)}"></line>
-        <line class="cycle-beam-spark" x1="${sx.toFixed(2)}" y1="${sy.toFixed(2)}" x2="${ex.toFixed(2)}" y2="${ey.toFixed(2)}"></line>
-        <path class="cycle-beam-head" d="M-6.5 -3.4 L2.2 0 L-6.5 3.4 L-4.8 0 Z" transform="translate(${ex.toFixed(2)} ${ey.toFixed(2)}) rotate(${headAngle.toFixed(1)})"></path>
+      <defs>
+        <linearGradient id="ffFireOuter" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#ff3d00" stop-opacity=".0"></stop>
+          <stop offset=".25" stop-color="#ff5a1f"></stop>
+          <stop offset=".5" stop-color="#ff9a1f"></stop>
+          <stop offset=".75" stop-color="#ff5a1f"></stop>
+          <stop offset="1" stop-color="#ff3d00" stop-opacity=".0"></stop>
+        </linearGradient>
+        <linearGradient id="ffFireCore" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#fff7c2" stop-opacity=".6"></stop>
+          <stop offset=".6" stop-color="#fff3a0"></stop>
+          <stop offset="1" stop-color="#ffffff"></stop>
+        </linearGradient>
+        <filter id="ffFireWobble" x="-30%" y="-80%" width="160%" height="260%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.35 0.9" numOctaves="2" seed="3" result="noise">
+            <animate attributeName="baseFrequency" values="0.35 0.9;0.42 1.2;0.33 0.8;0.35 0.9" dur="0.9s" repeatCount="indefinite"></animate>
+          </feTurbulence>
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="3.4" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
+        </filter>
+        <filter id="ffFireGlow" x="-50%" y="-150%" width="200%" height="400%">
+          <feGaussianBlur stdDeviation="2.2"></feGaussianBlur>
+        </filter>
+      </defs>
+      <g class="cycle-fire" transform="translate(${f(sx)} ${f(sy)}) rotate(${angle.toFixed(1)})">
+        <path class="fire-halo" d="${flame(3.6, 8.4, 6.2, 6.5)}" filter="url(#ffFireGlow)"></path>
+        <g filter="url(#ffFireWobble)">
+          <path class="fire-outer" d="${flame(2.6, 6.4, 4.8, 6)}" fill="url(#ffFireOuter)"></path>
+          <path class="fire-mid" d="${flame(1.7, 4.3, 3.2, 5)}"></path>
+          <path class="fire-core" d="${flame(0.8, 2, 1.5, 3.6)}" fill="url(#ffFireCore)"></path>
+        </g>
+        ${embers}
       </g>
     </svg>`;
 }
@@ -1926,6 +1956,7 @@ function renderTargetCycle(state) {
       personEl.style.top = `${point.y}%`;
     }
     personEl.innerHTML = `
+      ${index === currentIndex && cycle.length > 1 ? `<span class="cycle-aura" aria-hidden="true"><i></i><i></i><i></i><b></b><b></b><b></b><b></b></span>` : ""}
       <span class="profile-avatar person-avatar" aria-hidden="true"><span>${escapeHtml(getInitial(name))}</span></span>
       <span class="cycle-name">${escapeHtml(name || "-")}</span>
       ${index === currentIndex && cycle.length > 1 ? `<span class="cycle-next-badge">다음</span>` : ""}

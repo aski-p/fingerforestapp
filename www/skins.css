@@ -814,3 +814,82 @@ body.skin-on .ranking-page .ranking-back {
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface, #fff) 82%, transparent);
 }
+
+/* ================= 3.19.1: 불기둥 화살표 + 차례인 사람 황금 불꽃 오라 ================= */
+.cycle-fire .fire-halo { fill: #ff7a1a; opacity: .55; animation: fireHalo 0.7s ease-in-out infinite alternate; }
+.cycle-fire .fire-mid { fill: #ffb72b; }
+.cycle-fire .fire-ember { fill: #fff2a8; }
+.cycle-fire { animation: firePulse 0.45s ease-in-out infinite alternate; transform-box: view-box; }
+@keyframes fireHalo { from { opacity: .4; } to { opacity: .75; } }
+@keyframes firePulse { from { filter: brightness(1); } to { filter: brightness(1.18); } }
+
+/* 오라: 아바타 뒤에서 위로 치솟는 황금 불꽃 */
+.cycle-aura {
+  position: absolute;
+  left: 50%;
+  top: 28px;
+  z-index: -1;
+  width: 104px;
+  height: 104px;
+  transform: translate(-50%, -54%);
+  pointer-events: none;
+}
+.cycle-aura i {
+  position: absolute;
+  inset: 0;
+  border-radius: 50% 50% 46% 46% / 62% 62% 38% 38%;
+  background:
+    radial-gradient(ellipse at 50% 70%, rgba(255, 255, 230, .95) 0 26%, rgba(255, 226, 90, .9) 38%, rgba(255, 170, 30, .75) 55%, rgba(255, 110, 0, 0) 72%);
+  clip-path: polygon(50% 0%, 58% 18%, 68% 4%, 72% 24%, 86% 12%, 84% 34%, 100% 30%, 90% 52%, 100% 70%, 82% 74%, 88% 96%, 50% 86%, 12% 96%, 18% 74%, 0% 70%, 10% 52%, 0% 30%, 16% 34%, 14% 12%, 28% 24%, 32% 4%, 42% 18%);
+  transform-origin: 50% 80%;
+  animation: auraFlicker 0.42s ease-in-out infinite alternate;
+}
+.cycle-aura i:nth-child(2) { transform: scale(.88) rotate(8deg); animation-duration: .36s; animation-delay: -.12s; opacity: .85; }
+.cycle-aura i:nth-child(3) { transform: scale(1.12) rotate(-6deg); animation-duration: .5s; animation-delay: -.25s; opacity: .7; filter: hue-rotate(-12deg); }
+@keyframes auraFlicker {
+  0% { transform: scale(.94, .9) translateY(2px) rotate(-2deg); }
+  50% { transform: scale(1.04, 1.12) translateY(-3px) rotate(1deg); }
+  100% { transform: scale(.98, 1.2) translateY(-6px) rotate(2deg); }
+}
+/* 위로 튀는 불티 */
+.cycle-aura b {
+  position: absolute;
+  left: 50%;
+  bottom: 22%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff6b0;
+  box-shadow: 0 0 6px 2px rgba(255, 200, 40, .9);
+  animation: auraSpark 1s linear infinite;
+}
+.cycle-aura b:nth-of-type(1) { margin-left: -26px; animation-delay: -.1s; }
+.cycle-aura b:nth-of-type(2) { margin-left: 20px; animation-delay: -.45s; }
+.cycle-aura b:nth-of-type(3) { margin-left: -8px; animation-delay: -.7s; animation-duration: .8s; }
+.cycle-aura b:nth-of-type(4) { margin-left: 30px; animation-delay: -.25s; animation-duration: 1.2s; }
+@keyframes auraSpark {
+  0% { transform: translateY(0) scale(1); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translateY(-58px) scale(.3); opacity: 0; }
+}
+/* 차례인 사람 아바타: 황금 테두리로 바꾸고 기존 초록 링은 덮어씀 */
+.target-cycle-card.multiple .cycle-person.current .profile-avatar {
+  border-color: #ffd23f;
+  box-shadow: 0 0 0 3px #fff3b0, 0 0 18px 6px rgba(255, 190, 40, .85), 0 0 34px 12px rgba(255, 120, 0, .45);
+  animation: saiyanGlow 0.5s ease-in-out infinite alternate;
+}
+@keyframes saiyanGlow {
+  from { box-shadow: 0 0 0 3px #fff3b0, 0 0 14px 4px rgba(255, 190, 40, .75), 0 0 28px 10px rgba(255, 120, 0, .35); }
+  to { box-shadow: 0 0 0 4px #fff7c8, 0 0 22px 8px rgba(255, 210, 60, .95), 0 0 42px 16px rgba(255, 120, 0, .55); }
+}
+.cycle-next-badge { background: linear-gradient(90deg, #ff7a1a, #ffb72b); color: #fff; }
+@media (prefers-reduced-motion: reduce) {
+  .cycle-aura i, .cycle-aura b, .cycle-fire, .cycle-fire .fire-halo,
+  .target-cycle-card.multiple .cycle-person.current .profile-avatar { animation: none; }
+}
+.cycle-fire .fire-halo { opacity: .7; }
+@keyframes fireHalo { from { opacity: .55; } to { opacity: .9; } }
+.target-cycle-card.multiple .cycle-center { width: 19%; }
+.cycle-center b { font-size: 15px; }
+.cycle-center small { font-size: 10px; }
+.cycle-center-fruit { width: 22px; height: 22px; }
