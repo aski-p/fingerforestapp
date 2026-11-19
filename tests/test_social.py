@@ -81,69 +81,22 @@ class SupabaseFilterTests(unittest.TestCase):
         self.assertIn("order=id.desc", path)
 
 
-class FakePostgrest:
-    """SupabaseDocStore가 쓰는 PostgREST 문법만 흉내 낸다(fruit_chat_messages 한 테이블)."""
 
-    def __init__(self):
-        self.rows = []
-        self.next_id = 1
+class SocialAvailabilityTests(unittest.TestCase):
+    def test_missing_tables_report_unavailable_and_are_rechecked(self):
+        from unittest import mock
+        import web_server
+        web_server._SOCIAL = None
+        calls = {"n": 0}
 
-    def __call__(self, method, path, body=None, extra_headers=None):
-        import urllib.parse as up
-        base, _, query = path.partition("?")
-        assert base == "/rest/v1/fruit_chat_messages", base
-        params = up.parse_qsl(query, keep_blank_values=True)
-        if method == "POST":
-            row = {"id": self.next_id, **body}
-            self.next_id += 1
-            self.rows.append(row)
-            return [row]
-        rows = [r for r in self.rows if self._match(r, params)]
-        if method == "GET":
-            order = dict(params).get("order", "id.asc")
-            rows.sort(key=lambda r: r["id"], reverse=order.endswith("desc"))
-            limit = dict(params).get("limit")
-            return [dict(id=r["id"], metadata=r["metadata"]) for r in (rows[: int(limit)] if limit else rows)]
-        if method == "PATCH":
-            for r in rows:
-                r.update(body)
-            return None
-        if method == "DELETE":
-            self.rows = [r for r in self.rows if r not in rows]
-            return None
+        def missing(method, path, **kwargs):
+            calls["n"] += 1
+            raise RuntimeError("Supabase 요청 실패: 404 PGRST205")
 
-    @staticmethod
-    def _match(row, params):
-        for key, cond in params:
-            if key in ("select", "order", "limit"):
-                continue
-            op, _, raw = cond.partition(".")
-            if key == "user_key":
-                value = row["user_key"]
-            elif key == "id":
-                value = row["id"]
-            else:
-                field = key.split("->>", 1)[1]
-                v = (row.get("metadata") or {}).get(field)
-                value = None if v is None else str(v)
-            if op == "eq" and str(value) != raw:
-                return False
-            if op == "is" and value is not None:
-                return False
-            if op == "gt" and not (value is not None and int(value) > int(raw)):
-                return False
-            if op == "in" and str(value) not in raw.strip("()").split(","):
-                return False
-        return True
-
-
-class DocStoreTests(SocialTests):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.fake = FakePostgrest()
-        self.s = social.Social(social.SupabaseDocStore(self.fake))
-
-    def test_rows_live_in_the_existing_chat_table_under_social_keys(self):
-        self.s.send_note("1", "가", "2", "나", "hi")
-        self.assertTrue(all(r["user_key"].startswith("social:") for r in self.fake.rows))
-        self.assertTrue(all(r["role"] == "user" and r["content"] for r in self.fake.rows))
+        with mock.patch.object(web_server, "supabase_config", lambda: {"url": "x", "key": "y"}), \
+                mock.patch.object(web_server, "supabase_request", missing):
+            for _ in range(2):
+                with self.assertRaises(web_server.SocialUnavailable):
+                    web_server.social_service()
+        self.assertEqual(calls["n"], 2)
+        self.assertIsNone(web_server._SOCIAL)

@@ -34,7 +34,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.19.4"
+APP_VERSION = "3.19.5"
 ANDROID_APP_VERSION = "3.17.2"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -56,7 +56,7 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "앱 사용자끼리 대화·친구·쪽지를 바로 쓸 수 있어요(오른쪽 아래 말풍선).",
+    "앱 사용자끼리 대화·친구·쪽지 기능이 들어갔어요(오른쪽 아래 말풍선). 저장소 준비가 끝나면 바로 쓸 수 있어요.",
     "차례인 사람의 불꽃 오라를 조금 줄여 불기둥이 더 잘 보여요.",
 ]
 VALID_THEMES = {
@@ -1628,11 +1628,17 @@ class Handler(BaseHTTPRequestHandler):
                     owner_key, _session_token = self.require_session_owner()
                     try:
                         result = social_get(parsed.path, urllib.parse.parse_qs(parsed.query), owner_key)
+                    except SocialUnavailable as exc:
+                        self.send_json(503, {"ok": False, "error": str(exc)})
+                        return
                     except social.SocialError as exc:
                         self.send_json(400, {"ok": False, "error": str(exc)})
                         return
-                    except fruit_auto.FruitAutoError:
-                        raise
+                    except fruit_auto.FruitAutoError as exc:
+                        if "Supabase" not in str(exc):
+                            raise
+                        self.send_json(503, {"ok": False, "error": social_error(exc)})
+                        return
                     except Exception as exc:
                         self.send_json(503, {"ok": False, "error": social_error(exc)})
                         return
@@ -1676,11 +1682,17 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path.startswith("/api/social/"):
                 try:
                     result = social_post(parsed.path, payload, owner_key)
+                except SocialUnavailable as exc:
+                    self.send_json(503, {"ok": False, "error": str(exc)})
+                    return
                 except social.SocialError as exc:
                     self.send_json(400, {"ok": False, "error": str(exc)})
                     return
-                except fruit_auto.FruitAutoError:
-                    raise
+                except fruit_auto.FruitAutoError as exc:
+                    if "Supabase" not in str(exc):
+                        raise
+                    self.send_json(503, {"ok": False, "error": social_error(exc)})
+                    return
                 except Exception as exc:
                     self.send_json(503, {"ok": False, "error": social_error(exc)})
                     return
@@ -1780,20 +1792,26 @@ _SOCIAL = None
 _SOCIAL_LOCK = threading.Lock()
 
 
+class SocialUnavailable(RuntimeError):
+    pass
+
+
 def social_service():
+    """전용 테이블(supabase_social_schema.sql)이 있을 때만 운영 저장소를 쓴다.
+    개인 대화라서 공개 읽기 정책이 걸린 fruit_profiles 같은 테이블에는 절대 저장하지 않는다."""
     global _SOCIAL
     with _SOCIAL_LOCK:
-        if _SOCIAL is None:
-            if not supabase_config():
-                store = social.SqliteStore(fruit_auto.DATA_DIR / "social.db")
-            else:
-                # 전용 테이블(supabase_social_schema.sql)이 있으면 그걸, 없으면 기존 fruit_chat_messages에 문서로 저장
-                try:
-                    supabase_request("GET", "/rest/v1/fruit_rooms?select=id&limit=1")
-                    store = social.SupabaseStore(supabase_request)
-                except Exception:
-                    store = social.SupabaseDocStore(supabase_request)
-            _SOCIAL = social.Social(store)
+        if _SOCIAL is not None:
+            return _SOCIAL
+        if not supabase_config():
+            _SOCIAL = social.Social(social.SqliteStore(fruit_auto.DATA_DIR / "social.db"))
+            return _SOCIAL
+        try:
+            supabase_request("GET", "/rest/v1/fruit_rooms?select=id&limit=1")
+        except Exception as exc:
+            # 아직 테이블이 없음: 캐시하지 않고 다음 요청에서 다시 확인한다
+            raise SocialUnavailable("채팅 저장소가 아직 준비되지 않았어요(관리자 설정 필요).") from exc
+        _SOCIAL = social.Social(social.SupabaseStore(supabase_request))
         return _SOCIAL
 
 
