@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV87";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.18.3";
+const appVersion = "3.18.4";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -833,7 +833,7 @@ const skinBannerText = {
 };
 
 function migratedTheme(theme) {
-  // 3.18.3 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
+  // 3.18.4 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
   if ((!theme || theme === "default") && storeGet(skinMigrationKey) !== "1") {
     storeSet(skinMigrationKey, "1");
     return DEFAULT_SKIN;
@@ -1189,8 +1189,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.18.3",
-        badge: "/icons/app-icon-192.png?v=3.18.3",
+        icon: "/icons/app-icon-192.png?v=3.18.4",
+        badge: "/icons/app-icon-192.png?v=3.18.4",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1810,13 +1810,41 @@ function cycleRingSvg(total, currentIndex) {
     </svg>`;
 }
 
-const CYCLE_AVATAR_COUNT = 8;
+const CYCLE_AVATAR_COUNT = 20;
 
-function cycleDefaultAvatar(person) {
+function cycleAvatarIndex(person) {
   const key = String(person?.emp_id || person?.emp_nm || "");
   let hash = 0;
   for (const ch of key) hash = (hash * 31 + ch.codePointAt(0)) >>> 0;
-  return `/assets/avatars/a${(hash % CYCLE_AVATAR_COUNT) + 1}.webp`;
+  return hash % CYCLE_AVATAR_COUNT;
+}
+
+function animalAvatarUrl(index) {
+  return `/assets/avatars/animal-${String(index + 1).padStart(2, "0")}.webp`;
+}
+
+// 사람마다 동물 캐릭터 하나(같은 사람은 늘 같은 동물). used를 주면 그 목록 안에서는 겹치지 않게 다음 동물로 민다.
+function cycleDefaultAvatar(person, used = null) {
+  let index = cycleAvatarIndex(person);
+  if (used) {
+    for (let step = 0; step < CYCLE_AVATAR_COUNT && used.has(index); step += 1) index = (index + 1) % CYCLE_AVATAR_COUNT;
+    used.add(index);
+  }
+  return animalAvatarUrl(index);
+}
+
+function cycleAnimalAssignments(cycle) {
+  const used = new Set();
+  const map = new Map();
+  (Array.isArray(cycle) ? cycle : []).forEach((person) => {
+    map.set(String(person?.emp_id || person?.emp_nm || ""), cycleDefaultAvatar(person, used));
+  });
+  return map;
+}
+
+function personAnimalAvatar(person, cycle) {
+  const key = String(person?.emp_id || person?.emp_nm || "");
+  return cycleAnimalAssignments(cycle).get(key) || cycleDefaultAvatar(person);
 }
 
 function renderTargetCycle(state) {
@@ -1868,6 +1896,7 @@ function renderTargetCycle(state) {
     center.innerHTML = `<b>나</b><span class="cycle-center-fruit" aria-hidden="true"></span>${berries && berries !== "-" ? `<small>열매 ${escapeHtml(berries)}</small>` : ""}`;
     flow.appendChild(center);
   }
+  const animals = cycleAnimalAssignments(cycle);
   cycle.forEach((person, index) => {
     const name = cyclePersonName(person);
     const personEl = document.createElement("div");
@@ -1889,7 +1918,7 @@ function renderTargetCycle(state) {
       personEl.querySelector(".profile-avatar"),
       personEl.querySelector(".profile-avatar span"),
       name,
-      person.profilePhotoUrl || getCachedProfilePhoto(person.emp_id) || cycleDefaultAvatar(person)
+      person.profilePhotoUrl || getCachedProfilePhoto(person.emp_id) || animals.get(String(person?.emp_id || person?.emp_nm || "")) || cycleDefaultAvatar(person)
     );
     personEl.querySelector(".cycle-remove").addEventListener("click", async () => {
       try {
@@ -2590,8 +2619,10 @@ function renderState(state) {
     ? personNameLabel(state.loginUser || state.senderEmployeeName, state.senderEmployeeId)
     : "로그인 필요";
   const senderPhoto = unlocked ? storedSenderProfilePhoto(state) || "" : "";
-  const targetLabel = hasTarget ? employeeLabel(state.targetEmployeeName, state.targetEmployeeId) : "검색 후 선택";
-  const targetPhoto = hasTarget ? state.targetProfilePhotoUrl || "" : "";
+  const targetLabel = hasTarget ? personNameLabel(state.targetEmployeeName, state.targetEmployeeId) : "검색 후 선택";
+  const targetPhoto = hasTarget
+    ? state.targetProfilePhotoUrl || personAnimalAvatar({ emp_id: state.targetEmployeeId, emp_nm: state.targetEmployeeName }, state.targetCycle)
+    : "";
 
   setLockedState(unlocked);
   $("loginUserDisplay").textContent = senderLabel;
