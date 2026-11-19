@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV87";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.18.6";
+const appVersion = "3.18.7";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -430,7 +430,6 @@ function isModalVisible(id) {
 
 function syncModalOpenState() {
   const visible = [
-    "rankingModal",
     "historyModal",
     "settingsModal",
     "profileModal",
@@ -833,7 +832,7 @@ const skinBannerText = {
 };
 
 function migratedTheme(theme) {
-  // 3.18.6 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
+  // 3.18.7 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
   if ((!theme || theme === "default") && storeGet(skinMigrationKey) !== "1") {
     storeSet(skinMigrationKey, "1");
     return DEFAULT_SKIN;
@@ -1189,8 +1188,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.18.6",
-        badge: "/icons/app-icon-192.png?v=3.18.6",
+        icon: "/icons/app-icon-192.png?v=3.18.7",
+        badge: "/icons/app-icon-192.png?v=3.18.7",
         data: { url: item.url || "/" },
       });
       return true;
@@ -2810,12 +2809,14 @@ function renderRanking(data) {
   }
   body.innerHTML = items.map((item) => {
     const hasLevel = kind === "level";
+    const avatar = getCachedProfilePhoto(item.empId) || cycleDefaultAvatar({ emp_id: item.empId, emp_nm: item.name });
     return `
-      <div class="ranking-row${hasLevel ? " has-level" : ""}">
+      <div class="ranking-row${hasLevel ? " has-level" : ""}${item.isMe ? " is-me" : ""}">
         ${renderRankingMedal(item.rank)}
-        <strong class="ranking-name">${escapeHtml(item.name || "-")}</strong>
+        <span class="ranking-avatar" style="background-image:url('${escapeHtml(avatar)}')" aria-hidden="true"></span>
+        <strong class="ranking-name">${escapeHtml(item.name || "-")}${item.isMe ? '<em class="ranking-me">나</em>' : ""}</strong>
         ${hasLevel ? `<span class="ranking-level">${escapeHtml(item.level || "-")}</span>` : ""}
-        <span class="ranking-count">${fmtNumber(item.count || 0)}개</span>
+        <span class="ranking-count"><span class="rk-ico rk-fruit" aria-hidden="true"></span>${fmtNumber(item.count || 0)}</span>
       </div>
     `;
   }).join("");
@@ -3115,9 +3116,15 @@ function openRankingModal() {
   }
   rankingDate = new Date();
   $("rankingModal").classList.remove("hidden");
-  document.body.classList.add("modal-open");
+  document.body.classList.add("page-ranking");
+  window.scrollTo(0, 0);
+  if (history.state?.page !== "ranking") history.pushState({ page: "ranking" }, "", "#ranking");
   refreshRanking();
 }
+
+window.addEventListener("popstate", () => {
+  if (!$("rankingModal").classList.contains("hidden") && history.state?.page !== "ranking") closeRankingModal({ fromHistory: true });
+});
 
 async function openSettingsModal() {
   $("settingsModal").classList.remove("hidden");
@@ -3173,8 +3180,10 @@ function closeHistoryModal() {
   syncModalOpenState();
 }
 
-function closeRankingModal() {
+function closeRankingModal({ fromHistory = false } = {}) {
   $("rankingModal").classList.add("hidden");
+  document.body.classList.remove("page-ranking");
+  if (!fromHistory && history.state?.page === "ranking") history.back();
   syncModalOpenState();
 }
 
@@ -3340,10 +3349,7 @@ $("historyOpenBtn").addEventListener("click", () => {
 });
 
 $("rankingOpenBtn").addEventListener("click", openRankingModal);
-$("rankingCloseBtn").addEventListener("click", closeRankingModal);
-$("rankingModal").addEventListener("click", (event) => {
-  if (event.target === $("rankingModal")) closeRankingModal();
-});
+$("rankingCloseBtn").addEventListener("click", () => closeRankingModal());
 document.querySelectorAll("[data-ranking-kind]").forEach((button) => {
   button.addEventListener("click", () => {
     rankingKind = button.dataset.rankingKind || "berry";

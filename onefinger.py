@@ -90,6 +90,15 @@ class OneFingerClient:
             raise LoginFailed("새 OneFinger는 숫자 사번으로 로그인해요. 사번을 확인해 주세요.", code="SSO_EMPNO_FORMAT")
         start = f"{ONEFINGER_URL}/auth/login?return_to={urllib.parse.quote(ONEFINGER_URL + '/', safe='')}"
         res = self._open(urllib.request.Request(start, headers={"Accept": "text/html"}))
+        if getattr(res, "status", getattr(res, "code", 0)) == 429:
+            retry_after = 0
+            try:
+                retry_after = int((res.headers.get("Retry-After") or "0").strip())
+            except (TypeError, ValueError, AttributeError):
+                retry_after = 0
+            err = OneFingerError("통합 로그인이 잠시 막혔어요(요청이 많음). 몇 분 뒤 다시 시도해 주세요.", code="RATE_LIMITED", status=429)
+            err.retry_after = retry_after
+            raise err
         page_url = res.geturl()
         html = res.read().decode("utf-8", "replace")
         if _host(page_url) != _host(ONEFINGER_SSO_URL):

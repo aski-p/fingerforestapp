@@ -33,7 +33,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.18.6"
+APP_VERSION = "3.18.7"
 ANDROID_APP_VERSION = "3.17.2"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -55,8 +55,8 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "숲속 다이어리·성장 정원 스킨의 그림을 화면 위쪽 띠가 아니라 화면 전체 배경으로 바꿨습니다. 카드는 살짝 비치는 종이처럼 보여요.",
-    "공지·왕관 같은 팝업이 화면 밖에서 열려 반응이 없어 보이던 문제를 고쳤습니다.",
+    "왕관(랭킹)이 팝업 대신 별도 페이지로 열려요. 동물 캐릭터와 함께 순위가 보이고, 내 순위 줄이 강조돼요. 뒤로가기로 홈에 돌아와요.",
+    "통합 로그인에 요청이 몰려 '429'로 막히던 문제를 줄였어요. 로그인 세션을 서버 안에서 함께 쓰고, 막히면 잠시 쉬었다가 다시 시도해요.",
 ]
 VALID_THEMES = {
     "diary",

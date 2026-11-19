@@ -181,3 +181,47 @@ class OneFingerSessionReuseTests(unittest.TestCase):
             fruit_auto.pms_login(fruit_auto.Client(), "12345678", "pw")
             fruit_auto.pms_login(fruit_auto.Client(), "12345678", "pw")
         self.assertEqual(calls["login"], 2)
+
+
+class OneFingerRateLimitTests(unittest.TestCase):
+    def setUp(self):
+        fruit_auto.forget_onefinger_sessions()
+
+    def tearDown(self):
+        fruit_auto.forget_onefinger_sessions()
+
+    def test_429_starts_a_cooldown_without_hammering_sso(self):
+        calls = {"login": 0}
+
+        def limited_login(self, employee_no, password):
+            calls["login"] += 1
+            err = onefinger.OneFingerError("429", code="RATE_LIMITED", status=429)
+            err.retry_after = 120
+            raise err
+
+        with mock.patch.object(onefinger.OneFingerClient, "login", limited_login), \
+                mock.patch.object(onefinger.OneFingerClient, "session_info", lambda self: {"authenticated": False}):
+            for _ in range(3):
+                with self.assertRaises(fruit_auto.FruitAutoError) as ctx:
+                    fruit_auto.pms_login(fruit_auto.Client(), "12345678", "pw")
+        self.assertEqual(calls["login"], 1)
+        self.assertIn("분 뒤", str(ctx.exception))
+
+    def test_session_cookies_are_shared_through_the_private_file(self):
+        calls = {"login": 0}
+
+        def fake_login(self, employee_no, password):
+            calls["login"] += 1
+            self.employee = {"id": "900001", "employeeNo": employee_no, "name": "테스트"}
+            return self.employee
+
+        with mock.patch.object(onefinger.OneFingerClient, "login", fake_login), \
+                mock.patch.object(onefinger.OneFingerClient, "session_info", lambda self: {"authenticated": True, "csrf": "t"}):
+            fruit_auto.pms_login(fruit_auto.Client(), "12345678", "pw")
+            fruit_auto._ONEFINGER_SESSIONS.clear()  # 다른 프로세스처럼 메모리 캐시 없음
+            fruit_auto.pms_login(fruit_auto.Client(), "12345678", "pw")
+        self.assertEqual(calls["login"], 1)
+        files = list(fruit_auto._onefinger_state_dir().glob("*.json"))
+        self.assertTrue(files)
+        self.assertEqual(oct(files[0].stat().st_mode & 0o777), "0o600")
+        self.assertNotIn("pw", files[0].read_text())

@@ -1,13 +1,13 @@
 <!doctype html>
 <html lang="ko">
   <head>
-    <!-- 마지막 배포: 2026-08-13T12:52:38Z (v3.18.6, Railway web 서비스 4be3dc7e) -->
+    <!-- 마지막 배포: 2026-08-13T12:52:38Z (v3.18.7, Railway web 서비스 4be3dc7e) -->
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#f7f9fc">
     <link rel="manifest" href="/manifest.webmanifest">
-    <link rel="apple-touch-icon" href="/icons/app-touch-icon.png?v=3.18.6">
-    <link rel="icon" href="/icons/app-icon-192.png?v=3.18.6" type="image/png">
+    <link rel="apple-touch-icon" href="/icons/app-touch-icon.png?v=3.18.7">
+    <link rel="icon" href="/icons/app-icon-192.png?v=3.18.7" type="image/png">
     <script>
       (() => {
         const now = new Date();
@@ -27,8 +27,8 @@
         document.head.appendChild(preload);
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=3.18.6">
-    <link rel="stylesheet" href="/skins.css?v=3.18.6">
+    <link rel="stylesheet" href="/styles.css?v=3.18.7">
+    <link rel="stylesheet" href="/skins.css?v=3.18.7">
     <title>FingerForest</title>
   </head>
   <body class="logged-out splash-active main-bg-scene main-bg-forest-summer">
@@ -78,7 +78,7 @@
     </div>
     <div id="busyOverlay" class="busy-overlay" role="status" aria-live="polite" aria-hidden="true" hidden>
       <div class="busy-overlay-card">
-        <img src="/assets/fingerfruit-loading.gif?v=3.18.6" alt="" aria-hidden="true">
+        <img src="/assets/fingerfruit-loading.gif?v=3.18.7" alt="" aria-hidden="true">
         <strong>로딩중이에요</strong>
         <span>잠시만 기다려 주세요.</span>
       </div>
@@ -387,31 +387,31 @@
         </div>
       </div>
 
-      <div id="rankingModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="rankingModalTitle">
-        <div class="modal-panel ranking-panel">
-          <div class="modal-head">
-            <div>
-              <p class="label">FOREST</p>
-              <h2 id="rankingModalTitle">왕관</h2>
-            </div>
-            <button id="rankingCloseBtn" class="icon-button" type="button" aria-label="왕관 닫기">닫기</button>
+      <section id="rankingModal" class="ranking-page hidden" aria-labelledby="rankingModalTitle">
+        <header class="ranking-page-hero">
+          <button id="rankingCloseBtn" class="ranking-back" type="button" aria-label="홈으로">‹ 홈</button>
+          <div class="ranking-page-title">
+            <h2 id="rankingModalTitle">왕관</h2>
+            <p>동료들의 순위를 확인해요</p>
           </div>
+        </header>
+        <div class="ranking-page-body">
           <div class="ranking-tabs" aria-label="랭킹 종류">
-            <button class="active" type="button" data-ranking-kind="berry">열매랭킹</button>
-            <button type="button" data-ranking-kind="gift">열매선물</button>
-            <button type="button" data-ranking-kind="level">회원레벨</button>
+            <button class="active" type="button" data-ranking-kind="berry"><span class="rk-ico rk-fruit" aria-hidden="true"></span>열매</button>
+            <button type="button" data-ranking-kind="gift"><span class="rk-ico rk-gift" aria-hidden="true"></span>선물</button>
+            <button type="button" data-ranking-kind="level"><span class="rk-ico rk-leaf" aria-hidden="true"></span>레벨</button>
           </div>
           <div id="rankingMonthbar" class="ranking-monthbar">
             <button id="rankingPrevBtn" type="button" aria-label="이전 달">‹</button>
             <strong id="rankingMonthLabel">이번 달</strong>
             <button id="rankingNextBtn" type="button" aria-label="다음 달">›</button>
           </div>
-          <div id="rankingSummary" class="ranking-summary">왕관 버튼을 누르면 랭킹을 불러옵니다.</div>
+          <div id="rankingSummary" class="ranking-summary">랭킹을 불러오는 중이에요.</div>
           <div id="rankingBody" class="ranking-body">
             <div class="ranking-empty">랭킹을 불러오는 중입니다...</div>
           </div>
         </div>
-      </div>
+      </section>
 
       <div id="settingsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
         <div class="modal-panel settings-panel">
@@ -560,7 +560,7 @@
 
       <p id="toast" class="toast" role="status"></p>
       <footer class="app-footer">
-        <span>v3.18.6 정식버전 · by aski</span>
+        <span>v3.18.7 정식버전 · by aski</span>
         <a id="supportLink" class="support-link" href="https://qr.kakaopay.com/Ej7ruxJDq" target="_blank" rel="noopener" aria-label="카카오페이로 후원하기">후원하기</a>
       </footer>
     </main>
@@ -583,8 +583,8 @@
     <button id="chatOpenBtn" class="chat-fab" type="button" aria-label="채팅 열기">
       <span class="chat-fab-mark" aria-hidden="true"></span>
     </button>
-    <script src="/request_coordinator.js?v=3.18.6"></script>
-    <script src="/ranking_presenter.js?v=3.18.6"></script>
-    <script src="/app.js?v=3.18.6"></script>
+    <script src="/request_coordinator.js?v=3.18.7"></script>
+    <script src="/ranking_presenter.js?v=3.18.7"></script>
+    <script src="/app.js?v=3.18.7"></script>
   </body>
 </html>

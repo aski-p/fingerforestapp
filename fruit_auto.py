@@ -1386,31 +1386,122 @@ def _adopt_session(client, cached_client):
     client.employee = cached_client.employee
 
 
+_ONEFINGER_COOLDOWN_DEFAULT = 10 * 60
+
+
+def _onefinger_state_dir():
+    path = DATA_DIR / "onefinger_sessions"
+    try:
+        path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    except OSError:
+        pass
+    return path
+
+
+def _onefinger_cooldown_until():
+    try:
+        return float((_onefinger_state_dir() / "cooldown").read_text().strip() or 0)
+    except (OSError, ValueError):
+        return 0.0
+
+
+def _set_onefinger_cooldown(seconds):
+    until = time.time() + max(60, int(seconds or _ONEFINGER_COOLDOWN_DEFAULT))
+    try:
+        target = _onefinger_state_dir() / "cooldown"
+        target.write_text(str(until))
+        os.chmod(target, 0o600)
+    except OSError:
+        pass
+    return until
+
+
+def _save_session_cookies(key, client):
+    # 웹 서버와 자동 작업(tick worker)이 같은 세션을 쓰도록 쿠키만 비공개 파일(0600)에 둔다. 비밀번호는 넣지 않는다.
+    try:
+        cookies = [
+            {"name": c.name, "value": c.value, "domain": c.domain, "path": c.path, "secure": c.secure, "expires": c.expires}
+            for c in client.cookies
+        ]
+        target = _onefinger_state_dir() / f"{key.replace(':', '_')}.json"
+        tmp = target.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"savedAt": time.time(), "employee": client.employee, "cookies": cookies}))
+        os.chmod(tmp, 0o600)
+        tmp.replace(target)
+    except OSError:
+        pass
+
+
+def _load_session_cookies(key, client):
+    try:
+        data = json.loads((_onefinger_state_dir() / f"{key.replace(':', '_')}.json").read_text())
+    except (OSError, ValueError):
+        return False
+    if time.time() - float(data.get("savedAt") or 0) > _ONEFINGER_SESSION_MAX_AGE:
+        return False
+    jar = http.cookiejar.CookieJar()
+    for c in data.get("cookies") or []:
+        jar.set_cookie(http.cookiejar.Cookie(
+            0, c["name"], c["value"], None, False, c["domain"], bool(c["domain"]), c["domain"].startswith("."),
+            c["path"], True, bool(c.get("secure")), c.get("expires"), False, None, None, {},
+        ))
+    client.cookies = jar
+    client.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    client.employee = data.get("employee")
+    return bool(client.employee)
+
+
 def _onefinger_login_reusing_session(client, employee_no, password):
     key = _onefinger_session_key(employee_no, password)
     with _ONEFINGER_SESSIONS_LOCK:
         cached = _ONEFINGER_SESSIONS.get(key)
+    candidates = []
     if cached and time.time() - cached[1] < _ONEFINGER_SESSION_MAX_AGE:
-        _adopt_session(client, cached[0])
+        candidates.append("memory")
+    candidates.append("file")
+    for source in candidates:
+        if source == "memory":
+            _adopt_session(client, cached[0])
+        elif not _load_session_cookies(key, client):
+            continue
         try:
             if client.session_info().get("authenticated") and client.employee:
+                with _ONEFINGER_SESSIONS_LOCK:
+                    _ONEFINGER_SESSIONS[key] = (client, time.time())
                 return client.employee
         except OneFingerError:
             pass
-        with _ONEFINGER_SESSIONS_LOCK:
-            _ONEFINGER_SESSIONS.pop(key, None)
-        client.cookies = http.cookiejar.CookieJar()
-        client.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(client.cookies))
-        client.employee = None
-    emp = client.login(employee_no, password)
+    with _ONEFINGER_SESSIONS_LOCK:
+        _ONEFINGER_SESSIONS.pop(key, None)
+    client.cookies = http.cookiejar.CookieJar()
+    client.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(client.cookies))
+    client.employee = None
+    wait = _onefinger_cooldown_until() - time.time()
+    if wait > 0:
+        raise OneFingerError(
+            f"통합 로그인이 잠시 막혀 있어요. 약 {max(1, int(wait // 60) + 1)}분 뒤 다시 시도해 주세요.",
+            code="RATE_LIMITED", status=429,
+        )
+    try:
+        emp = client.login(employee_no, password)
+    except OneFingerError as exc:
+        if getattr(exc, "code", "") == "RATE_LIMITED" or getattr(exc, "status", None) == 429:
+            _set_onefinger_cooldown(getattr(exc, "retry_after", 0))
+        raise
     with _ONEFINGER_SESSIONS_LOCK:
         _ONEFINGER_SESSIONS[key] = (client, time.time())
+    _save_session_cookies(key, client)
     return emp
 
 
 def forget_onefinger_sessions():
     with _ONEFINGER_SESSIONS_LOCK:
         _ONEFINGER_SESSIONS.clear()
+    try:
+        for path in _onefinger_state_dir().glob("*"):
+            path.unlink()
+    except OSError:
+        pass
 
 
 def pms_login(client, pms_id=None, pms_password=None, owner_key=None):
@@ -1608,6 +1699,10 @@ def forest_ranking(kind="berry", month=None, owner_key=None, limit=None):
     def row_name(row):
         return row.get("empNm") or row.get("emp_nm") or row.get("name") or "-"
 
+    def row_extra(row):
+        emp_id = str(row.get("empId") or row.get("emp_id") or "")
+        return {"empId": emp_id, "isMe": bool(emp_id) and emp_id == str(sender_employee_id or "")}
+
     items = []
     if limit is None:
         visible_rows = ranking_rows
@@ -1625,18 +1720,21 @@ def forest_ranking(kind="berry", month=None, owner_key=None, limit=None):
                 "name": row_name(row),
                 "level": forest_level_label(row.get("lvl")),
                 "count": count,
+                **row_extra(row),
             })
         elif kind == "gift":
             items.append({
                 "rank": index if index <= 5 else 0,
                 "name": row_name(row),
                 "count": int_text(row.get("sumBerry") or row.get("yrBryCnt")),
+                **row_extra(row),
             })
         else:
             items.append({
                 "rank": int_text(row.get("rnk") or row.get("rankNo") or index) or index,
                 "name": row_name(row),
                 "count": int_text(row.get("sumBerry") or row.get("yrBryCnt")),
+                **row_extra(row),
             })
 
     if my_row:

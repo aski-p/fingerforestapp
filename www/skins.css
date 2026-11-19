@@ -408,3 +408,206 @@ body.theme-garden.main-bg-scene .launch-splash {
   background: rgba(255, 252, 245, 0.82);
   color: var(--text);
 }
+
+/* ================= 3.18.7: 왕관(랭킹) = 팝업이 아닌 별도 페이지 ================= */
+body.page-ranking .app > :not(#rankingModal):not(#appNotice) {
+  display: none !important;
+}
+
+.ranking-page {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  min-height: 100dvh;
+  margin: -18px -16px 0;
+  padding: max(14px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  background: var(--bg);
+}
+
+.ranking-page.hidden { display: none; }
+
+:is(body.theme-diary, body.theme-garden) .ranking-page { background: transparent; }
+
+.ranking-page-hero {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  min-height: 172px;
+  margin: calc(-1 * max(14px, env(safe-area-inset-top))) -16px 0;
+  padding: max(14px, env(safe-area-inset-top)) 18px 8px;
+  border-radius: 0 0 24px 24px;
+  background: var(--rk-hero, linear-gradient(160deg, var(--accent-soft), var(--bg)));
+  background-size: cover;
+  background-position: right center;
+}
+
+body.theme-diary .ranking-page-hero { --rk-hero: url("/assets/skins/rank-deer.webp") right center / cover no-repeat, #f7f3e8; }
+body.theme-garden .ranking-page-hero { --rk-hero: url("/assets/skins/c-banner.webp") center / cover no-repeat, #eef7ee; }
+
+.ranking-back {
+  justify-self: start;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.ranking-page-title h2 {
+  margin: 4px 0 4px;
+  color: var(--text-strong);
+  font-size: 30px;
+  font-weight: 950;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .8);
+}
+
+.ranking-page-title p {
+  display: inline-block;
+  max-width: 62%;
+  margin: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.ranking-page-body {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: 0 10px 26px var(--shadow, rgba(15, 23, 42, .06));
+}
+
+.ranking-page .ranking-tabs {
+  margin: 0;
+  padding: 4px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--surface-tint);
+}
+
+.ranking-page .ranking-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 42px;
+  border: 0;
+  border-radius: 11px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.ranking-page .ranking-tabs button.active {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 6px 14px var(--shadow, rgba(0, 0, 0, .1));
+}
+
+.ranking-page .ranking-monthbar {
+  margin: 0;
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.ranking-page .ranking-summary {
+  margin: 0;
+  border: 0;
+  border-radius: 14px;
+  padding: 14px;
+  background: var(--accent-soft);
+  color: var(--text-strong);
+}
+
+.ranking-page .ranking-body {
+  overflow: visible;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.ranking-page .ranking-row {
+  grid-template-columns: 46px 44px minmax(0, 1fr) auto;
+  gap: 10px;
+  min-height: 62px;
+  padding: 0 12px 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.ranking-page .ranking-row.has-level {
+  grid-template-columns: 46px 44px minmax(0, 1fr) auto auto;
+}
+
+.ranking-page .ranking-row.is-me {
+  border-color: var(--accent-bright);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-bright);
+}
+
+.ranking-avatar {
+  width: 44px;
+  height: 44px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: center / cover no-repeat var(--surface-tint);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .12);
+}
+
+.ranking-page .ranking-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ranking-me {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.ranking-page .ranking-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--sk-cta, var(--accent));
+  font-size: 16px;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
+
+.rk-ico {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  background: center / contain no-repeat;
+}
+
+.rk-fruit { background-image: url("/assets/skins/c-fruit.webp"); }
+.rk-gift { background-image: url("/assets/skins/a-notebook.webp"); }
+.rk-leaf { background-image: url("/assets/skins/a-leaf.webp"); }
+body.theme-diary .rk-fruit { background-image: url("/assets/skins/a-fruit.webp"); }
+
+.ranking-page .ranking-tabs button.active .rk-ico { filter: drop-shadow(0 0 2px rgba(255, 255, 255, .8)); }
+.ranking-page { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+.ranking-page-title p { max-width: none; white-space: nowrap; }
