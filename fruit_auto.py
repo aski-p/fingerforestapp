@@ -2004,6 +2004,9 @@ def _ledger_rows(client, std_month):
                 break
         if not counterpart:
             counterpart = next((n for n in sorted(set(names.values()), key=len, reverse=True) if n and len(n) >= 2 and n in text), "")
+        if not counterpart:
+            # 상대가 없는 시스템 내역: 옛 포레스트 잔고 이관, 칭찬하기 보상, 월 씨앗 지급 등
+            counterpart = "기존 포레스트" if "이관" in text else ("칭찬하기" if "칭찬" in text else "포레스트")
         if e.get("asset") == "seed" and "씨앗" not in message:
             message = f"[씨앗] {message}"
         rows.append({
