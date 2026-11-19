@@ -16,6 +16,7 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
+import time
 import uuid
 
 ONEFINGER_URL = os.environ.get("ONEFINGER_URL", "https://onefinger.fingerservice.co.kr").rstrip("/")
@@ -172,7 +173,14 @@ class OneFingerClient:
             data = json.dumps(body, ensure_ascii=False).encode()
         res = self._open(urllib.request.Request(url, data=data, method=method, headers=headers))
         status = getattr(res, "status", getattr(res, "code", 0))
+        if status in (502, 503, 504) and method == "GET":
+            # OneFinger 앞단(nginx)이 잠깐 502를 낼 때가 있다: 조회는 한 번만 다시 시도한다.
+            time.sleep(0.8)
+            res = self._open(urllib.request.Request(url, data=data, method=method, headers=headers))
+            status = getattr(res, "status", getattr(res, "code", 0))
         text = res.read().decode("utf-8", "replace")
+        if status in (502, 503, 504) and text.lstrip().startswith("<"):
+            raise OneFingerError(f"OneFinger 서버가 잠시 응답하지 않아요({status}). 잠시 뒤 다시 시도해 주세요.", code=str(status), status=status)
         try:
             j = json.loads(text) if text else {}
         except json.JSONDecodeError:

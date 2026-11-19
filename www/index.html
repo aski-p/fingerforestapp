@@ -1,13 +1,13 @@
 <!doctype html>
 <html lang="ko">
   <head>
-    <!-- 마지막 배포: 2026-08-13T12:52:38Z (v3.19.2, Railway web 서비스 4be3dc7e) -->
+    <!-- 마지막 배포: 2026-08-13T12:52:38Z (v3.19.3, Railway web 서비스 4be3dc7e) -->
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#f7f9fc">
     <link rel="manifest" href="/manifest.webmanifest">
-    <link rel="apple-touch-icon" href="/icons/app-touch-icon.png?v=3.19.2">
-    <link rel="icon" href="/icons/app-icon-192.png?v=3.19.2" type="image/png">
+    <link rel="apple-touch-icon" href="/icons/app-touch-icon.png?v=3.19.3">
+    <link rel="icon" href="/icons/app-icon-192.png?v=3.19.3" type="image/png">
     <script>
       (() => {
         const now = new Date();
@@ -27,8 +27,8 @@
         document.head.appendChild(preload);
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=3.19.2">
-    <link rel="stylesheet" href="/skins.css?v=3.19.2">
+    <link rel="stylesheet" href="/styles.css?v=3.19.3">
+    <link rel="stylesheet" href="/skins.css?v=3.19.3">
     <title>FingerForest</title>
   </head>
   <body class="logged-out splash-active main-bg-scene main-bg-forest-summer">
@@ -79,7 +79,7 @@
     </div>
     <div id="busyOverlay" class="busy-overlay" role="status" aria-live="polite" aria-hidden="true" hidden>
       <div class="busy-overlay-card">
-        <img id="busyCharacter" src="/assets/fingerfruit-loading.gif?v=3.19.2" alt="" aria-hidden="true">
+        <img id="busyCharacter" src="/assets/fingerfruit-loading.gif?v=3.19.3" alt="" aria-hidden="true">
         <strong>로딩중이에요</strong>
         <span>잠시만 기다려 주세요.</span>
       </div>
@@ -564,31 +564,71 @@
 
       <p id="toast" class="toast" role="status"></p>
       <footer class="app-footer">
-        <span>v3.19.2 정식버전 · by aski</span>
+        <span>v3.19.3 정식버전 · by aski</span>
         <a id="supportLink" class="support-link" href="https://qr.kakaopay.com/Ej7ruxJDq" target="_blank" rel="noopener" aria-label="카카오페이로 후원하기">후원하기</a>
       </footer>
     </main>
     <div id="chatPopup" class="chat-popup hidden" role="dialog" aria-labelledby="chatTitle">
       <div class="chat-head">
         <div>
-          <p class="label">CLAUDE</p>
+          <p class="label">FOREST TALK</p>
           <h2 id="chatTitle">채팅</h2>
         </div>
         <button id="chatCloseBtn" class="icon-button" type="button" aria-label="채팅 닫기">닫기</button>
       </div>
-      <div id="chatMessages" class="chat-messages" aria-live="polite">
-        <div class="chat-empty">Claude Haiku에게 바로 물어보세요.</div>
+      <div class="social-tabs" role="tablist" aria-label="채팅 메뉴">
+        <button type="button" class="active" data-social-tab="rooms">대화<em id="socialRoomsBadge" class="social-badge hidden"></em></button>
+        <button type="button" data-social-tab="friends">친구<em id="socialFriendsBadge" class="social-badge hidden"></em></button>
+        <button type="button" data-social-tab="notes">쪽지<em id="socialNotesBadge" class="social-badge hidden"></em></button>
+        <button type="button" data-social-tab="ai">AI</button>
       </div>
-      <form id="chatForm" class="chat-form">
-        <textarea id="chatInput" rows="2" maxlength="8000" placeholder="메시지 입력" enterkeyhint="send"></textarea>
-        <button id="chatSendBtn" type="submit" aria-label="메시지 보내기">전송</button>
-      </form>
+      <section id="socialRoomsView" class="social-view" data-social-view="rooms">
+        <div id="socialRoomList" class="social-list"></div>
+      </section>
+      <section id="socialRoomView" class="social-view hidden" data-social-view="room">
+        <div class="social-room-head">
+          <button id="socialRoomBack" type="button" class="social-back">‹</button>
+          <strong id="socialRoomTitle">대화</strong>
+          <button id="socialRoomLeave" type="button" class="social-link">나가기</button>
+        </div>
+        <div id="socialMessages" class="chat-messages social-messages" aria-live="polite"></div>
+        <form id="socialSendForm" class="chat-form">
+          <textarea id="socialInput" rows="2" maxlength="2000" placeholder="메시지 입력" enterkeyhint="send"></textarea>
+          <button type="submit" aria-label="메시지 보내기">전송</button>
+        </form>
+      </section>
+      <section id="socialFriendsView" class="social-view hidden" data-social-view="friends">
+        <form id="socialSearchForm" class="social-search">
+          <input id="socialSearchInput" type="search" placeholder="이름으로 직원 찾기" autocomplete="off">
+          <button type="submit">찾기</button>
+        </form>
+        <div id="socialSearchResults" class="social-list"></div>
+        <div id="socialFriendList" class="social-list"></div>
+      </section>
+      <section id="socialNotesView" class="social-view hidden" data-social-view="notes">
+        <form id="socialNoteForm" class="social-note-form">
+          <div class="social-note-to"><span>받는 사람</span><strong id="socialNoteTo">친구 탭에서 '쪽지'를 눌러 고르세요</strong></div>
+          <textarea id="socialNoteInput" rows="3" maxlength="2000" placeholder="쪽지 내용"></textarea>
+          <button type="submit" class="primary">쪽지 보내기</button>
+        </form>
+        <div id="socialNoteList" class="social-list"></div>
+      </section>
+      <section class="social-view hidden" data-social-view="ai">
+        <div id="chatMessages" class="chat-messages" aria-live="polite">
+          <div class="chat-empty">AI 도우미에게 바로 물어보세요.</div>
+        </div>
+        <form id="chatForm" class="chat-form">
+          <textarea id="chatInput" rows="2" maxlength="8000" placeholder="메시지 입력" enterkeyhint="send"></textarea>
+          <button id="chatSendBtn" type="submit" aria-label="메시지 보내기">전송</button>
+        </form>
+      </section>
     </div>
     <button id="chatOpenBtn" class="chat-fab" type="button" aria-label="채팅 열기">
       <span class="chat-fab-mark" aria-hidden="true"></span>
+      <em id="chatFabBadge" class="social-badge fab hidden"></em>
     </button>
-    <script src="/request_coordinator.js?v=3.19.2"></script>
-    <script src="/ranking_presenter.js?v=3.19.2"></script>
-    <script src="/app.js?v=3.19.2"></script>
+    <script src="/request_coordinator.js?v=3.19.3"></script>
+    <script src="/ranking_presenter.js?v=3.19.3"></script>
+    <script src="/app.js?v=3.19.3"></script>
   </body>
 </html>

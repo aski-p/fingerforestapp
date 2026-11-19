@@ -19,6 +19,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
 import fruit_auto
+import social
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -33,7 +34,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.19.2"
+APP_VERSION = "3.19.3"
 ANDROID_APP_VERSION = "3.17.2"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -55,10 +56,10 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "업무일지 달력에 지난 날짜의 승인·미승인이 다시 보여요(신 포레스트 업무일지 목록 기준).",
-    "'지금 한 번 작성'이 실패하면 로그인이 풀리던 문제를 고쳤어요. 이제 실패 이유를 그대로 알려 줘요.",
-    "왕관 랭킹: 1~3위는 단상 위에, 4위부터는 아래로 나열돼요.",
-    "반딧불 밤숲 스킨에서 어둡게 보이던 날짜·순위 글씨를 밝게 고쳤어요.",
+    "앱 사용자끼리 대화할 수 있어요: 오른쪽 아래 말풍선 > 대화·친구·쪽지 (AI 도우미는 AI 탭).",
+    "저장된 비밀번호가 틀리면 자동 로그인을 멈춰서 OneFinger 계정이 잠기지 않게 했어요. 앱에서 다시 로그인하면 풀려요.",
+    "업무일지 자동 작성 날짜를 동그란 날짜 칩과 요약 한 줄로 깔끔하게 바꿨어요.",
+    "로딩·시작 화면 캐릭터가 스킨마다 달라요.",
 ]
 VALID_THEMES = {
     "diary",
@@ -1625,6 +1626,22 @@ class Handler(BaseHTTPRequestHandler):
                     params = urllib.parse.parse_qs(parsed.query)
                     selected_month = (params.get("month") or [""])[0]
                     self.send_json(200, {"ok": True, "result": fruit_auto.worklog_approvals_local(owner_key=owner_key, month=selected_month)})
+                elif parsed.path.startswith("/api/social/"):
+                    owner_key, _session_token = self.require_session_owner()
+                    try:
+                        result = social_get(parsed.path, urllib.parse.parse_qs(parsed.query), owner_key)
+                    except social.SocialError as exc:
+                        self.send_json(400, {"ok": False, "error": str(exc)})
+                        return
+                    except fruit_auto.FruitAutoError:
+                        raise
+                    except Exception as exc:
+                        self.send_json(503, {"ok": False, "error": social_error(exc)})
+                        return
+                    if result is None:
+                        self.send_json(404, {"ok": False, "error": "not found"})
+                    else:
+                        self.send_json(200, {"ok": True, "result": result})
                 elif parsed.path == "/api/notifications":
                     owner_key, _session_token = self.require_session_owner()
                     self.send_json(200, {"ok": True, "result": {"items": fruit_auto.notification_items(owner_key=owner_key)}})
@@ -1658,6 +1675,20 @@ class Handler(BaseHTTPRequestHandler):
                 owner_key = result.get("ownerKey") if isinstance(result, dict) else None
             elif parsed.path == "/api/chat":
                 pass
+            elif parsed.path.startswith("/api/social/"):
+                try:
+                    result = social_post(parsed.path, payload, owner_key)
+                except social.SocialError as exc:
+                    self.send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                except fruit_auto.FruitAutoError:
+                    raise
+                except Exception as exc:
+                    self.send_json(503, {"ok": False, "error": social_error(exc)})
+                    return
+                if result is None:
+                    self.send_json(404, {"ok": False, "error": "not found"})
+                    return
             elif parsed.path == "/api/logout":
                 result = fruit_auto.logout(owner_key=owner_key, session_token=session_token)
             elif parsed.path == "/api/search":
@@ -1744,6 +1775,90 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:
             error = sanitize_error(exc)
             self.send_json(error_status(error, parsed.path), {"ok": False, "error": error})
+
+
+# ---------------------------------------------------------------- 사용자 채팅(친구·대화방·쪽지)
+_SOCIAL = None
+_SOCIAL_LOCK = threading.Lock()
+
+
+def social_service():
+    global _SOCIAL
+    with _SOCIAL_LOCK:
+        if _SOCIAL is None:
+            store = social.SupabaseStore(supabase_request) if supabase_config() else social.SqliteStore(fruit_auto.DATA_DIR / "social.db")
+            _SOCIAL = social.Social(store)
+        return _SOCIAL
+
+
+def social_identity(owner_key):
+    state = fruit_auto.get_account_state(owner_key) or {}
+    me = str(state.get("senderEmployeeId") or fruit_auto.employee_id_from_owner_key(owner_key) or "")
+    if not me.isdigit():
+        raise fruit_auto.FruitAutoError("채팅은 신 포레스트로 다시 로그인한 뒤 쓸 수 있어요. 다시 로그인하세요.")
+    name = state.get("senderEmployeeName") or state.get("loginUser") or ""
+    return me, name
+
+
+def social_push(employee_ids, title, body, tag):
+    owner_keys = [fruit_auto.owner_key_for_employee_id(eid) for eid in employee_ids if eid]
+    owner_keys = [k for k in owner_keys if k]
+    if not owner_keys:
+        return
+    payload = {"title": title, "body": body[:120], "tag": tag, "url": "/#chat"}
+    threading.Thread(target=fruit_auto.notify_web_push, args=(payload, owner_keys), daemon=True).start()
+
+
+def social_error(exc):
+    text = str(exc)
+    if "PGRST205" in text or "does not exist" in text or ("404" in text and "fruit_" in text):
+        return "채팅 저장소가 아직 준비되지 않았어요(관리자 설정 필요)."
+    return text
+
+
+def social_get(path, query, owner_key):
+    svc = social_service()
+    me, _name = social_identity(owner_key)
+    if path == "/api/social/summary":
+        return svc.summary(me)
+    if path == "/api/social/messages":
+        return {"items": svc.messages(me, (query.get("room") or ["0"])[0], after=int((query.get("after") or ["0"])[0] or 0))}
+    if path == "/api/social/notes":
+        return svc.notes(me)
+    return None
+
+
+def social_post(path, payload, owner_key):
+    svc = social_service()
+    me, name = social_identity(owner_key)
+    if path == "/api/social/friend-request":
+        result = svc.request_friend(me, name, payload.get("employeeId"), payload.get("name"))
+        if result == "requested":
+            social_push([str(payload.get("employeeId"))], "친구 신청", f"{name}님이 친구 신청을 보냈어요.", f"friend-{me}")
+        return {"status": result}
+    if path == "/api/social/friend-respond":
+        return {"status": svc.respond_friend(me, name, payload.get("employeeId"), bool(payload.get("accept")))}
+    if path == "/api/social/friend-remove":
+        return {"status": svc.remove_friend(me, payload.get("employeeId"))}
+    if path == "/api/social/block":
+        return {"status": svc.block(me, payload.get("employeeId"), payload.get("name"))}
+    if path == "/api/social/room-open":
+        return {"room": svc.open_room(me, name, payload.get("members") or [], payload.get("title") or "")}
+    if path == "/api/social/send":
+        sent = svc.send(me, name, payload.get("room"), payload.get("body"))
+        social_push(sent["recipients"], name or "새 메시지", str(payload.get("body") or ""), f"room-{payload.get('room')}")
+        return {"id": sent["id"]}
+    if path == "/api/social/read":
+        return {"status": svc.mark_read(me, payload.get("room"), payload.get("lastId"))}
+    if path == "/api/social/leave":
+        return {"status": svc.leave(me, payload.get("room"))}
+    if path == "/api/social/note":
+        result = svc.send_note(me, name, payload.get("to"), payload.get("toName"), payload.get("body"))
+        social_push([str(payload.get("to"))], f"쪽지 · {name}", str(payload.get("body") or ""), f"note-{result['id']}")
+        return result
+    if path == "/api/social/note-read":
+        return {"status": svc.read_note(me, payload.get("id"))}
+    return None
 
 
 class FruitThreadingHTTPServer(ThreadingHTTPServer):

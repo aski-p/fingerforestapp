@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV87";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.19.2";
+const appVersion = "3.19.3";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -850,7 +850,7 @@ const skinBannerText = {
 const SKIN_IDS = new Set(Object.keys(skinBannerText));
 
 function migratedTheme(theme) {
-  // 3.19.2 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
+  // 3.19.3 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
   if ((!theme || theme === "default") && storeGet(skinMigrationKey) !== "1") {
     storeSet(skinMigrationKey, "1");
     return DEFAULT_SKIN;
@@ -1222,8 +1222,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.19.2",
-        badge: "/icons/app-icon-192.png?v=3.19.2",
+        icon: "/icons/app-icon-192.png?v=3.19.3",
+        badge: "/icons/app-icon-192.png?v=3.19.3",
         data: { url: item.url || "/" },
       });
       return true;
@@ -3382,7 +3382,8 @@ function renderChatMessages() {
 
 function openChatPopup() {
   $("chatPopup").classList.remove("hidden");
-  renderChatMessages();
+  if (typeof switchSocialTab === "function") switchSocialTab(social?.tab === "room" ? "rooms" : (social?.tab || "rooms"));
+  else renderChatMessages();
 }
 
 function closeChatPopup() {
@@ -4091,3 +4092,220 @@ setInterval(updateMainBackground, 60 * 1000);
 setInterval(() => refresh({ silent: true }), 30000);
 setInterval(() => checkReceivedNotifications({ silent: true }), 15000);
 setTimeout(() => checkReceivedNotifications({ silent: true }), 2500);
+
+// ================= 사용자 채팅: 대화 · 친구 · 쪽지 =================
+const social = { tab: "rooms", summary: null, roomId: null, roomTitle: "", lastId: 0, noteTo: null, pollTimer: null, roomTimer: null };
+
+function socialTimeLabel(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  return sameDay ? d.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" }) : `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+function socialAvatar(id, name) {
+  const url = getCachedProfilePhoto(id) || cycleDefaultAvatar({ emp_id: id, emp_nm: name });
+  return `<span class="social-avatar" style="background-image:url('${escapeHtml(url)}')" aria-hidden="true"></span>`;
+}
+
+function setSocialBadge(id, count) {
+  const el = $(id);
+  if (!el) return;
+  el.textContent = count > 99 ? "99+" : String(count || "");
+  el.classList.toggle("hidden", !count);
+}
+
+function showSocialView(name) {
+  document.querySelectorAll("[data-social-view]").forEach((el) => el.classList.toggle("hidden", el.dataset.socialView !== name));
+}
+
+function switchSocialTab(tab) {
+  social.tab = tab;
+  document.querySelectorAll("[data-social-tab]").forEach((b) => b.classList.toggle("active", b.dataset.socialTab === tab));
+  stopRoomPolling();
+  social.roomId = null;
+  showSocialView(tab);
+  if (tab === "ai") renderChatMessages();
+  if (tab === "rooms" || tab === "friends") refreshSocialSummary();
+  if (tab === "notes") refreshSocialNotes();
+}
+
+async function refreshSocialSummary({ silent = true } = {}) {
+  if (!isUnlocked()) return;
+  try {
+    social.summary = await api("/api/social/summary");
+    renderSocialSummary();
+  } catch (err) {
+    if (!silent) toast(err.message);
+    const list = $("socialRoomList");
+    if (list && !social.summary) list.innerHTML = `<div class="social-empty">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderSocialSummary() {
+  const s = social.summary || {};
+  setSocialBadge("socialRoomsBadge", s.unreadMessages);
+  setSocialBadge("socialFriendsBadge", s.pendingRequests);
+  setSocialBadge("socialNotesBadge", s.unreadNotes);
+  setSocialBadge("chatFabBadge", (s.unreadMessages || 0) + (s.pendingRequests || 0) + (s.unreadNotes || 0));
+  const rooms = s.rooms || [];
+  $("socialRoomList").innerHTML = rooms.length
+    ? rooms.map((r) => {
+      const other = (r.members || []).find((m) => m.id !== String(currentState.senderEmployeeId || "")) || {};
+      return `<button type="button" class="social-row" data-room="${r.id}" data-title="${escapeHtml(r.title)}">
+          ${r.kind === "group" ? '<span class="social-avatar group" aria-hidden="true">👥</span>' : socialAvatar(other.id, other.name)}
+          <span class="social-row-main"><strong>${escapeHtml(r.title)}${r.kind === "group" ? ` <small>${(r.members || []).length}</small>` : ""}</strong><span>${escapeHtml(r.lastMessage || "대화를 시작해 보세요")}</span></span>
+          <span class="social-row-side"><small>${escapeHtml(socialTimeLabel(r.lastAt))}</small>${r.unread ? `<em class="social-badge">${r.unread}</em>` : ""}</span>
+        </button>`;
+    }).join("")
+    : '<div class="social-empty">아직 대화가 없어요. 친구 탭에서 대화를 시작해 보세요.</div>';
+  $("socialRoomList").querySelectorAll("[data-room]").forEach((b) => b.addEventListener("click", () => openSocialRoom(Number(b.dataset.room), b.dataset.title)));
+  const friendRow = (f, actions) => `<div class="social-row static">${socialAvatar(f.friend, f.friend_name)}<span class="social-row-main"><strong>${escapeHtml(f.friend_name || "-")}</strong></span><span class="social-row-actions">${actions}</span></div>`;
+  const incoming = (s.incoming || []).map((f) => friendRow(f, `<button type="button" data-accept="${f.friend}">수락</button><button type="button" class="ghost" data-decline="${f.friend}">거절</button>`)).join("");
+  const outgoing = (s.outgoing || []).map((f) => friendRow(f, '<small>수락 대기</small>')).join("");
+  const friends = (s.friends || []).map((f) => friendRow(f, `<button type="button" data-dm="${f.friend}" data-name="${escapeHtml(f.friend_name || "")}">대화</button><button type="button" class="ghost" data-note="${f.friend}" data-name="${escapeHtml(f.friend_name || "")}">쪽지</button><button type="button" class="ghost danger" data-unfriend="${f.friend}">삭제</button>`)).join("");
+  $("socialFriendList").innerHTML = `
+    ${incoming ? `<h4>받은 친구 신청</h4>${incoming}` : ""}
+    ${outgoing ? `<h4>보낸 친구 신청</h4>${outgoing}` : ""}
+    <h4>친구 ${(s.friends || []).length}</h4>${friends || '<div class="social-empty">위에서 직원을 찾아 친구 신청을 보내 보세요.</div>'}`;
+  bindSocialFriendActions($("socialFriendList"));
+}
+
+function bindSocialFriendActions(root) {
+  root.querySelectorAll("[data-accept]").forEach((b) => b.addEventListener("click", () => socialAction("/api/social/friend-respond", { employeeId: b.dataset.accept, accept: true }, "친구가 됐어요.")));
+  root.querySelectorAll("[data-decline]").forEach((b) => b.addEventListener("click", () => socialAction("/api/social/friend-respond", { employeeId: b.dataset.decline, accept: false }, "신청을 거절했어요.")));
+  root.querySelectorAll("[data-unfriend]").forEach((b) => b.addEventListener("click", () => {
+    if (window.confirm("친구에서 삭제할까요?")) socialAction("/api/social/friend-remove", { employeeId: b.dataset.unfriend }, "친구에서 삭제했어요.");
+  }));
+  root.querySelectorAll("[data-request]").forEach((b) => b.addEventListener("click", () => socialAction("/api/social/friend-request", { employeeId: b.dataset.request, name: b.dataset.name }, "친구 신청을 보냈어요.")));
+  root.querySelectorAll("[data-dm]").forEach((b) => b.addEventListener("click", async () => {
+    try {
+      const data = await api("/api/social/room-open", { members: [{ id: b.dataset.dm, name: b.dataset.name }] });
+      switchSocialTab("rooms");
+      openSocialRoom(data.room.id, b.dataset.name);
+    } catch (err) { toast(err.message); }
+  }));
+  root.querySelectorAll("[data-note]").forEach((b) => b.addEventListener("click", () => {
+    social.noteTo = { id: b.dataset.note, name: b.dataset.name };
+    switchSocialTab("notes");
+  }));
+}
+
+async function socialAction(path, payload, okMessage) {
+  try {
+    await api(path, payload);
+    toast(okMessage);
+    await refreshSocialSummary();
+  } catch (err) { toast(err.message); }
+}
+
+async function searchSocialPeople(query) {
+  const box = $("socialSearchResults");
+  if (!query) { box.innerHTML = ""; return; }
+  box.innerHTML = '<div class="social-empty">찾는 중…</div>';
+  try {
+    const data = await api("/api/search", { query });
+    const me = String(currentState.senderEmployeeId || "");
+    const people = (data.results || []).filter((p) => String(p.emp_id) !== me).slice(0, 15);
+    const known = new Set([...(social.summary?.friends || []), ...(social.summary?.outgoing || [])].map((f) => f.friend));
+    box.innerHTML = people.length ? people.map((p) => `<div class="social-row static">${socialAvatar(p.emp_id, p.emp_nm)}<span class="social-row-main"><strong>${escapeHtml(p.emp_nm || "-")}</strong><span>${escapeHtml([p.dept_nm, p.pos_nm].filter(Boolean).join(" · "))}</span></span><span class="social-row-actions">${known.has(String(p.emp_id)) ? "" : `<button type="button" data-request="${p.emp_id}" data-name="${escapeHtml(p.emp_nm || "")}">친구 신청</button>`}<button type="button" class="ghost" data-dm="${p.emp_id}" data-name="${escapeHtml(p.emp_nm || "")}">대화</button><button type="button" class="ghost" data-note="${p.emp_id}" data-name="${escapeHtml(p.emp_nm || "")}">쪽지</button></span></div>`).join("") : '<div class="social-empty">찾는 직원이 없어요.</div>';
+    bindSocialFriendActions(box);
+  } catch (err) { box.innerHTML = `<div class="social-empty">${escapeHtml(err.message)}</div>`; }
+}
+
+function renderSocialMessages(items, append) {
+  const box = $("socialMessages");
+  const html = items.map((m) => `<div class="chat-message ${m.mine ? "user" : "assistant"}">${m.mine ? "" : `<small class="social-sender">${escapeHtml(m.senderName || "")}</small>`}<span>${escapeHtml(m.body)}</span><small class="social-time">${escapeHtml(socialTimeLabel(m.at))}</small></div>`).join("");
+  if (append) box.insertAdjacentHTML("beforeend", html); else box.innerHTML = html || '<div class="chat-empty">첫 메시지를 보내 보세요.</div>';
+  box.scrollTop = box.scrollHeight;
+}
+
+async function loadSocialMessages(initial) {
+  if (!social.roomId) return;
+  try {
+    const data = await api(`/api/social/messages?room=${social.roomId}&after=${initial ? 0 : social.lastId}`);
+    const items = data.items || [];
+    if (initial) renderSocialMessages(items, false);
+    else if (items.length) { $("socialMessages").querySelector(".chat-empty")?.remove(); renderSocialMessages(items, true); }
+    if (items.length) {
+      social.lastId = items[items.length - 1].id;
+      api("/api/social/read", { room: social.roomId, lastId: social.lastId }).catch(() => {});
+    }
+  } catch (err) { if (initial) toast(err.message); }
+}
+
+function stopRoomPolling() {
+  if (social.roomTimer) window.clearInterval(social.roomTimer);
+  social.roomTimer = null;
+}
+
+async function openSocialRoom(roomId, title) {
+  social.roomId = roomId;
+  social.roomTitle = title || "대화";
+  social.lastId = 0;
+  $("socialRoomTitle").textContent = social.roomTitle;
+  showSocialView("room");
+  await loadSocialMessages(true);
+  stopRoomPolling();
+  social.roomTimer = window.setInterval(() => {
+    if ($("chatPopup").classList.contains("hidden") || document.hidden) return;
+    loadSocialMessages(false);
+  }, 4000);
+}
+
+async function refreshSocialNotes() {
+  $("socialNoteTo").textContent = social.noteTo ? social.noteTo.name : "친구 탭에서 '쪽지'를 눌러 고르세요";
+  try {
+    const data = await api("/api/social/notes");
+    const inbox = data.inbox || [];
+    const sent = data.sent || [];
+    const row = (n, box) => `<button type="button" class="social-row note${!n.read && box === "in" ? " unread" : ""}" ${box === "in" ? `data-note-id="${n.id}"` : ""}>${socialAvatar(box === "in" ? n.from : n.to, box === "in" ? n.fromName : n.toName)}<span class="social-row-main"><strong>${box === "in" ? escapeHtml(n.fromName || "-") : `→ ${escapeHtml(n.toName || "-")}`}</strong><span class="note-body">${escapeHtml(n.body)}</span></span><span class="social-row-side"><small>${escapeHtml(socialTimeLabel(n.at))}</small></span></button>`;
+    $("socialNoteList").innerHTML = `<h4>받은 쪽지</h4>${inbox.map((n) => row(n, "in")).join("") || '<div class="social-empty">받은 쪽지가 없어요.</div>'}<h4>보낸 쪽지</h4>${sent.map((n) => row(n, "out")).join("") || '<div class="social-empty">보낸 쪽지가 없어요.</div>'}`;
+    $("socialNoteList").querySelectorAll("[data-note-id]").forEach((b) => b.addEventListener("click", () => {
+      b.classList.toggle("open");
+      if (b.classList.contains("unread")) {
+        b.classList.remove("unread");
+        api("/api/social/note-read", { id: b.dataset.noteId }).then(() => refreshSocialSummary()).catch(() => {});
+      }
+    }));
+  } catch (err) { $("socialNoteList").innerHTML = `<div class="social-empty">${escapeHtml(err.message)}</div>`; }
+}
+
+document.querySelectorAll("[data-social-tab]").forEach((b) => b.addEventListener("click", () => switchSocialTab(b.dataset.socialTab)));
+$("socialRoomBack").addEventListener("click", () => switchSocialTab("rooms"));
+$("socialRoomLeave").addEventListener("click", async () => {
+  if (!social.roomId || !window.confirm("이 대화방에서 나갈까요?")) return;
+  await socialAction("/api/social/leave", { room: social.roomId }, "대화방에서 나갔어요.");
+  switchSocialTab("rooms");
+});
+$("socialSendForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const input = $("socialInput");
+  const body = (input.value || "").trim();
+  if (!body || !social.roomId) return;
+  input.value = "";
+  try {
+    await api("/api/social/send", { room: social.roomId, body });
+    await loadSocialMessages(false);
+  } catch (err) { input.value = body; toast(err.message); }
+});
+$("socialInput").addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); $("socialSendForm").requestSubmit(); }
+});
+$("socialSearchForm").addEventListener("submit", (event) => { event.preventDefault(); searchSocialPeople(($("socialSearchInput").value || "").trim()); });
+$("socialNoteForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const body = ($("socialNoteInput").value || "").trim();
+  if (!social.noteTo) { toast("친구 탭에서 받는 사람을 먼저 골라 주세요."); return; }
+  if (!body) return;
+  try {
+    await api("/api/social/note", { to: social.noteTo.id, toName: social.noteTo.name, body });
+    $("socialNoteInput").value = "";
+    toast(`${social.noteTo.name}님에게 쪽지를 보냈어요.`);
+    refreshSocialNotes();
+  } catch (err) { toast(err.message); }
+});
+window.setInterval(() => { if (isUnlocked() && !document.hidden) refreshSocialSummary(); }, 20000);
+window.setTimeout(() => refreshSocialSummary(), 4000);
+if (location.hash === "#chat") window.setTimeout(() => openChatPopup(), 1500);
