@@ -144,3 +144,40 @@ class OneFingerRequestTests(unittest.TestCase):
         self.assertEqual(seen["headers"]["origin"], onefinger.ONEFINGER_URL)
         self.assertEqual(seen["headers"]["x-csrf-token"], "tok")
         self.assertEqual(seen["headers"]["x-forest-expected-employee-id"], "900001")
+
+
+class OneFingerSessionReuseTests(unittest.TestCase):
+    def setUp(self):
+        fruit_auto.forget_onefinger_sessions()
+
+    def tearDown(self):
+        fruit_auto.forget_onefinger_sessions()
+
+    def test_second_login_reuses_the_live_session(self):
+        calls = {"login": 0}
+
+        def fake_login(self, employee_no, password):
+            calls["login"] += 1
+            self.employee = {"id": "900001", "employeeNo": employee_no, "name": "테스트"}
+            return self.employee
+
+        with mock.patch.object(onefinger.OneFingerClient, "login", fake_login), \
+                mock.patch.object(onefinger.OneFingerClient, "session_info", lambda self: {"authenticated": True, "csrf": "t"}):
+            fruit_auto.pms_login(fruit_auto.Client(), "12345678", "pw")
+            _token, dataset = fruit_auto.pms_login(fruit_auto.Client(), "12345678", "pw")
+        self.assertEqual(calls["login"], 1)
+        self.assertEqual(dataset["SESS_EMPNO"], "12345678")
+
+    def test_expired_session_logs_in_again(self):
+        calls = {"login": 0}
+
+        def fake_login(self, employee_no, password):
+            calls["login"] += 1
+            self.employee = {"id": "900001", "employeeNo": employee_no, "name": "테스트"}
+            return self.employee
+
+        with mock.patch.object(onefinger.OneFingerClient, "login", fake_login), \
+                mock.patch.object(onefinger.OneFingerClient, "session_info", lambda self: {"authenticated": False}):
+            fruit_auto.pms_login(fruit_auto.Client(), "12345678", "pw")
+            fruit_auto.pms_login(fruit_auto.Client(), "12345678", "pw")
+        self.assertEqual(calls["login"], 2)

@@ -33,7 +33,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.18.2"
+APP_VERSION = "3.18.3"
 ANDROID_APP_VERSION = "3.17.2"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -55,9 +55,8 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "새 디자인 '숲속 다이어리' 스킨을 기본으로 적용했습니다. 숲 일러스트 배너, 씨앗·열매 그림, 따뜻한 종이 카드.",
-    "설정 > 스킨에서 '클린'(깔끔한 흰 카드)과 '성장 정원'(밝은 정원 게임 느낌)으로 바꿀 수 있습니다. 기존 Fresh도 그대로 고를 수 있어요.",
-    "신 포레스트 로그인·열매 보내기와 원형 전송 사이클은 그대로 이어집니다.",
+    "잔액 조회가 '조회 오류'로 멈추던 문제를 고쳤습니다. 신 포레스트 로그인을 매번 새로 하지 않고 이어서 써서 통합 로그인이 막히지 않아요.",
+    "새 디자인 스킨(숲속 다이어리·클린·성장 정원)은 설정 > 스킨에서 바꿀 수 있어요.",
 ]
 VALID_THEMES = {
     "diary",

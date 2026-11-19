@@ -1368,12 +1368,57 @@ def sso_employee_no(pms_id, owner_key=None):
     return value
 
 
+# OneFinger 세션 재사용: 요청마다 SSO에 새로 로그인하면 서버 IP에서 로그인이 몰려 SSO가 막는다.
+# 사번+비밀번호 해시별로 쿠키를 메모리에만 두고, 세션이 살아 있으면 그대로 쓴다(디스크에 저장하지 않음).
+_ONEFINGER_SESSIONS = {}
+_ONEFINGER_SESSIONS_LOCK = threading.Lock()
+_ONEFINGER_SESSION_MAX_AGE = 20 * 60
+
+
+def _onefinger_session_key(employee_no, password):
+    digest = hashlib.sha256(f"{employee_no}\0{password}".encode("utf-8")).hexdigest()
+    return f"{employee_no}:{digest[:24]}"
+
+
+def _adopt_session(client, cached_client):
+    client.cookies = cached_client.cookies
+    client.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(client.cookies))
+    client.employee = cached_client.employee
+
+
+def _onefinger_login_reusing_session(client, employee_no, password):
+    key = _onefinger_session_key(employee_no, password)
+    with _ONEFINGER_SESSIONS_LOCK:
+        cached = _ONEFINGER_SESSIONS.get(key)
+    if cached and time.time() - cached[1] < _ONEFINGER_SESSION_MAX_AGE:
+        _adopt_session(client, cached[0])
+        try:
+            if client.session_info().get("authenticated") and client.employee:
+                return client.employee
+        except OneFingerError:
+            pass
+        with _ONEFINGER_SESSIONS_LOCK:
+            _ONEFINGER_SESSIONS.pop(key, None)
+        client.cookies = http.cookiejar.CookieJar()
+        client.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(client.cookies))
+        client.employee = None
+    emp = client.login(employee_no, password)
+    with _ONEFINGER_SESSIONS_LOCK:
+        _ONEFINGER_SESSIONS[key] = (client, time.time())
+    return emp
+
+
+def forget_onefinger_sessions():
+    with _ONEFINGER_SESSIONS_LOCK:
+        _ONEFINGER_SESSIONS.clear()
+
+
 def pms_login(client, pms_id=None, pms_password=None, owner_key=None):
     """새 OneFinger 통합 로그인. 예전 PMS 로그인과 같은 (token, dataset) 모양을 돌려준다."""
     pms_id = pms_id or read_secret("pms_id")
     pms_password = pms_password or read_secret("pms_password")
     try:
-        emp = client.login(sso_employee_no(pms_id, owner_key), pms_password)
+        emp = _onefinger_login_reusing_session(client, sso_employee_no(pms_id, owner_key), pms_password)
     except LoginFailed as exc:
         raise FruitAutoError(str(exc)) from exc
     except OneFingerError as exc:

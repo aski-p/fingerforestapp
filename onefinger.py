@@ -96,7 +96,10 @@ class OneFingerClient:
             raise OneFingerError(f"통합 로그인 화면을 열지 못했어요({getattr(res, 'status', '?')}).", code="SSO_START")
         form = parse_login_form(html)
         if not form:
-            raise OneFingerError("통합 로그인 화면 형식이 바뀌었어요.", code="SSO_NOFORM")
+            title = re.search(r"<title[^>]*>(.*?)</title>", html, re.I | re.S)
+            hint = re.sub(r"\s+", " ", title.group(1)).strip()[:60] if title else re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html)).strip()[:60]
+            status = getattr(res, "status", getattr(res, "code", "?"))
+            raise OneFingerError(f"통합 로그인 화면을 읽지 못했어요(응답 {status}, {hint or '빈 페이지'}).", code="SSO_NOFORM")
         post_url = urllib.parse.urljoin(page_url, form["action"])
         if _host(post_url) != _host(ONEFINGER_SSO_URL):
             raise OneFingerError("통합 로그인 주소가 올바르지 않아요.", code="SSO_FORM_ORIGIN")
