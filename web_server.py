@@ -33,7 +33,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.18.4"
+APP_VERSION = "3.18.5"
 ANDROID_APP_VERSION = "3.17.2"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -55,8 +55,8 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "동료 얼굴을 귀여운 동물 캐릭터 20종으로 바꿨습니다. 사람마다 동물이 하나씩 정해지고, 순환 목록 안에서는 겹치지 않아요.",
-    "열매 대상 직원 이름 옆에 붙던 내부 번호를 없앴습니다.",
+    "공지·설정 같은 팝업이 화면 중간에 끼어 보이던 문제를 고쳤습니다. 이제 화면 전체를 덮고 가운데 떠요.",
+    "동료 얼굴은 귀여운 동물 캐릭터 20종으로 보여요.",
 ]
 VALID_THEMES = {
     "diary",

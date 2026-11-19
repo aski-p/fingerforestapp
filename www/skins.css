@@ -155,7 +155,8 @@ body.theme-garden .skin-banner strong {
 }
 
 /* 배너 아래로 첫 카드가 살짝 겹치게: 카드가 배너 위에 떠 있도록 */
-:is(body.theme-diary, body.theme-garden) .skin-banner ~ * {
+/* 배너 위에 떠야 하는 건 로그인 카드·작업 영역뿐. 팝업(.modal)·토스트 등은 건드리지 않는다(fixed 유지). */
+:is(body.theme-diary, body.theme-garden) .skin-banner ~ :is(.login-wordmark, .login-card, .workspace) {
   position: relative;
   z-index: 1;
 }
