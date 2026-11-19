@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV87";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.19.1";
+const appVersion = "3.19.2";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -849,7 +849,7 @@ const skinBannerText = {
 const SKIN_IDS = new Set(Object.keys(skinBannerText));
 
 function migratedTheme(theme) {
-  // 3.19.1 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
+  // 3.19.2 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
   if ((!theme || theme === "default") && storeGet(skinMigrationKey) !== "1") {
     storeSet(skinMigrationKey, "1");
     return DEFAULT_SKIN;
@@ -1056,9 +1056,9 @@ async function recoverSession() {
   return recoveringSession;
 }
 
-function isAuthError(data, response) {
-  const error = String(data?.error || "");
-  return response?.status === 401 || error.includes("로그인") || error.includes("세션") || error.includes("기기 CID");
+function isAuthError(_data, response) {
+  // 서버가 앱 세션 만료일 때만 401을 준다. OneFinger 쪽 오류 문구에 '로그인'이 들어 있어도 로그아웃하지 않는다.
+  return response?.status === 401;
 }
 
 function clearAuthenticatedUi() {
@@ -1205,8 +1205,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.19.1",
-        badge: "/icons/app-icon-192.png?v=3.19.1",
+        icon: "/icons/app-icon-192.png?v=3.19.2",
+        badge: "/icons/app-icon-192.png?v=3.19.2",
         data: { url: item.url || "/" },
       });
       return true;
@@ -3823,11 +3823,11 @@ $("worklogRunBtn").addEventListener("click", async () => {
     toast("");
     openWorklogSuccessModal(result.projectName || "");
   } catch (err) {
-    if (isAuthError({ error: err.message }, { status: 401 }) || !isUnlocked()) {
-      clearAuthenticatedUi();
+    // 앱 세션 만료(401)는 api()가 이미 정리한다. 그 밖의 실패는 로그아웃하지 말고 이유를 보여 준다.
+    if (!isUnlocked()) {
       toast("");
     } else {
-      openSuccessModal("입력 확인", err.message, false);
+      openSuccessModal("업무일지 작성 실패", err.message, false);
     }
   } finally {
     setBusy(false);

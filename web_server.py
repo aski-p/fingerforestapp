@@ -33,7 +33,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.19.1"
+APP_VERSION = "3.19.2"
 ANDROID_APP_VERSION = "3.17.2"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -55,8 +55,10 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "전송 순환의 화살표가 이글거리는 불기둥으로 바뀌었어요. 불꽃이 일렁이고 불티가 다음 사람에게 날아가요.",
-    "이번 차례인 사람은 황금 불꽃 오라에 휩싸여 타오르고, 불티가 위로 튀어요.",
+    "업무일지 달력에 지난 날짜의 승인·미승인이 다시 보여요(신 포레스트 업무일지 목록 기준).",
+    "'지금 한 번 작성'이 실패하면 로그인이 풀리던 문제를 고쳤어요. 이제 실패 이유를 그대로 알려 줘요.",
+    "왕관 랭킹: 1~3위는 단상 위에, 4위부터는 아래로 나열돼요.",
+    "반딧불 밤숲 스킨에서 어둡게 보이던 날짜·순위 글씨를 밝게 고쳤어요.",
 ]
 VALID_THEMES = {
     "diary",
@@ -888,12 +890,23 @@ def sanitize_error(exc):
     return text[:500]
 
 
+# 앱(FingerForest) 세션이 끝났을 때만 401. OneFinger 쪽 오류("통합 로그인이 잠시 막혔어요", "OneFinger 세션이 끝났어요" 등)는
+# 서버가 다시 로그인해 처리할 일이라 앱을 로그아웃시키면 안 된다(그러면 앱이 자동 재로그인하며 SSO 요청만 늘어난다).
+APP_AUTH_ERROR_MARKERS = (
+    "로그인이 필요합니다",
+    "다시 로그인하세요",
+    "기기 CID",
+    "저장된 PMS 로그인 정보가 없습니다",
+)
+
+
 def error_status(error, path=""):
-    auth_markers = ("로그인", "세션", "기기 CID", "PMS login", "PMS 로그인", "Forest token", "Forest employee")
     if path == "/api/login":
         return 401
-    if any(marker in error for marker in auth_markers[:3]):
+    if any(marker in error for marker in APP_AUTH_ERROR_MARKERS):
         return 401
+    if "429" in error or "잠시 막혀" in error or "잠시 막혔" in error:
+        return 429
     return 500
 
 

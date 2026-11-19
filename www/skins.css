@@ -951,3 +951,4 @@ body.skin-on .ranking-page .ranking-back {
 
 /* 밤숲 스킨: 달력 글씨·4등 이하 순위 숫자 보정 */
 body.theme-night :is(.ranking-monthbar strong, .ranking-medal, .ranking-monthbar button) { color: var(--text-strong); }
+body.theme-night .calendar-monthbar strong { color: var(--text-strong); }

@@ -3121,42 +3121,43 @@ def local_worklog_events_by_date(owner_key, month=None, limit=20000):
 
 
 def worklog_approvals(owner_key=None, month=None):
+    """신 포레스트 업무일지 목록(/me/worklogs)으로 그 달 날짜별 승인·미승인을 만든다(달력 API는 501)."""
     owner_key = require_owner(owner_key)
     state = get_account_state(owner_key)
     selected_month = normalize_history_month(month)
+    month_prefix = f"{str(selected_month)[:4]}-{str(selected_month)[4:6]}"
     local_events = local_worklog_events_by_date(owner_key, selected_month)
-    client, _employee_info, _login_dataset, _employee, sender_employee_id, _sender_employee_name = account_login(owner_key)
-    content = _approval_rows(client, selected_month)
+    client, employee_info, _login_dataset, _employee, _sender_employee_id, _sender_employee_name = account_login(owner_key)
+    try:
+        logs = client.worklogs(limit=100)
+    except OneFingerError as exc:
+        raise FruitAutoError(f"업무일지 승인 현황을 읽지 못했습니다: {exc}") from exc
+    project_names = {str(p["id"]): p["name"] for p in worklog_projects_from_employee_info(employee_info)}
     approvals = {}
-    for row in content:
-        message = row.get("tgtMsg") or ""
-        if berry_history_reward_kind(message) != "work_approval":
+    for log in logs:
+        history_date = str(log.get("date") or "")
+        if not history_date.startswith(month_prefix):
             continue
-        day = work_approval_message_day(message) or parse_int(str(row.get("stdDt") or "").replace("일", ""), None)
-        history_date = history_date_from_month_day(selected_month, day)
-        if not history_date:
+        items = log.get("items") or []
+        if not items:
             continue
+        approved = all(item.get("approvedAt") for item in items)
         local = local_events.get(history_date, {})
-        project_name = local.get("projectName") or state.get("worklogProjectName") or ""
-        target_employee_name = local.get("targetEmployeeName") or row.get("tgtEmpNm") or state.get("worklogTargetEmployeeName") or ""
-        content_text = local.get("workDesc") or ""
-        if not content_text:
-            state_project_matches = not local.get("projectName") or local.get("projectName") == state.get("worklogProjectName")
-            state_target_matches = not local.get("targetEmployeeId") or local.get("targetEmployeeId") == state.get("worklogTargetEmployeeId")
-            if state_project_matches and state_target_matches:
-                content_text = state.get("worklogContent") or ""
+        first = sorted(items, key=lambda item: item.get("sortOrder") or 0)[0]
+        seed_gifts = log.get("seedGifts") or []
         approvals[history_date] = {
             "date": history_date,
-            "approved": True,
-            "status": "approved",
-            "projectName": project_name,
-            "content": content_text,
-            "seedMessage": local.get("seedMessage") or state.get("worklogSeedMessage") or message,
-            "seedCount": local.get("seedCount") if local.get("seedCount") is not None else state.get("worklogSeedCount"),
-            "targetEmployeeName": target_employee_name,
-            "targetEmployeeId": local.get("targetEmployeeId") or state.get("worklogTargetEmployeeId") or "",
-            "completedAt": local.get("completedAt") or local.get("at") or "",
-            "officialMessage": message,
+            "approved": approved,
+            "status": "approved" if approved else "pending",
+            "projectName": local.get("projectName") or project_names.get(str(first.get("projectId") or ""), "") or state.get("worklogProjectName") or "",
+            "content": local.get("workDesc") or first.get("body") or "",
+            "seedMessage": local.get("seedMessage") or (seed_gifts[0].get("message") if seed_gifts else "") or "",
+            "seedCount": local.get("seedCount") if local.get("seedCount") is not None else (seed_gifts[0].get("amount") if seed_gifts else None),
+            "targetEmployeeName": local.get("targetEmployeeName") or (seed_gifts[0].get("employeeName") if seed_gifts else "") or "",
+            "targetEmployeeId": local.get("targetEmployeeId") or (str(seed_gifts[0].get("employeeId")) if seed_gifts else ""),
+            "completedAt": local.get("completedAt") or local.get("at") or log.get("updatedAt") or "",
+            "officialMessage": f"[업무{'승인' if approved else '미승인'}] {int(history_date[8:10])}일",
+            "approvedTotal": log.get("approvedTotal"),
         }
     if remove_completed_schedule_dates(state, approvals.keys()):
         state["worklogNextRunAt"] = next_worklog_run_at(state)
@@ -5118,8 +5119,9 @@ def _save_worklog_onefinger(client, employee_info, state, target_date, seed_coun
         raise FruitAutoError(f"업무일지를 읽지 못했습니다: {exc}") from exc
     if current and current.get("items"):
         return "exists"
-    scheduled = int((current or {}).get("scheduledMinutes") or 480) or 480
-    minutes = max(30, min(1440, round(scheduled / 30) * 30))
+    # 신 포레스트 웹에서 쓴 기존 일지는 그날 예정 근무시간(scheduledMinutes)을 그대로 쓰고, 정보가 없으면 0분이다.
+    scheduled = int((current or {}).get("scheduledMinutes") or 0)
+    minutes = max(0, min(1440, round(scheduled / 30) * 30))
     seed_gift = None
     if seed_count:
         target = find_target_employee(client, state.get("worklogTargetEmployeeName"), state.get("worklogTargetEmployeeId"))

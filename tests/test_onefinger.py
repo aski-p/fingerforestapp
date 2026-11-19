@@ -225,3 +225,37 @@ class OneFingerRateLimitTests(unittest.TestCase):
         self.assertTrue(files)
         self.assertEqual(oct(files[0].stat().st_mode & 0o777), "0o600")
         self.assertNotIn("pw", files[0].read_text())
+
+
+class WorklogApprovalTests(unittest.TestCase):
+    def test_approvals_come_from_the_worklog_list_with_pending_days(self):
+        class C:
+            def worklogs(self, limit=100):
+                return [
+                    {"date": "2026-11-16", "items": [{"projectId": "525", "body": "개발", "approvedAt": "2026-11-17T01:00:00Z", "sortOrder": 0}], "updatedAt": "x"},
+                    {"date": "2026-11-17", "items": [{"projectId": "525", "body": "검토", "approvedAt": None, "sortOrder": 0}], "updatedAt": "y"},
+                    {"date": "2026-10-31", "items": [{"projectId": "525", "body": "old", "approvedAt": "z", "sortOrder": 0}]},
+                ]
+
+        info = {"resultMap": [{}], "projects": []}
+        with mock.patch.object(fruit_auto, "require_owner", lambda k: "o"), \
+                mock.patch.object(fruit_auto, "get_account_state", lambda k: {}), \
+                mock.patch.object(fruit_auto, "local_worklog_events_by_date", lambda k, m: {}), \
+                mock.patch.object(fruit_auto, "account_login", lambda k: (C(), info, {}, {}, "1", "n")), \
+                mock.patch.object(fruit_auto, "worklog_projects_from_employee_info", lambda i: [{"id": "525", "name": "IBK"}]), \
+                mock.patch.object(fruit_auto, "remove_completed_schedule_dates", lambda s, d: False):
+            result = fruit_auto.worklog_approvals(owner_key="o", month="202611")
+        by_date = {item["date"]: item for item in result["items"]}
+        self.assertEqual(set(by_date), {"2026-11-16", "2026-11-17"})
+        self.assertTrue(by_date["2026-11-16"]["approved"])
+        self.assertFalse(by_date["2026-11-17"]["approved"])
+        self.assertEqual(by_date["2026-11-17"]["status"], "pending")
+        self.assertEqual(by_date["2026-11-17"]["projectName"], "IBK")
+
+
+class ErrorStatusTests(unittest.TestCase):
+    def test_onefinger_errors_do_not_log_the_app_out(self):
+        import web_server
+        self.assertEqual(web_server.error_status("OneFinger 로그인 실패: 통합 로그인이 잠시 막혀 있어요. 약 3분 뒤"), 429)
+        self.assertEqual(web_server.error_status("업무일지 저장 실패: OneFinger PUT 실패(422)"), 500)
+        self.assertEqual(web_server.error_status("로그인이 필요합니다."), 401)

@@ -215,6 +215,10 @@ class OneFingerClient:
                 return None
             raise
 
+    def worklogs(self, limit=100):
+        # month/from/to는 서버가 무시한다: 최근 기록을 limit개 받아 호출한 쪽이 날짜로 거른다.
+        return self.api("GET", "/me/worklogs", {"limit": int(limit)}) or []
+
     def save_worklog(self, date, body):
         return self.api("PUT", f"/me/worklogs/{date}", body=body)
 
