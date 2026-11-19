@@ -771,3 +771,46 @@ body.theme-clean .busy-overlay-card img { filter: drop-shadow(0 0 0 #fff) drop-s
 @media (prefers-reduced-motion: reduce) {
   body.skin-on .busy-overlay-card img { animation: none; }
 }
+
+/* ================= 3.19.0 ================= */
+/* 상단 스킨 이름 배너 제거 */
+.skin-banner, body.skin-on .skin-banner { display: none !important; }
+
+/* 왕관 페이지 뒤로가기: 작은 알약 버튼, 제목과 한 줄 */
+.ranking-page-hero {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  align-content: start;
+  column-gap: 10px;
+}
+.ranking-page .ranking-back,
+body.skin-on .ranking-page .ranking-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  width: auto;
+  height: 38px;
+  min-height: 38px;
+  max-height: 38px;
+  margin: 0;
+  padding: 0 14px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 4px 12px var(--shadow, rgba(0, 0, 0, .08));
+}
+.ranking-page-title { grid-column: 1 / -1; }
+
+/* 순환 고리: 화살표는 아바타·이름표 아래층, 이름표는 읽히게 */
+.target-cycle-card.multiple .cycle-ring > .cycle-beam-layer { z-index: 1; }
+.target-cycle-card.multiple .cycle-person,
+.target-cycle-card.multiple .cycle-center { z-index: 2; }
+.target-cycle-card .cycle-name {
+  padding: 0 6px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface, #fff) 82%, transparent);
+}

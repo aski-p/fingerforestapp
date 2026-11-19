@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV87";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.18.9";
+const appVersion = "3.19.0";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -849,7 +849,7 @@ const skinBannerText = {
 const SKIN_IDS = new Set(Object.keys(skinBannerText));
 
 function migratedTheme(theme) {
-  // 3.18.9 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
+  // 3.19.0 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
   if ((!theme || theme === "default") && storeGet(skinMigrationKey) !== "1") {
     storeSet(skinMigrationKey, "1");
     return DEFAULT_SKIN;
@@ -1205,8 +1205,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.18.9",
-        badge: "/icons/app-icon-192.png?v=3.18.9",
+        icon: "/icons/app-icon-192.png?v=3.19.0",
+        badge: "/icons/app-icon-192.png?v=3.19.0",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1803,8 +1803,10 @@ function cycleRingSvg(total, currentIndex) {
   const uy = dy / len;
   const sx = 50 + ux * 12;
   const sy = 50 + uy * 12;
-  const ex = target.x - ux * 12.5;
-  const ey = target.y - uy * 12.5;
+  // 다음 사람이 위쪽에 있으면 이름표·'다음' 배지가 화살표 길목(아바타 아래)에 있으므로 그 앞에서 멈춘다.
+  const stopBefore = target.y < 46 ? 21 : 12.5;
+  const ex = target.x - ux * stopBefore;
+  const ey = target.y - uy * stopBefore;
   const headAngle = (Math.atan2(dy, dx) * 180) / Math.PI;
   return `
     <svg viewBox="0 0 100 100" focusable="false">
