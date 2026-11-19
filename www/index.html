@@ -57,6 +57,7 @@
       })();
     </script>
     <div id="launchSplash" class="launch-splash" aria-label="FingerForest 시작 화면">
+      <img id="launchCharacter" class="launch-character hidden" src="/assets/loading/diary.webp" alt="" aria-hidden="true">
       <div class="launch-wordmark" aria-hidden="true">
         <span class="launch-line">
           <span style="--i: 0">F</span>
@@ -78,7 +79,7 @@
     </div>
     <div id="busyOverlay" class="busy-overlay" role="status" aria-live="polite" aria-hidden="true" hidden>
       <div class="busy-overlay-card">
-        <img src="/assets/fingerfruit-loading.gif?v=3.19.2" alt="" aria-hidden="true">
+        <img id="busyCharacter" src="/assets/fingerfruit-loading.gif?v=3.19.2" alt="" aria-hidden="true">
         <strong>로딩중이에요</strong>
         <span>잠시만 기다려 주세요.</span>
       </div>
@@ -322,17 +323,20 @@
                   </label>
                 </div>
                 <div class="worklog-block">
-                  <h3>자동 작성 시간</h3>
-                  <div class="worklog-schedule-row">
+                  <div class="schedule-head">
+                    <h3>자동 작성 시간</h3>
+                    <input id="worklogTimeInput" class="schedule-time-chip" type="time" value="09:05" aria-label="업무일지 작성 시각">
+                  </div>
+                  <p id="worklogScheduleSummary" class="schedule-summary">날짜를 선택하세요</p>
+                  <div class="worklog-schedule-row schedule-hidden-controls">
                     <button id="worklogCalendarBtn" class="calendar-button" type="button" aria-label="업무일지 날짜 추가">
                       <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M7 2v3M17 2v3M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/>
                       </svg>
                     </button>
-                    <button id="worklogDateInput" class="date-open-button" type="button">날짜 선택</button>
-                    <input id="worklogTimeInput" type="time" value="09:05" aria-label="업무일지 시간">
+                    <button id="worklogDateInput" class="date-open-button day-chip-add" type="button">+ 날짜 추가</button>
                   </div>
-                  <div id="worklogDateChips" class="date-chips" aria-live="polite"></div>
+                  <div id="worklogDateChips" class="date-chips day-chips" aria-live="polite"></div>
                 </div>
                 <div class="worklog-block worklog-auto-block">
                   <label class="remember-login worklog-enable">

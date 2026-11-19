@@ -796,6 +796,7 @@ function previewAppearance(settings = appearanceSettings()) {
   document.body.classList.remove(...fonts.map((item) => `font-${item.id}`));
   if (theme !== "default") document.body.classList.add(`theme-${theme}`);
   document.body.classList.toggle("skin-on", SKIN_IDS.has(theme));
+  applySkinCharacters(theme);
   renderSkinBanner(theme);
   document.body.classList.add(`font-${font}`);
   updateAppearanceSelection({ theme, font });
@@ -856,6 +857,22 @@ function migratedTheme(theme) {
   }
   storeSet(skinMigrationKey, "1");
   return theme;
+}
+
+// 로딩 캐릭터: CSS content 교체는 일부 WebView에서 무시되므로 이미지 주소를 직접 바꾼다.
+function applySkinCharacters(theme) {
+  const isSkin = SKIN_IDS.has(theme);
+  const busy = $("busyCharacter");
+  if (busy) {
+    if (!busy.dataset.defaultSrc) busy.dataset.defaultSrc = busy.getAttribute("src");
+    const next = isSkin ? `/assets/loading/${theme}.webp` : busy.dataset.defaultSrc;
+    if (busy.getAttribute("src") !== next) busy.setAttribute("src", next);
+  }
+  const launch = $("launchCharacter");
+  if (launch) {
+    launch.classList.toggle("hidden", !isSkin);
+    if (isSkin) launch.setAttribute("src", `/assets/loading/${theme}.webp`);
+  }
 }
 
 function renderSkinBanner(theme) {
@@ -2034,33 +2051,69 @@ function preserveStateValue(merged, previous, cached, key) {
   }
 }
 
+const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
+
+function worklogDateParts(date) {
+  const [y, m, d] = String(date).split("-").map(Number);
+  const weekday = WEEKDAY_KO[new Date(y, m - 1, d).getDay()];
+  return { y, m, d, weekday };
+}
+
+function worklogTimeLabel() {
+  const value = $("worklogTimeInput")?.value || "09:05";
+  const [h, mi] = value.split(":").map(Number);
+  const ampm = h < 12 ? "오전" : "오후";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${ampm} ${hour12}:${String(mi).padStart(2, "0")}`;
+}
+
+// 시안 C: 요약 한 줄 + 월별로 묶은 동그란 날짜 칩(숫자 크게, 요일 작게). 칩을 누르면 그 날짜를 뺀다.
 function renderWorklogDates() {
   const allowedDates = selectedWorklogDates.filter((date) => isWorklogAllowedDate(date) && !worklogApprovalForDate(date));
   if (allowedDates.length !== selectedWorklogDates.length) {
     selectedWorklogDates = allowedDates;
   }
   const box = $("worklogDateChips");
-  box.innerHTML = "";
   const opener = $("worklogDateInput");
-  opener.textContent = selectedWorklogDates.length
-    ? `${selectedWorklogDates.length}개 날짜 선택됨`
-    : "날짜 선택";
-  if (!selectedWorklogDates.length) {
-    box.innerHTML = '<span class="empty">선택 날짜 없음</span>';
-    window.setTimeout(syncWorkspacePagerHeight, 0);
-    return;
+  const summary = $("worklogScheduleSummary");
+  box.innerHTML = "";
+  const dates = [...selectedWorklogDates].sort();
+  if (summary) {
+    if (!dates.length) {
+      summary.textContent = "날짜를 선택하세요";
+    } else {
+      const next = worklogDateParts(dates[0]);
+      summary.innerHTML = `총 <strong>${dates.length}회</strong> 예약 · 다음 <strong>${next.m}/${next.d}(${next.weekday})</strong> ${escapeHtml(worklogTimeLabel())}`;
+    }
   }
-  selectedWorklogDates.forEach((date) => {
-    const chip = document.createElement("span");
-    chip.className = "date-chip";
-    chip.innerHTML = `${escapeHtml(date)} <button type="button" aria-label="${escapeHtml(date)} 삭제">×</button>`;
-    chip.querySelector("button").addEventListener("click", () => {
+  let currentMonth = "";
+  dates.forEach((date) => {
+    const parts = worklogDateParts(date);
+    const monthKey = `${parts.y}-${parts.m}`;
+    if (monthKey !== currentMonth) {
+      currentMonth = monthKey;
+      const label = document.createElement("span");
+      label.className = "day-chip-month";
+      label.textContent = `${parts.m}월`;
+      box.appendChild(label);
+    }
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = `day-chip${parts.weekday === "토" || parts.weekday === "일" ? " weekend" : ""}`;
+    chip.setAttribute("aria-label", `${parts.m}월 ${parts.d}일 ${parts.weekday}요일 예약 빼기`);
+    chip.innerHTML = `<b>${parts.d}</b><small>${parts.weekday}</small><i aria-hidden="true">×</i>`;
+    chip.addEventListener("click", () => {
       selectedWorklogDates = selectedWorklogDates.filter((item) => item !== date);
       markWorklogDraftDirty();
       renderWorklogDates();
+      toast(`${parts.m}/${parts.d}(${parts.weekday}) 예약을 뺐어요.`);
     });
     box.appendChild(chip);
   });
+  if (opener) {
+    opener.textContent = dates.length ? "+ 날짜 추가" : "+ 날짜 선택";
+    box.appendChild(opener);
+  }
   window.setTimeout(syncWorkspacePagerHeight, 0);
 }
 
@@ -3802,6 +3855,7 @@ $("worklogSeedCount").addEventListener("input", () => {
   $(id).addEventListener("input", markWorklogDraftDirty);
   $(id).addEventListener("change", markWorklogDraftDirty);
 });
+$("worklogTimeInput").addEventListener("change", () => renderWorklogDates());
 
 $("worklogSaveBtn").addEventListener("click", async () => {
   await saveWorklogSettingsFromForm();
