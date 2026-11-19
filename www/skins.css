@@ -1,0 +1,337 @@
+/* FingerForest 3.18.1 skins: 숲속 다이어리(diary, 기본) · 클린(clean) · 성장 정원(garden)
+   공통 규칙은 --sk-* 변수로 칠하고, 스킨마다 변수와 장식(배너·아이콘)만 다르게 둔다. */
+
+body.theme-diary {
+  --bg: #f7f3e8;
+  --surface: #fffcf5;
+  --surface-soft: #fbf6ea;
+  --surface-tint: #f3ecd9;
+  --line: #e8dfc9;
+  --line-strong: #d9ccaa;
+  --text: #243b2b;
+  --text-strong: #1c2f22;
+  --muted: #7a7058;
+  --accent: #3e6b3a;
+  --accent-bright: #6a9a4a;
+  --accent-soft: #e6eed3;
+  --button: #3e6b3a;
+  --button-text: #ffffff;
+  --blue-soft: #fbf6ea;
+  --gold-soft: #fbf1dc;
+  --shadow: rgba(92, 70, 30, 0.08);
+  --sk-radius: 16px;
+  --sk-cta: #a75a12;
+  --sk-cta-text: #ffffff;
+  --sk-chip: #e6eed3;
+  --sk-chip-text: #3e6b3a;
+  --sk-banner: url("/assets/skins/a-banner.webp");
+  --sk-seed: url("/assets/skins/a-seed.webp");
+  --sk-fruit: url("/assets/skins/a-fruit.webp");
+  --sk-title-font: "Pretendard", sans-serif;
+}
+
+body.theme-clean {
+  --bg: #f5f7f8;
+  --surface: #ffffff;
+  --surface-soft: #f8faf9;
+  --surface-tint: #eef4f1;
+  --line: #e2e8e5;
+  --line-strong: #d3ddd8;
+  --text: #15241e;
+  --text-strong: #0f1b16;
+  --muted: #66746d;
+  --accent: #126447;
+  --accent-bright: #1f8a62;
+  --accent-soft: #e5f1ec;
+  --button: #126447;
+  --button-text: #ffffff;
+  --blue-soft: #f8faf9;
+  --gold-soft: #f8faf9;
+  --shadow: rgba(16, 36, 28, 0.06);
+  --sk-radius: 14px;
+  --sk-cta: #126447;
+  --sk-cta-text: #ffffff;
+  --sk-chip: #e5f1ec;
+  --sk-chip-text: #126447;
+}
+
+body.theme-garden {
+  --bg: #eef7ee;
+  --surface: #ffffff;
+  --surface-soft: #f6fbf4;
+  --surface-tint: #e5f3e2;
+  --line: #d6ead2;
+  --line-strong: #bfdeb8;
+  --text: #1d3b22;
+  --text-strong: #14301a;
+  --muted: #5f7a62;
+  --accent: #2e8b3d;
+  --accent-bright: #45b055;
+  --accent-soft: #e2f4dd;
+  --button: #2e8b3d;
+  --button-text: #ffffff;
+  --blue-soft: #f6fbf4;
+  --gold-soft: #fff6e2;
+  --shadow: rgba(30, 90, 40, 0.1);
+  --sk-radius: 20px;
+  --sk-cta: #f08a1c;
+  --sk-cta-text: #ffffff;
+  --sk-chip: #e2f4dd;
+  --sk-chip-text: #2e8b3d;
+  --sk-banner: url("/assets/skins/c-banner.webp");
+  --sk-seed: url("/assets/skins/c-seed.webp");
+  --sk-fruit: url("/assets/skins/c-fruit.webp");
+}
+
+/* ---------- 공통: 배경 ---------- */
+:is(body.theme-diary, body.theme-clean, body.theme-garden),
+:is(body.theme-diary, body.theme-clean, body.theme-garden).main-bg-scene {
+  background: var(--bg);
+  background-attachment: scroll;
+}
+
+body.theme-diary.main-bg-scene .launch-splash,
+body.theme-garden.main-bg-scene .launch-splash {
+  background: var(--sk-banner) center top / 100% auto no-repeat, var(--bg);
+}
+
+body.theme-clean.main-bg-scene .launch-splash {
+  background: var(--bg);
+}
+
+/* ---------- 상단 바 ---------- */
+:is(body.theme-diary, body.theme-clean, body.theme-garden) .hero {
+  border-bottom-color: transparent;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+}
+
+:is(body.theme-diary, body.theme-clean, body.theme-garden) :is(.ranking-button, .settings-button, .push-control, .logout) {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text-strong);
+  box-shadow: none;
+}
+
+body.theme-garden .ranking-button img {
+  content: url("/assets/skins/c-crown.webp");
+}
+
+/* ---------- 배너 (다이어리·정원) ---------- */
+.skin-banner {
+  display: none;
+}
+
+:is(body.theme-diary, body.theme-garden) .skin-banner {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  margin: -14px -16px -36px;
+  padding: 26px 22px 0;
+  min-height: 176px;
+  background: var(--sk-banner) center top / cover no-repeat;
+}
+
+:is(body.theme-diary, body.theme-garden) .skin-banner strong {
+  color: var(--text-strong);
+  font-size: 26px;
+  font-weight: 950;
+  letter-spacing: -0.02em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .7);
+}
+
+:is(body.theme-diary, body.theme-garden) .skin-banner span {
+  max-width: 54%;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .7);
+}
+
+body.theme-garden .skin-banner strong {
+  color: #14301a;
+}
+
+/* 배너 아래로 첫 카드가 살짝 겹치게: 카드가 배너 위에 떠 있도록 */
+:is(body.theme-diary, body.theme-garden) .skin-banner ~ * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- 카드 공통 ---------- */
+:is(body.theme-diary, body.theme-clean, body.theme-garden) :is(.card, .metric, .balance-toolbar, .workspace-tabs, .fruit-unified-block, .login-profile, .worklog-block) {
+  border: 1px solid var(--line);
+  border-radius: var(--sk-radius);
+  background: var(--surface);
+  box-shadow: 0 8px 22px var(--shadow);
+}
+
+:is(body.theme-diary, body.theme-clean, body.theme-garden) :is(.fruit-unified-block, .worklog-block, .login-profile) {
+  box-shadow: none;
+  background: var(--surface-soft);
+}
+
+:is(body.theme-diary, body.theme-clean, body.theme-garden) .metric:nth-child(n) {
+  background: var(--surface);
+}
+
+:is(body.theme-diary, body.theme-clean, body.theme-garden) :is(.metric span, .balance-toolbar span, .section-title p) {
+  color: var(--muted);
+}
+
+:is(body.theme-diary, body.theme-clean, body.theme-garden) :is(h2, h3, .metric strong, .balance-toolbar strong) {
+  color: var(--text-strong);
+}
+
+/* 씨앗·열매 카드: 큰 숫자 + 그림 아이콘 */
+:is(body.theme-diary, body.theme-clean, body.theme-garden) .status-grid .metric:nth-child(3),
+:is(body.theme-diary, body.theme-clean, body.theme-garden) .status-grid .metric:nth-child(4) {
+  position: relative;
+  overflow: hidden;
+}
+
+:is(body.theme-diary, body.theme-clean, body.theme-garden) .status-grid .metric:nth-child(3) strong,
+:is(body.theme-diary, body.theme-clean, body.theme-garden) .status-grid .metric:nth-child(4) strong {
+  font-size: 32px;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
+
+body.theme-diary .status-grid .metric:nth-child(3) strong,
+body.theme-diary .status-grid .metric:nth-child(4) strong {
+  color: #a75a12;
+}
+
+body.theme-garden .status-grid .metric:nth-child(4) strong {
+  color: #c4610c;
+}
+
+:is(body.theme-diary, body.theme-garden) .status-grid .metric:nth-child(3)::after,
+:is(body.theme-diary, body.theme-garden) .status-grid .metric:nth-child(4)::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 54px;
+  height: 54px;
+  background: var(--sk-seed) center / contain no-repeat;
+  pointer-events: none;
+}
+
+:is(body.theme-diary, body.theme-garden) .status-grid .metric:nth-child(4)::after {
+  background-image: var(--sk-fruit);
+}
+
+/* ---------- 버튼 ---------- */
+:is(body.theme-diary, body.theme-clean, body.theme-garden) .primary {
+  border-radius: 12px;
+  background: var(--sk-cta);
+  color: var(--sk-cta-text);
+  font-weight: 900;
+}
+
+:is(body.theme-diary, body.theme-clean, body.theme-garden) .primary.soft,
+:is(body.theme-diary, body.theme-clean, body.theme-garden) #refreshBalanceBtn,
+:is(body.theme-diary, body.theme-clean, body.theme-garden) .history-chip {
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+}
+
+:is(body.theme-diary, body.theme-clean, body.theme-garden) .secondary {
+  border-radius: 12px;
+  background: var(--sk-chip);
+  color: var(--sk-chip-text);
+}
+
+:is(body.theme-diary, body.theme-clean, body.theme-garden) .badge.ok,
+:is(body.theme-diary, body.theme-clean, body.theme-garden) .badge.neutral {
+  background: var(--sk-chip);
+  color: var(--sk-chip-text);
+}
+
+/* 탭 */
+:is(body.theme-diary, body.theme-clean, body.theme-garden) .workspace-tabs {
+  padding: 4px;
+  background: var(--surface-tint);
+  box-shadow: none;
+}
+
+:is(body.theme-diary, body.theme-clean, body.theme-garden) .workspace-tabs button {
+  border-radius: calc(var(--sk-radius) - 4px);
+  color: var(--muted);
+}
+
+:is(body.theme-diary, body.theme-clean, body.theme-garden) .workspace-tabs button.active {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 6px 14px var(--shadow);
+}
+
+/* 입력칸 */
+:is(body.theme-diary, body.theme-clean, body.theme-garden) :is(input[type="text"], input[type="number"], input[type="password"], input:not([type]), textarea, select) {
+  border-color: var(--line-strong);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text-strong);
+}
+
+/* 순환 카드 */
+:is(body.theme-diary, body.theme-clean, body.theme-garden) .target-cycle-card {
+  border-color: var(--line);
+  border-radius: var(--sk-radius);
+  background: var(--surface);
+}
+
+body.theme-diary .target-cycle-card {
+  background:
+    radial-gradient(circle at 100% 100%, rgba(221, 233, 184, .5), transparent 38%),
+    var(--surface);
+}
+
+body.theme-garden .target-cycle-card {
+  background:
+    radial-gradient(circle at 50% 120%, rgba(150, 214, 120, .35), transparent 55%),
+    var(--surface);
+}
+
+/* 로그인 전 화면 */
+:is(body.theme-diary, body.theme-clean, body.theme-garden) .login-wordmark span {
+  color: var(--accent);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+/* 클린: 그림 없이 숫자와 선으로 */
+body.theme-clean .status-grid .metric:nth-child(4) strong {
+  color: #126447;
+}
+
+body.theme-clean :is(.card, .metric, .balance-toolbar) {
+  box-shadow: 0 1px 2px var(--shadow);
+}
+
+/* 로그인 후: 바깥 로그인 카드 틀은 지우고 안쪽 사용자 카드만 */
+:is(body.theme-diary, body.theme-clean, body.theme-garden).authenticated .login-card {
+  border: 0;
+  background: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+:is(body.theme-diary, body.theme-clean, body.theme-garden).authenticated .login-card .login-profile {
+  background: var(--surface);
+  box-shadow: 0 8px 22px var(--shadow);
+}
+
+:is(body.theme-diary, body.theme-garden) .skin-banner span {
+  max-width: 62%;
+  font-size: 12px;
+}
+
+body.theme-diary .skin-banner span {
+  background: linear-gradient(90deg, rgba(251, 246, 234, .85), rgba(251, 246, 234, 0));
+  padding: 2px 8px 2px 0;
+}

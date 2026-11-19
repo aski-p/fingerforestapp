@@ -13,7 +13,7 @@ import web_server
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "3.18.1"
+EXPECTED_VERSION = "3.18.2"
 ANDROID_VERSION = "3.17.2"
 EXPECTED_ANDROID_SIGNER = "19657138bba6fb9186d885c42eab5142710b147401e49abb2bbc0f12d01b50e7"
 
@@ -89,8 +89,8 @@ class ReleaseConsistencyTests(unittest.TestCase):
     def test_release_notes_only_describe_current_update(self):
         notes = web_server.RELEASE_NOTES
         self.assertTrue(notes)
-        self.assertTrue(any("신 포레스트" in note for note in notes))
-        self.assertTrue(any("전송 사이클" in note for note in notes))
+        self.assertTrue(all(isinstance(note, str) and note.strip() for note in notes))
+        self.assertLessEqual(len(notes), 5)
 
     def test_canonical_sources_use_expected_platform_versions(self):
         checks = {

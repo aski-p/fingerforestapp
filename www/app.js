@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV87";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.18.1";
+const appVersion = "3.18.2";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -314,7 +314,10 @@ window.addEventListener("resize", updateVisualViewportMetrics);
 ["loginId", "loginPw"].forEach((id) => enableReliableInputFocus($(id)));
 
 const themes = [
-  { id: "default", label: "Fresh", swatch: ["#f7f9fc", "#10b981", "#111827"] },
+  { id: "diary", label: "숲속 다이어리", category: "special", swatch: ["#f7f3e8", "#3e6b3a", "#a75a12"] },
+  { id: "clean", label: "클린", category: "special", swatch: ["#f5f7f8", "#126447", "#15241e"] },
+  { id: "garden", label: "성장 정원", category: "special", swatch: ["#eef7ee", "#2e8b3d", "#f08a1c"] },
+  { id: "default", label: "Fresh (기존)", swatch: ["#f7f9fc", "#10b981", "#111827"] },
   { id: "dark", label: "Dark", swatch: ["#101418", "#34d399", "#e8edf2"] },
   { id: "berry", label: "Berry", swatch: ["#fff0f7", "#ec4899", "#9d174d"] },
   { id: "ocean", label: "Ocean", swatch: ["#f2fbff", "#0ea5e9", "#0f3f5d"] },
@@ -775,7 +778,7 @@ function applyAppearance() {
 
 function initializeAppearanceSettings() {
   setAppearanceSettings({
-    theme: storeGet(themeKey) || "default",
+    theme: migratedTheme(storeGet(themeKey) || ""),
     font: storeGet(fontKey) || "pretendard",
   });
 }
@@ -786,6 +789,7 @@ function previewAppearance(settings = appearanceSettings()) {
   document.body.classList.remove(...themes.map((item) => `theme-${item.id}`));
   document.body.classList.remove(...fonts.map((item) => `font-${item.id}`));
   if (theme !== "default") document.body.classList.add(`theme-${theme}`);
+  renderSkinBanner(theme);
   document.body.classList.add(`font-${font}`);
   updateAppearanceSelection({ theme, font });
 }
@@ -821,6 +825,31 @@ function appearanceSettings() {
   };
 }
 
+const skinMigrationKey = "fruitSkinDiaryV318";
+const DEFAULT_SKIN = "diary";
+const skinBannerText = {
+  diary: ["숲속 다이어리", "숲에서 쌓이는 우리의 업무와 마음 기록"],
+  garden: ["성장 정원", "함께 가꾸는 우리 팀의 성장 정원"],
+};
+
+function migratedTheme(theme) {
+  // 3.18.2 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
+  if ((!theme || theme === "default") && storeGet(skinMigrationKey) !== "1") {
+    storeSet(skinMigrationKey, "1");
+    return DEFAULT_SKIN;
+  }
+  storeSet(skinMigrationKey, "1");
+  return theme;
+}
+
+function renderSkinBanner(theme) {
+  const text = skinBannerText[theme];
+  const banner = $("skinBanner");
+  if (!banner) return;
+  $("skinBannerTitle").textContent = text ? text[0] : "";
+  $("skinBannerSub").textContent = text ? text[1] : "";
+}
+
 function setAppearanceSettings(settings = {}) {
   const theme = themes.some((item) => item.id === settings.theme) ? settings.theme : "default";
   const font = fonts.some((item) => item.id === settings.font) ? settings.font : "pretendard";
@@ -847,6 +876,10 @@ async function loadProfileSettings({ silent = true } = {}) {
   if (!isUnlocked()) return;
   try {
     const settings = await api("/api/profile-settings");
+    if (!settings.theme || settings.theme === "default") {
+      const local = storeGet(themeKey);
+      if (local && local !== "default") settings.theme = local;
+    }
     setAppearanceSettings(settings);
   } catch (err) {
     if (!silent) toast(`설정 불러오기 실패: ${err.message}`);
@@ -1156,8 +1189,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.18.1",
-        badge: "/icons/app-icon-192.png?v=3.18.1",
+        icon: "/icons/app-icon-192.png?v=3.18.2",
+        badge: "/icons/app-icon-192.png?v=3.18.2",
         data: { url: item.url || "/" },
       });
       return true;
