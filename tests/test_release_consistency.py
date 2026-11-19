@@ -14,8 +14,8 @@ import web_server
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_VERSION = "3.20.0"
-ANDROID_VERSION = "3.17.2"
-EXPECTED_ANDROID_SIGNER = "19657138bba6fb9186d885c42eab5142710b147401e49abb2bbc0f12d01b50e7"
+ANDROID_VERSION = "3.20.0"
+EXPECTED_ANDROID_SIGNER = "a75377fc97230b8e562fda164e0f91743cab2d5dbc34dfa1becff7f5d1728817"
 
 
 class ReleaseConsistencyTests(unittest.TestCase):
@@ -215,12 +215,16 @@ class ReleaseConsistencyTests(unittest.TestCase):
         self.assertNotIn("loadRememberedLogin()", logout_body)
 
     def test_android_artifact_retains_update_compatible_signer(self):
-        apksigner = Path(
-            shutil.which("apksigner")
-            or "/opt/data/cache/fingerforest-android/sdk/build-tools/35.0.0/apksigner"
-        )
+        try:
+            apksigner = release_builder.find_apksigner()
+        except RuntimeError:
+            self.skipTest("apksigner is unavailable")
         apk = ROOT / "www" / "downloads" / f"fingerfruit-android-v{ANDROID_VERSION}.apk"
-        if not apksigner.is_file():
+        try:
+            available = apksigner.is_file()
+        except OSError:
+            available = False
+        if not available:
             self.skipTest("apksigner is unavailable")
         result = subprocess.run(
             [str(apksigner), "verify", "--print-certs", str(apk)],

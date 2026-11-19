@@ -611,12 +611,33 @@ function renderUrgentNotice(info = latestAppInfo) {
     text &&
     installed &&
     compareVersions(installed, maxVersion) <= 0;
-  if (!show) {
-    el.classList.add("hidden");
+  if (show) {
+    el.innerHTML = text;
+    el.classList.remove("hidden");
     return;
   }
-  el.innerHTML = text;
-  el.classList.remove("hidden");
+  // 3.20.0+ Android app: newer APK on the server -> one tap downloads it and opens the system installer.
+  const androidVersion = info?.androidVersion || "";
+  if (window.FruitAndroid?.installUpdate && androidVersion && info?.androidApkUrl && compareVersions(androidVersion, installed) > 0) {
+    el.textContent = "";
+    const label = document.createElement("span");
+    label.textContent = `새 버전 v${androidVersion}이 나왔어요 `;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "app-notice-action";
+    button.textContent = "지금 업데이트";
+    button.addEventListener("click", () => {
+      try {
+        window.FruitAndroid.installUpdate(new URL(info.androidApkUrl, location.href).href);
+      } catch (_err) {
+        location.href = info.androidApkUrl;
+      }
+    });
+    el.append(label, button);
+    el.classList.remove("hidden");
+    return;
+  }
+  el.classList.add("hidden");
 }
 
 async function checkAppVersion() {

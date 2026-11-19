@@ -35,7 +35,7 @@ PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
 APP_VERSION = "3.20.0"
-ANDROID_APP_VERSION = "3.17.2"
+ANDROID_APP_VERSION = "3.20.0"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
 CHAT_CONTEXT_MESSAGE_LIMIT = 8
@@ -939,9 +939,11 @@ def app_info(handler):
         "iosProfileUrl": f"{base_url}/downloads/{ios_name}" if base_url else f"/downloads/{ios_name}",
         "message": "새 버전이 있습니다. 업데이트 후 다시 실행해주세요.",
         "notice": {
+            # 3.20.0 moved Android to a new app id and a permanent key; old installs (<= 3.17.2) cannot
+            # update in place, so they get a one-tap link to the new APK. The new app offers to remove the old one.
             "enabled": True,
-            "maxVersion": "3.16.0",
-            "text": "⚠️ 안드로이드 <b>3.16.0 이하</b> 버전 사용자 알림: 앱 서명 키가 변경되어 기존 설치본으로는 새 버전 업데이트가 불가능합니다. 설치 페이지(<b>install.html</b>)에서 <b>새 APK</b>를 받아 기존 앱을 <b>삭제</b>한 뒤 재설치해 주세요.",
+            "maxVersion": "3.17.2",
+            "text": f"📱 <b>새 FingerForest 앱</b>이 나왔어요. <a href=\"/downloads/{android_name}\"><b>여기를 눌러 설치</b></a>하면 새 앱이 따로 설치되고, 새 앱을 열면 이전 앱 삭제를 안내해 드려요. 새 앱에서 한 번만 다시 로그인해 주세요.",
         },
         "releaseNotes": RELEASE_NOTES,
         "publicHolidays": fruit_auto.KOREAN_PUBLIC_HOLIDAYS,

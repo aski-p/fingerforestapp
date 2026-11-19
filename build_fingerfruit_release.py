@@ -14,7 +14,11 @@ WWW = ROOT / "www"
 ANDROID = ROOT / "mobile-build" / "android-app"
 LOCAL_MOBILE_BUILD = ROOT / "mobile-build"
 STATE_MOBILE_BUILD = ROOT.parent / "state" / "fruit-auto" / "mobile-build"
-EXPECTED_ANDROID_SIGNER_SHA256 = "19657138bba6fb9186d885c42eab5142710b147401e49abb2bbc0f12d01b50e7"
+# 3.20.0+: permanent release key (com.openclaw.fingerforest). Backups: PGX ~/fingerforest-android-keys,
+# NAS aski_main/keys/fingerforest-android, 5080 C:\\Users\\aski\\keys\\fingerforest-android
+EXPECTED_ANDROID_SIGNER_SHA256 = "a75377fc97230b8e562fda164e0f91743cab2d5dbc34dfa1becff7f5d1728817"
+ANDROID_KEY_DIR = Path(os.environ.get("FF_KEY_DIR") or Path.home() / "fingerforest-android-keys")
+ANDROID_BUILDER_IMAGE = os.environ.get("FF_ANDROID_IMAGE") or "dropday-apk-builder:gradle-37"
 GRADLE = Path(os.environ.get("GRADLE_HOME") or LOCAL_MOBILE_BUILD / "gradle") / "bin" / "gradle"
 JAVA_HOME = Path(os.environ.get("JAVA_HOME") or LOCAL_MOBILE_BUILD / "jdk21")
 if not GRADLE.exists():
@@ -199,6 +203,9 @@ def find_apksigner():
         candidates = sorted((Path(sdk_root) / "build-tools").glob("*/apksigner"), reverse=True)
         if candidates:
             return candidates[0]
+    wrapper = ROOT / "tools" / "apksigner-docker.sh"
+    if wrapper.exists() and shutil.which("docker"):
+        return wrapper
     raise RuntimeError("apksigner is required to verify the Android release signer")
 
 
@@ -215,7 +222,8 @@ def verify_android_signer(apk, apksigner=None):
         env=env,
     )
     output = result.stdout + result.stderr
-    output_lines = output.splitlines()
+    # apksigner 37 labels a single-scheme signer "V2 Signer:"; older builds print "Signer #1".
+    output_lines = [("Signer #1 " + line[len("V2 Signer: "):]) if line.startswith("V2 Signer: ") else line for line in output.splitlines()]
     signer_lines = [line for line in output_lines if "Signer #" in line]
     if any(not line.startswith("Signer #") for line in signer_lines):
         raise RuntimeError("Android release signer output is malformed")
@@ -240,11 +248,16 @@ def verify_android_signer(apk, apksigner=None):
 
 
 def build_android(new):
-    env = dict(os.environ)
-    env["JAVA_HOME"] = str(JAVA_HOME)
-    env["PATH"] = f"{JAVA_HOME / 'bin'}:{env.get('PATH', '')}"
-    env["GRADLE_USER_HOME"] = str(ROOT / "mobile-build" / ".gradle-home")
-    run([str(GRADLE), "--no-daemon", ":app:assembleRelease"], cwd=ANDROID, env=env)
+    # Builds inside the PGX arm64 Android builder image (JDK 21, Gradle 9, SDK 37) with the release key mounted read-only.
+    if not (ANDROID_KEY_DIR / "release.p12").exists():
+        raise RuntimeError(f"release key missing: {ANDROID_KEY_DIR}")
+    cache = Path.home() / ".cache" / "ff-gradle"
+    cache.mkdir(parents=True, exist_ok=True)
+    run([
+        "docker", "run", "--rm", "-u", f"{os.getuid()}:{os.getgid()}", "-e", "HOME=/tmp", "-e", "GRADLE_USER_HOME=/gradle",
+        "-v", f"{ANDROID}:/w", "-v", f"{cache}:/gradle", "-v", f"{ANDROID_KEY_DIR}:/keys:ro", "-w", "/w", ANDROID_BUILDER_IMAGE,
+        "sh", "-c", "gradle --no-daemon --console=plain -Pandroid.aapt2FromMavenOverride=$AAPT2_OVERRIDE :app:assembleRelease",
+    ])
     apk = ANDROID / "app" / "build" / "outputs" / "apk" / "release" / "app-release.apk"
     if not apk.exists():
         raise RuntimeError("release APK not found")

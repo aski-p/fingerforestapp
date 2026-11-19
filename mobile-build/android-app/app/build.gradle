@@ -1,15 +1,23 @@
 plugins { id "com.android.application" }
 
+// FingerForest 3.20.0+: new application id + permanent release key (2026-11-19). The old debug-signed
+// com.openclaw.fruitauto build cannot be updated in place; the web app guides it to install this one.
+// Key backups: PGX ~/fingerforest-android-keys, NAS aski_main/keys/fingerforest-android, 5080 C:\Users\aski\keys\fingerforest-android
+def keyDir = file(System.getenv("FF_KEY_DIR") ?: "/keys")
+def keyPass = new File(keyDir, "pass").exists() ? new File(keyDir, "pass").text.trim() : ""
+
 android {
     namespace "com.openclaw.fruitauto"
-    compileSdk 35
-    defaultConfig { applicationId "com.openclaw.fruitauto"; minSdk 23; targetSdk 35; versionCode 31702; versionName "3.17.2" }
+    compileSdk 37
+    buildToolsVersion "37.0.0"
+    defaultConfig { applicationId "com.openclaw.fingerforest"; minSdk 23; targetSdk 35; versionCode 32000; versionName "3.20.0" }
     signingConfigs {
         release {
-            storeFile signingConfigs.debug.storeFile
-            storePassword signingConfigs.debug.storePassword
-            keyAlias signingConfigs.debug.keyAlias
-            keyPassword signingConfigs.debug.keyPassword
+            storeFile new File(keyDir, "release.p12")
+            storeType "pkcs12"
+            storePassword keyPass
+            keyAlias "fingerforest"
+            keyPassword keyPass
         }
     }
     buildTypes {

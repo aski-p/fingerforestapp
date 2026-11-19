@@ -23,7 +23,7 @@ import android.webkit.WebViewClient;
 
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST_CODE = 20260529;
-    private static final String APP_VERSION = "3.17.2";
+    private static final String APP_VERSION = "3.20.0";
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
     private static final String APP_URL = "https://web-production-011c4.up.railway.app/";
@@ -120,13 +120,43 @@ public class MainActivity extends Activity {
             }
         });
         webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
-            openExternal(this, url);
+            if (ApkUpdater.isOwnApk(url)) ApkUpdater.start(this, url);
+            else openExternal(this, url);
         });
         webView.loadUrl(APP_URL);
         webView.postDelayed(() -> {
             if (!mainFrameLoaded) loadFallbackIfNeeded();
         }, PRIMARY_LOAD_TIMEOUT_MS);
         scheduleNotificationChecks(this);
+        offerOldAppRemoval();
+    }
+
+    // 3.20.0 moved to a new application id; until the old debug-signed app is gone, offer to remove it.
+    private static final String OLD_PACKAGE = "com.openclaw.fruitauto";
+
+    private boolean isOldAppInstalled() {
+        try {
+            getPackageManager().getPackageInfo(OLD_PACKAGE, 0);
+            return true;
+        } catch (PackageManager.NameNotFoundException _error) {
+            return false;
+        }
+    }
+
+    private void offerOldAppRemoval() {
+        if (OLD_PACKAGE.equals(getPackageName()) || !isOldAppInstalled()) return;
+        new AlertDialog.Builder(this)
+            .setTitle("이전 앱 정리")
+            .setMessage("새 FingerForest 앱으로 옮겨 왔어요. 아이콘이 두 개가 되지 않게 이전 앱을 삭제해 주세요. 새 앱에서 한 번만 다시 로그인하면 돼요.")
+            .setPositiveButton("이전 앱 삭제", (dialog, which) -> {
+                try {
+                    startActivity(new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + OLD_PACKAGE)));
+                } catch (Exception _error) {
+                    ApkUpdater.toast(this, "설정 > 앱에서 이전 FingerForest를 삭제해 주세요");
+                }
+            })
+            .setNegativeButton("나중에", null)
+            .show();
     }
 
     private void clearLegacySensitiveStorage() {
@@ -301,6 +331,14 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void openSupport(String url) {
             MainActivity.openExternal(context, url);
+        }
+
+        @JavascriptInterface
+        public void installUpdate(String url) {
+            if (context instanceof Activity) {
+                Activity activity = (Activity) context;
+                activity.runOnUiThread(() -> ApkUpdater.start(activity, url));
+            }
         }
 
         @JavascriptInterface
