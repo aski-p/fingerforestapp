@@ -111,3 +111,36 @@ class OneFingerPortTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OneFingerRequestTests(unittest.TestCase):
+    def _capture(self, method, path):
+        client = onefinger.OneFingerClient()
+        client.employee = {"id": "900001"}
+        seen = {}
+
+        class Res:
+            status = 200
+
+            def read(self):
+                return b'{"data": {}}'
+
+        def fake_open(req, timeout=None):
+            seen["url"] = req.full_url
+            seen["headers"] = {k.lower(): v for k, v in req.header_items()}
+            return Res()
+
+        client._open = fake_open
+        client.session_info = lambda: {"authenticated": True, "csrf": "tok"}
+        client.api(method, path, body={} if method != "GET" else None)
+        return seen
+
+    def test_forest_calls_go_to_the_forest_api(self):
+        seen = self._capture("GET", "/me")
+        self.assertTrue(seen["url"].endswith("/api/v1/forest/me"), seen["url"])
+
+    def test_writes_send_origin_and_csrf(self):
+        seen = self._capture("POST", "/fruit-gifts")
+        self.assertEqual(seen["headers"]["origin"], onefinger.ONEFINGER_URL)
+        self.assertEqual(seen["headers"]["x-csrf-token"], "tok")
+        self.assertEqual(seen["headers"]["x-forest-expected-employee-id"], "900001")

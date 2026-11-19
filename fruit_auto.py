@@ -56,7 +56,7 @@ _SECRETS_LOCK_STATE = threading.local()
 KST = dt.timezone(dt.timedelta(hours=9))
 
 # 2026-11-19: 옛 PMS 로그인(pms.fingerservice.co.kr)과 옛 포레스트(forest2…/api/v1/dw)는 새 OneFinger로 옮겨졌다.
-# 모든 포레스트 호출은 onefinger.py(새 OneFinger /pms-api)로 간다. 아래 함수들은 예전 응답 모양을 그대로 돌려줘서
+# 모든 포레스트 호출은 onefinger.py(새 OneFinger /api/v1/forest)로 간다. 아래 함수들은 예전 응답 모양을 그대로 돌려줘서
 # 나머지 코드(기록·랭킹·자동전송·업무일지)는 바꾸지 않는다.
 from onefinger import OneFingerClient, OneFingerError, LoginFailed
 
@@ -1882,6 +1882,8 @@ def _approval_rows(client, std_month):
     try:
         days = client.worklog_calendar(month)
     except OneFingerError as exc:
+        if getattr(exc, "status", None) == 501:
+            return []  # 신 포레스트가 아직 달력 기능을 열지 않음 → 승인 내역 없이 진행
         raise FruitAutoError(f"업무일지 승인 현황을 읽지 못했습니다: {exc}") from exc
     rows = []
     for d in days:

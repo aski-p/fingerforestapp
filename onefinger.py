@@ -4,7 +4,7 @@
 앱에서 쓴 업무일지·열매 선물이 옛 포레스트로 들어가 신 포레스트에 반영되지 않던 문제를 이 모듈로 고친다.
 
  - 로그인: 브라우저와 같은 통합 로그인(OIDC) 흐름을 따라간다. 사번(숫자) + 비밀번호. 비밀번호는 HTTPS 폼으로만 보낸다.
- - API: {ONEFINGER_URL}/pms-api/...  응답 {data, meta} / 오류 {error:{code,message}}
+ - API: {ONEFINGER_URL}/api/v1/forest/...  응답 {data, meta} / 오류 {error:{code,message}}
  - 쓰기(POST/PUT): X-CSRF-Token(GET /auth/session) + Idempotency-Key + X-Forest-Expected-Employee-Id
 명세는 새 OneFinger 웹 화면 스크립트에 들어 있는 API 정의(get_me, get_employees, get_me_reward_balance,
 post_fruit_gifts, get/put_me_worklogs_date, get_me_reward_ledger, get_rankings, get_me_worklog_calendar)를 따른다.
@@ -20,7 +20,7 @@ import uuid
 
 ONEFINGER_URL = os.environ.get("ONEFINGER_URL", "https://onefinger.fingerservice.co.kr").rstrip("/")
 ONEFINGER_SSO_URL = os.environ.get("ONEFINGER_SSO_URL", "https://sso-onefinger.fingerservice.co.kr").rstrip("/")
-API_PREFIX = "/pms-api"
+API_PREFIX = "/api/v1/forest"
 TIMEOUT = 25
 
 
@@ -150,6 +150,8 @@ class OneFingerClient:
             if not s.get("authenticated"):
                 raise OneFingerError("OneFinger 세션이 끝났어요. 다시 로그인해 주세요.", code="AUTH", status=401)
             headers["X-CSRF-Token"] = s["csrf"]
+            headers["Origin"] = ONEFINGER_URL
+            headers["Referer"] = ONEFINGER_URL + "/"
             headers["Idempotency-Key"] = str(uuid.uuid4())
             if self.employee and self.employee.get("id"):
                 headers["X-Forest-Expected-Employee-Id"] = str(self.employee["id"])

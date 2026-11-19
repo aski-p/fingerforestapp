@@ -335,7 +335,7 @@ body.theme-getter.main-bg-scene {
     linear-gradient(180deg, rgba(10, 0, 3, 0.18), rgba(14, 1, 5, 0.62) 44%, rgba(14, 1, 5, 0.9)),
     radial-gradient(circle at 24% 16%, rgba(255, 230, 120, 0.18), transparent 28%),
     radial-gradient(circle at 82% 70%, rgba(255, 23, 56, 0.2), transparent 34%),
-    url("/assets/getter/getter-robo-splash.jpg?v=3.18.0") center top / cover fixed,
+    url("/assets/getter/getter-robo-splash.jpg?v=3.18.1") center top / cover fixed,
     #100205;
   background-attachment: fixed, fixed, fixed, fixed, fixed;
   background-repeat: no-repeat;
@@ -437,7 +437,7 @@ body.main-bg-scene .launch-splash {
 body.theme-getter.main-bg-scene .launch-splash {
   background:
     linear-gradient(180deg, rgba(8, 0, 2, 0.08), rgba(12, 1, 4, 0.54) 52%, rgba(12, 1, 4, 0.88)),
-    url("/assets/getter/getter-robo-splash.jpg?v=3.18.0") center top / cover no-repeat,
+    url("/assets/getter/getter-robo-splash.jpg?v=3.18.1") center top / cover no-repeat,
     #100205;
 }
 
@@ -795,7 +795,7 @@ body.theme-getter .hero {
   border-bottom-color: rgba(255, 23, 56, 0.58);
   background:
     linear-gradient(90deg, rgba(11, 2, 4, 0.98) 0%, rgba(19, 3, 7, 0.94) 62%, rgba(12, 2, 4, 0.72) 100%),
-    url("/assets/getter/getter-robo-splash.jpg?v=3.18.0") center 18% / cover;
+    url("/assets/getter/getter-robo-splash.jpg?v=3.18.1") center 18% / cover;
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.34);
 }
 
@@ -5256,3 +5256,86 @@ body.theme-getter .cycle-shuffle-chip { background: rgba(57, 255, 136, .1); colo
 @media (prefers-reduced-motion: reduce) {
   .cycle-beam-glow, .cycle-beam-spark, .target-cycle-card.multiple .cycle-person.current .profile-avatar { animation: none; }
 }
+
+/* --- 시안 E 2차: 시안에 더 가깝게 --- */
+.target-cycle-card {
+  border: 1px solid #dfe8d3;
+  border-radius: 18px;
+  padding: 16px 14px 18px;
+  background:
+    radial-gradient(circle at 100% 100%, rgba(221, 233, 184, .55), transparent 38%),
+    radial-gradient(circle at 0% 100%, rgba(221, 233, 184, .45), transparent 34%),
+    #fffdf8;
+  box-shadow: 0 10px 26px rgba(18, 100, 71, .08);
+}
+
+.target-cycle-head span { color: #15241e; font-size: 17px; font-weight: 950; }
+
+.cycle-edit-btn {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid #cfe0c4;
+  border-radius: 999px;
+  background: #fff;
+  color: #126447;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.target-cycle-card.editing .cycle-edit-btn { background: #126447; color: #fff; border-color: #126447; }
+
+.target-cycle-card .cycle-remove { display: none; }
+.target-cycle-card.editing .cycle-remove { display: grid; place-items: center; }
+.target-cycle-card.single .cycle-remove { display: grid; place-items: center; }
+
+.target-cycle-card .cycle-person .person-avatar {
+  width: 56px;
+  height: 56px;
+  border: 3px solid #fff;
+  font-size: 15px;
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 6px 14px rgba(21, 36, 30, .16);
+}
+
+.target-cycle-card .cycle-name { font-size: 14px; }
+
+.cycle-seg { stroke-width: 2.8; stroke: #d6e7c8; }
+.cycle-seg.sent { stroke-width: 3.2; }
+.cycle-seg-head { stroke-width: 2; }
+
+.cycle-beam-glow { stroke-width: 11; filter: blur(2.4px); }
+.cycle-beam-line { stroke-width: 4.2; }
+.cycle-beam-spark { stroke-width: 1.6; }
+
+.cycle-center { width: 29%; box-shadow: 0 0 0 5px #fff, 0 8px 22px rgba(18, 100, 71, .2); }
+.cycle-center b { font-size: 18px; }
+.cycle-center small { font-size: 12px; }
+.cycle-center-fruit { width: 28px; height: 28px; }
+.cycle-center-fruit::after { left: 14px; top: -7px; width: 11px; height: 7px; }
+
+.cycle-sent-check { top: -2px; left: 2px; width: 22px; height: 22px; }
+
+.target-cycle-summary {
+  justify-self: center;
+  margin-top: -2px;
+  color: #5b6b62;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.target-cycle-summary .cycle-progress-count { color: #126447; }
+
+.target-cycle-card.multiple .target-cycle-caption { margin-top: 10px; }
+.target-cycle-card.multiple .target-cycle-caption { display: flex; flex-direction: column; }
+.target-cycle-card.multiple .cycle-shuffle-chip { order: 3; }
+.target-cycle-card.multiple .target-cycle-summary { order: 2; }
+.cycle-center { width: 22%; }
+.cycle-beam { position: relative; }
+.target-cycle-card.multiple .cycle-ring { z-index: auto; }
+.cycle-ring > svg:first-child { position: absolute; inset: 0; z-index: 1; }
+.cycle-ring > .cycle-beam-layer { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.target-cycle-card.multiple .cycle-person { z-index: 2; }
+.cycle-beam-glow { stroke: rgba(190, 242, 100, .7); stroke-width: 9; }
+.cycle-beam-line { stroke-width: 5; }
+.target-cycle-card.multiple .cycle-shuffle-chip { align-self: center; }

@@ -1,13 +1,13 @@
 <!doctype html>
 <html lang="ko">
   <head>
-    <!-- 마지막 배포: 2026-08-13T12:52:38Z (v3.18.0, Railway web 서비스 4be3dc7e) -->
+    <!-- 마지막 배포: 2026-08-13T12:52:38Z (v3.18.1, Railway web 서비스 4be3dc7e) -->
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#f7f9fc">
     <link rel="manifest" href="/manifest.webmanifest">
-    <link rel="apple-touch-icon" href="/icons/app-touch-icon.png?v=3.18.0">
-    <link rel="icon" href="/icons/app-icon-192.png?v=3.18.0" type="image/png">
+    <link rel="apple-touch-icon" href="/icons/app-touch-icon.png?v=3.18.1">
+    <link rel="icon" href="/icons/app-icon-192.png?v=3.18.1" type="image/png">
     <script>
       (() => {
         const now = new Date();
@@ -27,7 +27,7 @@
         document.head.appendChild(preload);
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=3.18.0">
+    <link rel="stylesheet" href="/styles.css?v=3.18.1">
     <title>FingerForest</title>
   </head>
   <body class="logged-out splash-active main-bg-scene main-bg-forest-summer">
@@ -77,7 +77,7 @@
     </div>
     <div id="busyOverlay" class="busy-overlay" role="status" aria-live="polite" aria-hidden="true" hidden>
       <div class="busy-overlay-card">
-        <img src="/assets/fingerfruit-loading.gif?v=3.18.0" alt="" aria-hidden="true">
+        <img src="/assets/fingerfruit-loading.gif?v=3.18.1" alt="" aria-hidden="true">
         <strong>로딩중이에요</strong>
         <span>잠시만 기다려 주세요.</span>
       </div>
@@ -185,11 +185,12 @@
 
         <section id="targetCycleCard" class="target-cycle-card hidden" aria-label="자동전송 순환 대상">
           <div class="target-cycle-head">
-            <span>전송 사이클</span>
-            <strong id="targetCycleSummary">대상 없음</strong>
+            <span>자동 전송 순환</span>
+            <button id="targetCycleEdit" class="cycle-edit-btn" type="button" aria-pressed="false">순서 관리</button>
           </div>
           <div id="targetCycleFlow" class="target-cycle-flow" aria-live="polite"></div>
           <div id="targetCycleCaption" class="target-cycle-caption"></div>
+          <strong id="targetCycleSummary" class="target-cycle-summary">대상 없음</strong>
         </section>
 
         <div class="workspace-tabs" aria-label="작업 메뉴">
@@ -554,7 +555,7 @@
 
       <p id="toast" class="toast" role="status"></p>
       <footer class="app-footer">
-        <span>v3.18.0 정식버전 · by aski</span>
+        <span>v3.18.1 정식버전 · by aski</span>
         <a id="supportLink" class="support-link" href="https://qr.kakaopay.com/Ej7ruxJDq" target="_blank" rel="noopener" aria-label="카카오페이로 후원하기">후원하기</a>
       </footer>
     </main>
@@ -577,8 +578,8 @@
     <button id="chatOpenBtn" class="chat-fab" type="button" aria-label="채팅 열기">
       <span class="chat-fab-mark" aria-hidden="true"></span>
     </button>
-    <script src="/request_coordinator.js?v=3.18.0"></script>
-    <script src="/ranking_presenter.js?v=3.18.0"></script>
-    <script src="/app.js?v=3.18.0"></script>
+    <script src="/request_coordinator.js?v=3.18.1"></script>
+    <script src="/ranking_presenter.js?v=3.18.1"></script>
+    <script src="/app.js?v=3.18.1"></script>
   </body>
 </html>

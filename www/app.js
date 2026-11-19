@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV87";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.18.0";
+const appVersion = "3.18.1";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1156,8 +1156,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.18.0",
-        badge: "/icons/app-icon-192.png?v=3.18.0",
+        icon: "/icons/app-icon-192.png?v=3.18.1",
+        badge: "/icons/app-icon-192.png?v=3.18.1",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1752,10 +1752,10 @@ function cycleRingSvg(total, currentIndex) {
   const len = Math.hypot(dx, dy) || 1;
   const ux = dx / len;
   const uy = dy / len;
-  const sx = 50 + ux * 11.5;
-  const sy = 50 + uy * 11.5;
-  const ex = target.x - ux * 10.5;
-  const ey = target.y - uy * 10.5;
+  const sx = 50 + ux * 12;
+  const sy = 50 + uy * 12;
+  const ex = target.x - ux * 12.5;
+  const ey = target.y - uy * 12.5;
   const headAngle = (Math.atan2(dy, dx) * 180) / Math.PI;
   return `
     <svg viewBox="0 0 100 100" focusable="false">
@@ -1766,13 +1766,24 @@ function cycleRingSvg(total, currentIndex) {
         </linearGradient>
       </defs>
       ${segments.join("")}
+    </svg>
+    <svg class="cycle-beam-layer" viewBox="0 0 100 100" focusable="false">
       <g class="cycle-beam">
         <line class="cycle-beam-glow" x1="${sx.toFixed(2)}" y1="${sy.toFixed(2)}" x2="${ex.toFixed(2)}" y2="${ey.toFixed(2)}"></line>
         <line class="cycle-beam-line" stroke="url(#cycleBeam)" x1="${sx.toFixed(2)}" y1="${sy.toFixed(2)}" x2="${ex.toFixed(2)}" y2="${ey.toFixed(2)}"></line>
         <line class="cycle-beam-spark" x1="${sx.toFixed(2)}" y1="${sy.toFixed(2)}" x2="${ex.toFixed(2)}" y2="${ey.toFixed(2)}"></line>
-        <path class="cycle-beam-head" d="M-3.2 -3 L1.4 0 L-3.2 3 Z" transform="translate(${ex.toFixed(2)} ${ey.toFixed(2)}) rotate(${headAngle.toFixed(1)})"></path>
+        <path class="cycle-beam-head" d="M-6.5 -3.4 L2.2 0 L-6.5 3.4 L-4.8 0 Z" transform="translate(${ex.toFixed(2)} ${ey.toFixed(2)}) rotate(${headAngle.toFixed(1)})"></path>
       </g>
     </svg>`;
+}
+
+const CYCLE_AVATAR_COUNT = 8;
+
+function cycleDefaultAvatar(person) {
+  const key = String(person?.emp_id || person?.emp_nm || "");
+  let hash = 0;
+  for (const ch of key) hash = (hash * 31 + ch.codePointAt(0)) >>> 0;
+  return `/assets/avatars/a${(hash % CYCLE_AVATAR_COUNT) + 1}.webp`;
 }
 
 function renderTargetCycle(state) {
@@ -1787,7 +1798,10 @@ function renderTargetCycle(state) {
   card.classList.toggle("single", cycle.length === 1);
   card.classList.toggle("multiple", cycle.length > 1);
   flow.innerHTML = "";
-  if (caption) caption.innerHTML = "";
+  if (caption) {
+    caption.innerHTML = "";
+    caption.appendChild(summary);
+  }
   if (!cycle.length) {
     summary.textContent = "대상 없음";
     flow.innerHTML = `<div class="cycle-empty">직원을 추가하면 전송 순서가 여기에 표시됩니다.</div>`;
@@ -1797,14 +1811,17 @@ function renderTargetCycle(state) {
   const currentIndex = Math.max(0, cycle.findIndex((person) => String(person.emp_id || "") === currentId));
   const cyclePosition = Math.min(cycle.length, currentIndex + 1);
   const completedCount = Math.max(0, Number(state.targetCycleCompletedCount || 0));
-  summary.innerHTML = `${cycle.length}명 중 <span class="cycle-progress-count">${cyclePosition}번째</span> · ${completedCount}바퀴 완료`;
+  summary.innerHTML = cycle.length > 1
+    ? `${cycle.length}명 중 <span class="cycle-progress-count">${cyclePosition}번째</span> · ${completedCount}바퀴 완료`
+    : "받는 사람 1명";
   const currentPerson = cycle[currentIndex] || {};
   const currentName = cyclePersonName(currentPerson);
   if (caption) {
-    caption.innerHTML = `
-      <strong class="cycle-next-line">다음 차례 <span>${escapeHtml(currentName || "-")}</span>${currentPerson.pos_nm ? ` ${escapeHtml(currentPerson.pos_nm)}` : ""}</strong>
-      ${cycle.length > 1 ? `<span class="cycle-shuffle-chip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>한 바퀴 돌면 순서를 섞어요</span>` : ""}
-    `;
+    caption.innerHTML = `<strong class="cycle-next-line">다음 차례 <span>${escapeHtml(currentName || "-")}</span>${currentPerson.pos_nm ? ` ${escapeHtml(currentPerson.pos_nm)}` : ""}</strong>`;
+    caption.appendChild(summary);
+    if (cycle.length > 1) {
+      caption.insertAdjacentHTML("beforeend", `<span class="cycle-shuffle-chip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>한 바퀴 돌면 순서를 섞어요</span>`);
+    }
   }
   if (cycle.length > 1) {
     const ring = document.createElement("div");
@@ -1839,7 +1856,7 @@ function renderTargetCycle(state) {
       personEl.querySelector(".profile-avatar"),
       personEl.querySelector(".profile-avatar span"),
       name,
-      person.profilePhotoUrl || getCachedProfilePhoto(person.emp_id)
+      person.profilePhotoUrl || getCachedProfilePhoto(person.emp_id) || cycleDefaultAvatar(person)
     );
     personEl.querySelector(".cycle-remove").addEventListener("click", async () => {
       try {
@@ -3373,6 +3390,13 @@ $("intervalResetBtn").addEventListener("click", () => {
   setIntervalMinutes(minIntervalMinutes);
 });
 
+$("targetCycleEdit").addEventListener("click", () => {
+  const card = $("targetCycleCard");
+  const editing = !card.classList.contains("editing");
+  card.classList.toggle("editing", editing);
+  $("targetCycleEdit").setAttribute("aria-pressed", String(editing));
+  $("targetCycleEdit").textContent = editing ? "완료" : "순서 관리";
+});
 $("cycleRoundClose").addEventListener("click", () => $("cycleRoundModal").classList.add("hidden"));
 $("cycleRoundModal").addEventListener("click", (event) => {
   if (event.target === $("cycleRoundModal")) $("cycleRoundModal").classList.add("hidden");
