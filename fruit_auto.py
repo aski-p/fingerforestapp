@@ -1451,8 +1451,23 @@ def _load_session_cookies(key, client):
     return bool(client.employee)
 
 
-def _onefinger_login_reusing_session(client, employee_no, password):
+_LOGIN_BLOCKING_CODES = {"invalid_credentials", "locked", "must_change_password", "unknown"}
+
+
+def _login_block_path(key):
+    return _onefinger_state_dir() / f"{key.replace(':', '_')}.blocked"
+
+
+def _onefinger_login_reusing_session(client, employee_no, password, manual=False):
     key = _onefinger_session_key(employee_no, password)
+    # 계정 잠금 방지: 이 사번+비밀번호로 한 번 '비밀번호 오류/잠김'이 났으면, 사람이 앱에서 직접 로그인하기 전까지
+    # 자동 작업은 다시 시도하지 않는다(OneFinger는 5회 실패 시 15분 잠금).
+    block_path = _login_block_path(key)
+    if not manual and block_path.exists():
+        raise LoginFailed(
+            "저장된 OneFinger 비밀번호가 맞지 않아 자동 로그인을 멈췄어요. 앱에서 사번·비밀번호로 다시 로그인해 주세요.",
+            code="CREDENTIALS_PAUSED",
+        )
     with _ONEFINGER_SESSIONS_LOCK:
         cached = _ONEFINGER_SESSIONS.get(key)
     candidates = []
@@ -1487,7 +1502,17 @@ def _onefinger_login_reusing_session(client, employee_no, password):
     except OneFingerError as exc:
         if getattr(exc, "code", "") == "RATE_LIMITED" or getattr(exc, "status", None) == 429:
             _set_onefinger_cooldown(getattr(exc, "retry_after", 0))
+        if isinstance(exc, LoginFailed) and getattr(exc, "code", "") in _LOGIN_BLOCKING_CODES:
+            try:
+                block_path.write_text(json.dumps({"at": time.time(), "code": exc.code}))
+                os.chmod(block_path, 0o600)
+            except OSError:
+                pass
         raise
+    try:
+        block_path.unlink()
+    except OSError:
+        pass
     with _ONEFINGER_SESSIONS_LOCK:
         _ONEFINGER_SESSIONS[key] = (client, time.time())
     _save_session_cookies(key, client)
@@ -1504,12 +1529,13 @@ def forget_onefinger_sessions():
         pass
 
 
-def pms_login(client, pms_id=None, pms_password=None, owner_key=None):
-    """새 OneFinger 통합 로그인. 예전 PMS 로그인과 같은 (token, dataset) 모양을 돌려준다."""
+def pms_login(client, pms_id=None, pms_password=None, owner_key=None, manual=False):
+    """새 OneFinger 통합 로그인. 예전 PMS 로그인과 같은 (token, dataset) 모양을 돌려준다.
+    manual=True는 사람이 앱에서 직접 누른 로그인(자동 재시도 차단을 풀 수 있음)."""
     pms_id = pms_id or read_secret("pms_id")
     pms_password = pms_password or read_secret("pms_password")
     try:
-        emp = _onefinger_login_reusing_session(client, sso_employee_no(pms_id, owner_key), pms_password)
+        emp = _onefinger_login_reusing_session(client, sso_employee_no(pms_id, owner_key), pms_password, manual=manual)
     except LoginFailed as exc:
         raise FruitAutoError(str(exc)) from exc
     except OneFingerError as exc:
@@ -4080,7 +4106,7 @@ def account_login(owner_key):
 
 def save_credentials(pms_id, pms_password, device_id=None):
     client = Client()
-    token, dataset = pms_login(client, pms_id, pms_password)
+    token, dataset = pms_login(client, pms_id, pms_password, manual=True)
     employee_info = forest_login(client, token)
     employee = employee_info["resultMap"][0]
     owner_key, sender_employee_id, sender_employee_name = employee_identity(
@@ -4102,6 +4128,17 @@ def save_credentials(pms_id, pms_password, device_id=None):
             "pms_id": pms_id,
             "pms_password": pms_password,
         }
+        # 같은 사번을 쓰는 다른(옛) 계정 기록에 남은 비밀번호는 지운다: 자동 작업이 옛 비밀번호로 로그인을 반복해 계정이 잠기지 않게.
+        login_no = str(dataset.get("SESS_EMPNO") or "").strip()
+        for other_key, other in list(secrets["accounts"].items()):
+            if other_key == owner_key or not isinstance(other, dict):
+                continue
+            other_no = str(other.get("pms_id") or "").strip()
+            if not other_no.isdigit():
+                other_no = str((get_account_state(other_key) or {}).get("loginEmployeeNo") or "").strip()
+            if login_no and other_no == login_no:
+                secrets["accounts"].pop(other_key, None)
+                log_event({"action": "stale_credentials_removed", "ownerKey": other_key, "keptOwnerKey": owner_key})
         secrets["sessions"] = {
             existing_token: session
             for existing_token, session in secrets.get("sessions", {}).items()

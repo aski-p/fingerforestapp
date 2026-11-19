@@ -259,3 +259,46 @@ class ErrorStatusTests(unittest.TestCase):
         self.assertEqual(web_server.error_status("OneFinger 로그인 실패: 통합 로그인이 잠시 막혀 있어요. 약 3분 뒤"), 429)
         self.assertEqual(web_server.error_status("업무일지 저장 실패: OneFinger PUT 실패(422)"), 500)
         self.assertEqual(web_server.error_status("로그인이 필요합니다."), 401)
+
+
+class LoginLockoutGuardTests(unittest.TestCase):
+    def setUp(self):
+        fruit_auto.forget_onefinger_sessions()
+
+    def tearDown(self):
+        fruit_auto.forget_onefinger_sessions()
+
+    def test_wrong_password_is_tried_automatically_only_once(self):
+        calls = {"login": 0}
+
+        def wrong(self, employee_no, password):
+            calls["login"] += 1
+            raise onefinger.LoginFailed("사번 또는 비밀번호가 맞지 않아요.", code="invalid_credentials")
+
+        with mock.patch.object(onefinger.OneFingerClient, "login", wrong), \
+                mock.patch.object(onefinger.OneFingerClient, "session_info", lambda self: {"authenticated": False}):
+            for _ in range(4):
+                with self.assertRaises(fruit_auto.FruitAutoError):
+                    fruit_auto.pms_login(fruit_auto.Client(), "12345678", "old-pw")
+            self.assertEqual(calls["login"], 1)
+            # 사람이 앱에서 직접 로그인하면 다시 시도한다
+            with self.assertRaises(fruit_auto.FruitAutoError):
+                fruit_auto.pms_login(fruit_auto.Client(), "12345678", "old-pw", manual=True)
+            self.assertEqual(calls["login"], 2)
+
+    def test_new_password_is_not_blocked_by_an_old_failure(self):
+        state = {"n": 0}
+
+        def login(self, employee_no, password):
+            state["n"] += 1
+            if password == "old":
+                raise onefinger.LoginFailed("x", code="invalid_credentials")
+            self.employee = {"id": "1", "employeeNo": employee_no, "name": "t"}
+            return self.employee
+
+        with mock.patch.object(onefinger.OneFingerClient, "login", login), \
+                mock.patch.object(onefinger.OneFingerClient, "session_info", lambda self: {"authenticated": False}):
+            with self.assertRaises(fruit_auto.FruitAutoError):
+                fruit_auto.pms_login(fruit_auto.Client(), "12345678", "old")
+            fruit_auto.pms_login(fruit_auto.Client(), "12345678", "new")
+        self.assertEqual(state["n"], 2)
