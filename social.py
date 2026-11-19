@@ -364,3 +364,88 @@ class Social:
             "unreadNotes": unread_notes,
             "pendingRequests": len(f["incoming"]),
         }
+
+
+class SupabaseDocStore:
+    """새 테이블 없이 기존 fruit_chat_messages 테이블에 문서처럼 저장한다.
+    한 레코드 = 한 행: user_key='social:<table>', model=<table>, metadata=레코드(JSON). 자동 증가 id는 행 id를 쓴다."""
+
+    TABLE = "fruit_chat_messages"
+    SERIAL = {"fruit_rooms", "fruit_messages", "fruit_notes"}
+
+    def __init__(self, request):
+        self.request = request
+
+    def _filters(self, table, where):
+        parts = [f"user_key=eq.{urllib.parse.quote('social:' + table, safe='')}"]
+        for key, value in (where or {}).items():
+            gt = key.endswith("__gt")
+            field = key[:-4] if gt else key
+            column = "id" if (field in ("id", "rowid") and table in self.SERIAL) else f"metadata->>{field}"
+            if isinstance(value, (list, tuple, set)):
+                values = ",".join(urllib.parse.quote(str(v), safe="") for v in value)
+                parts.append(f"{column}=in.({values})")
+            elif value is None:
+                parts.append(f"{column}=is.null")
+            elif gt:
+                # metadata 숫자 비교는 문자열 비교가 되므로 id(행 번호)에만 쓴다
+                parts.append(f"{column}=gt.{int(value)}")
+            else:
+                parts.append(f"{column}=eq.{urllib.parse.quote(str(value), safe='')}")
+        return parts
+
+    def _record(self, table, row):
+        record = dict(row.get("metadata") or {})
+        if table in self.SERIAL:
+            record["id"] = row["id"]
+        record["_row"] = row["id"]
+        return record
+
+    def select(self, table, where=None, order=None, limit=None):
+        if where and any(isinstance(v, (list, tuple, set)) and not v for v in where.values()):
+            return []
+        q = ["select=id,metadata"] + self._filters(table, where)
+        q.append(f"order={order or 'id.asc'}")
+        if limit:
+            q.append(f"limit={int(limit)}")
+        rows = self.request("GET", f"/rest/v1/{self.TABLE}?{'&'.join(q)}") or []
+        out = [self._record(table, r) for r in rows]
+        for r in out:
+            r.pop("_row", None)
+        return out
+
+    def _rows(self, table, where):
+        q = ["select=id,metadata"] + self._filters(table, where)
+        return self.request("GET", f"/rest/v1/{self.TABLE}?{'&'.join(q)}") or []
+
+    def insert(self, table, row):
+        clean = {k: v for k, v in row.items() if k != "id"}
+        out = self.request(
+            "POST", f"/rest/v1/{self.TABLE}",
+            body={"user_key": f"social:{table}", "role": "user", "content": "-", "model": table, "metadata": clean},
+            extra_headers={"Prefer": "return=representation"},
+        )
+        created = (out or [{}])[0]
+        record = dict(clean)
+        if table in self.SERIAL:
+            record["id"] = created.get("id")
+        return record
+
+    def upsert(self, table, row, keys):
+        existing = self._rows(table, {k: row[k] for k in keys})
+        if existing:
+            merged = {**(existing[0].get("metadata") or {}), **row}
+            self.request("PATCH", f"/rest/v1/{self.TABLE}?id=eq.{existing[0]['id']}", body={"metadata": merged}, extra_headers={"Prefer": "return=minimal"})
+            for extra in existing[1:]:
+                self.request("DELETE", f"/rest/v1/{self.TABLE}?id=eq.{extra['id']}", extra_headers={"Prefer": "return=minimal"})
+        else:
+            self.insert(table, row)
+
+    def update(self, table, where, values):
+        for r in self._rows(table, where):
+            merged = {**(r.get("metadata") or {}), **values}
+            self.request("PATCH", f"/rest/v1/{self.TABLE}?id=eq.{r['id']}", body={"metadata": merged}, extra_headers={"Prefer": "return=minimal"})
+
+    def delete(self, table, where):
+        for r in self._rows(table, where):
+            self.request("DELETE", f"/rest/v1/{self.TABLE}?id=eq.{r['id']}", extra_headers={"Prefer": "return=minimal"})

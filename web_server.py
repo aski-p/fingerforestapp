@@ -34,7 +34,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.19.3"
+APP_VERSION = "3.19.4"
 ANDROID_APP_VERSION = "3.17.2"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -56,10 +56,8 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "앱 사용자끼리 대화할 수 있어요: 오른쪽 아래 말풍선 > 대화·친구·쪽지 (AI 도우미는 AI 탭).",
-    "저장된 비밀번호가 틀리면 자동 로그인을 멈춰서 OneFinger 계정이 잠기지 않게 했어요. 앱에서 다시 로그인하면 풀려요.",
-    "업무일지 자동 작성 날짜를 동그란 날짜 칩과 요약 한 줄로 깔끔하게 바꿨어요.",
-    "로딩·시작 화면 캐릭터가 스킨마다 달라요.",
+    "앱 사용자끼리 대화·친구·쪽지를 바로 쓸 수 있어요(오른쪽 아래 말풍선).",
+    "차례인 사람의 불꽃 오라를 조금 줄여 불기둥이 더 잘 보여요.",
 ]
 VALID_THEMES = {
     "diary",
@@ -1786,7 +1784,15 @@ def social_service():
     global _SOCIAL
     with _SOCIAL_LOCK:
         if _SOCIAL is None:
-            store = social.SupabaseStore(supabase_request) if supabase_config() else social.SqliteStore(fruit_auto.DATA_DIR / "social.db")
+            if not supabase_config():
+                store = social.SqliteStore(fruit_auto.DATA_DIR / "social.db")
+            else:
+                # 전용 테이블(supabase_social_schema.sql)이 있으면 그걸, 없으면 기존 fruit_chat_messages에 문서로 저장
+                try:
+                    supabase_request("GET", "/rest/v1/fruit_rooms?select=id&limit=1")
+                    store = social.SupabaseStore(supabase_request)
+                except Exception:
+                    store = social.SupabaseDocStore(supabase_request)
             _SOCIAL = social.Social(store)
         return _SOCIAL
 

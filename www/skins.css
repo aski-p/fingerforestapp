@@ -1072,3 +1072,5 @@ body.theme-night input { color-scheme: dark; }
 .social-note-form { display: grid; gap: 6px; margin: 4px 0 8px; }
 .social-note-to { display: flex; gap: 8px; align-items: baseline; font-size: 13px; color: var(--muted); }
 .social-note-to strong { color: var(--text-strong); }
+/* 오라를 조금 줄여 대각선 방향에서도 불기둥이 보이게 */
+.cycle-aura { width: 88px; height: 88px; }
