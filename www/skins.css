@@ -893,3 +893,61 @@ body.skin-on .ranking-page .ranking-back {
 .cycle-center b { font-size: 15px; }
 .cycle-center small { font-size: 10px; }
 .cycle-center-fruit { width: 22px; height: 22px; }
+
+/* ================= 랭킹 1~3위 단상 ================= */
+.ranking-podium {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr 1fr;
+  align-items: end;
+  gap: 8px;
+  margin: 6px 0 6px;
+  padding: 26px 4px 0;
+}
+.podium-slot { position: relative; display: grid; justify-items: center; gap: 4px; min-width: 0; }
+.podium-crown {
+  position: absolute;
+  top: -30px;
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 6px rgba(160, 110, 0, .35));
+  animation: podiumCrown 1.6s ease-in-out infinite;
+}
+@keyframes podiumCrown { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-4px) rotate(4deg); } }
+.podium-avatar {
+  width: 60px;
+  height: 60px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: center / cover no-repeat var(--surface-tint);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, .16);
+}
+.podium-1 .podium-avatar { width: 76px; height: 76px; border-color: #ffd23f; box-shadow: 0 0 0 3px #fff3b0, 0 8px 20px rgba(220, 150, 0, .45); }
+.podium-2 .podium-avatar { border-color: #cfd8e3; }
+.podium-3 .podium-avatar { border-color: #e2a173; }
+.podium-name {
+  display: flex; align-items: center; gap: 4px; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-strong); font-size: 14px; font-weight: 900;
+}
+.podium-count { display: inline-flex; align-items: center; gap: 3px; color: var(--sk-cta, var(--accent)); font-size: 14px; font-weight: 950; font-variant-numeric: tabular-nums; }
+.podium-block {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  margin-top: 4px;
+  border-radius: 14px 14px 6px 6px;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 950;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .25);
+  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, .08), 0 6px 14px rgba(0, 0, 0, .1);
+}
+.podium-1 .podium-block { height: 96px; background: linear-gradient(180deg, #ffd65a, #f2a900); }
+.podium-2 .podium-block { height: 72px; background: linear-gradient(180deg, #e3e9f1, #a9b6c6); }
+.podium-3 .podium-block { height: 56px; background: linear-gradient(180deg, #f2c09a, #c97b46); }
+.podium-slot.is-me .podium-block { outline: 3px solid var(--accent-bright); outline-offset: 2px; }
+.podium-slot.empty .podium-block { opacity: .35; }
+
+/* 밤숲 스킨: 달력 글씨·4등 이하 순위 숫자 보정 */
+body.theme-night :is(.ranking-monthbar strong, .ranking-medal, .ranking-monthbar button) { color: var(--text-strong); }

@@ -2857,9 +2857,27 @@ function renderRanking(data) {
     body.innerHTML = '<div class="ranking-empty">조회된 랭킹이 없습니다.</div>';
     return;
   }
-  body.innerHTML = items.map((item) => {
+  const avatarOf = (item) => getCachedProfilePhoto(item.empId) || cycleDefaultAvatar({ emp_id: item.empId, emp_nm: item.name });
+  const podiumItems = items.filter((item) => Number(item.rank) >= 1 && Number(item.rank) <= 3).slice(0, 3);
+  const restItems = items.filter((item) => !podiumItems.includes(item));
+  const podiumSlot = (item, place) => {
+    if (!item) return `<div class="podium-slot podium-${place} empty"><div class="podium-block"><span>${place}위</span></div></div>`;
+    return `
+      <div class="podium-slot podium-${place}${item.isMe ? " is-me" : ""}">
+        ${place === 1 ? '<img class="podium-crown" src="/assets/skins/c-crown.webp" alt="" aria-hidden="true">' : ""}
+        <span class="podium-avatar" style="background-image:url('${escapeHtml(avatarOf(item))}')" aria-hidden="true"></span>
+        <strong class="podium-name">${escapeHtml(item.name || "-")}${item.isMe ? '<em class="ranking-me">나</em>' : ""}</strong>
+        <span class="podium-count"><span class="rk-ico rk-fruit" aria-hidden="true"></span>${fmtNumber(item.count || 0)}${kind === "level" && item.level ? ` · ${escapeHtml(item.level)}` : ""}</span>
+        <div class="podium-block"><span>${place}위</span></div>
+      </div>`;
+  };
+  const byPlace = (place) => podiumItems.find((item) => Number(item.rank) === place) || podiumItems[place - 1];
+  const podiumHtml = podiumItems.length
+    ? `<div class="ranking-podium" aria-label="1~3위">${podiumSlot(byPlace(2), 2)}${podiumSlot(byPlace(1), 1)}${podiumSlot(byPlace(3), 3)}</div>`
+    : "";
+  body.innerHTML = podiumHtml + restItems.map((item) => {
     const hasLevel = kind === "level";
-    const avatar = getCachedProfilePhoto(item.empId) || cycleDefaultAvatar({ emp_id: item.empId, emp_nm: item.name });
+    const avatar = avatarOf(item);
     return `
       <div class="ranking-row${hasLevel ? " has-level" : ""}${item.isMe ? " is-me" : ""}">
         ${renderRankingMedal(item.rank)}
