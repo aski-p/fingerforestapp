@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV87";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.17.2";
+const appVersion = "3.18.0";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -1156,8 +1156,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.17.2",
-        badge: "/icons/app-icon-192.png?v=3.17.2",
+        icon: "/icons/app-icon-192.png?v=3.18.0",
+        badge: "/icons/app-icon-192.png?v=3.18.0",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1714,10 +1714,72 @@ function cyclePersonName(person) {
   return String(person?.emp_nm || person?.targetEmployeeName || person?.emp_id || person?.targetEmployeeId || "").trim();
 }
 
+const CYCLE_RING_RADIUS = 38;
+const cycleRoundSeenKey = "fingerfruit.cycleRoundSeen";
+
+function cyclePoint(index, total, radius = CYCLE_RING_RADIUS) {
+  const angle = (-90 + (360 / total) * index) * (Math.PI / 180);
+  return { x: 50 + Math.cos(angle) * radius, y: 50 + Math.sin(angle) * radius, angle };
+}
+
+function cycleArcPath(fromIndex, toIndex, total, gapDeg) {
+  const r = CYCLE_RING_RADIUS;
+  const step = 360 / total;
+  const start = (-90 + step * fromIndex + gapDeg) * (Math.PI / 180);
+  const end = (-90 + step * toIndex - gapDeg) * (Math.PI / 180);
+  const sx = 50 + Math.cos(start) * r;
+  const sy = 50 + Math.sin(start) * r;
+  const ex = 50 + Math.cos(end) * r;
+  const ey = 50 + Math.sin(end) * r;
+  const large = step * (toIndex - fromIndex) - gapDeg * 2 > 180 ? 1 : 0;
+  return `M${sx.toFixed(2)} ${sy.toFixed(2)} A${r} ${r} 0 ${large} 1 ${ex.toFixed(2)} ${ey.toFixed(2)}`;
+}
+
+function cycleRingSvg(total, currentIndex) {
+  const gap = Math.min(14, 180 / total);
+  const segments = [];
+  for (let i = 0; i < total; i += 1) {
+    const sent = i < currentIndex;
+    const mid = cyclePoint(i + 0.5, total);
+    const rotate = (mid.angle * 180) / Math.PI + 90;
+    segments.push(`
+      <path class="cycle-seg ${sent ? "sent" : ""}" d="${cycleArcPath(i, i + 1, total, gap)}"></path>
+      <path class="cycle-seg-head ${sent ? "sent" : ""}" d="M-1.6 -1.9 L1.6 0 L-1.6 1.9" transform="translate(${mid.x.toFixed(2)} ${mid.y.toFixed(2)}) rotate(${rotate.toFixed(1)})"></path>`);
+  }
+  const target = cyclePoint(currentIndex, total);
+  const dx = target.x - 50;
+  const dy = target.y - 50;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const sx = 50 + ux * 11.5;
+  const sy = 50 + uy * 11.5;
+  const ex = target.x - ux * 10.5;
+  const ey = target.y - uy * 10.5;
+  const headAngle = (Math.atan2(dy, dx) * 180) / Math.PI;
+  return `
+    <svg viewBox="0 0 100 100" focusable="false">
+      <defs>
+        <linearGradient id="cycleBeam" gradientUnits="userSpaceOnUse" x1="${sx.toFixed(2)}" y1="${sy.toFixed(2)}" x2="${ex.toFixed(2)}" y2="${ey.toFixed(2)}">
+          <stop offset="0" stop-color="#d9f99d" stop-opacity=".25"></stop>
+          <stop offset="1" stop-color="#bef264"></stop>
+        </linearGradient>
+      </defs>
+      ${segments.join("")}
+      <g class="cycle-beam">
+        <line class="cycle-beam-glow" x1="${sx.toFixed(2)}" y1="${sy.toFixed(2)}" x2="${ex.toFixed(2)}" y2="${ey.toFixed(2)}"></line>
+        <line class="cycle-beam-line" stroke="url(#cycleBeam)" x1="${sx.toFixed(2)}" y1="${sy.toFixed(2)}" x2="${ex.toFixed(2)}" y2="${ey.toFixed(2)}"></line>
+        <line class="cycle-beam-spark" x1="${sx.toFixed(2)}" y1="${sy.toFixed(2)}" x2="${ex.toFixed(2)}" y2="${ey.toFixed(2)}"></line>
+        <path class="cycle-beam-head" d="M-3.2 -3 L1.4 0 L-3.2 3 Z" transform="translate(${ex.toFixed(2)} ${ey.toFixed(2)}) rotate(${headAngle.toFixed(1)})"></path>
+      </g>
+    </svg>`;
+}
+
 function renderTargetCycle(state) {
   const card = $("targetCycleCard");
   const flow = $("targetCycleFlow");
   const summary = $("targetCycleSummary");
+  const caption = $("targetCycleCaption");
   if (!card || !flow || !summary) return;
   const cycle = Array.isArray(state.targetCycle) ? state.targetCycle : [];
   card.classList.toggle("hidden", !isUnlocked());
@@ -1725,6 +1787,7 @@ function renderTargetCycle(state) {
   card.classList.toggle("single", cycle.length === 1);
   card.classList.toggle("multiple", cycle.length > 1);
   flow.innerHTML = "";
+  if (caption) caption.innerHTML = "";
   if (!cycle.length) {
     summary.textContent = "대상 없음";
     flow.innerHTML = `<div class="cycle-empty">직원을 추가하면 전송 순서가 여기에 표시됩니다.</div>`;
@@ -1734,45 +1797,42 @@ function renderTargetCycle(state) {
   const currentIndex = Math.max(0, cycle.findIndex((person) => String(person.emp_id || "") === currentId));
   const cyclePosition = Math.min(cycle.length, currentIndex + 1);
   const completedCount = Math.max(0, Number(state.targetCycleCompletedCount || 0));
-  summary.innerHTML = `${cycle.length}명중 <span class="cycle-progress-count">${cyclePosition}명</span> 순환(${completedCount}번 완료)`;
+  summary.innerHTML = `${cycle.length}명 중 <span class="cycle-progress-count">${cyclePosition}번째</span> · ${completedCount}바퀴 완료`;
+  const currentPerson = cycle[currentIndex] || {};
+  const currentName = cyclePersonName(currentPerson);
+  if (caption) {
+    caption.innerHTML = `
+      <strong class="cycle-next-line">다음 차례 <span>${escapeHtml(currentName || "-")}</span>${currentPerson.pos_nm ? ` ${escapeHtml(currentPerson.pos_nm)}` : ""}</strong>
+      ${cycle.length > 1 ? `<span class="cycle-shuffle-chip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>한 바퀴 돌면 순서를 섞어요</span>` : ""}
+    `;
+  }
   if (cycle.length > 1) {
     const ring = document.createElement("div");
     ring.className = "cycle-ring";
     ring.setAttribute("aria-hidden", "true");
-    const segmentSize = 360 / cycle.length;
-    const activeStartAngle = -90 + segmentSize * currentIndex;
-    const activeEndAngle = activeStartAngle + segmentSize;
-    const cycleArcPoint = (angleDeg) => {
-      const rad = angleDeg * (Math.PI / 180);
-      return {
-        x: 100 + Math.cos(rad) * 82,
-        y: 100 + Math.sin(rad) * 82,
-      };
-    };
-    const activeStart = cycleArcPoint(activeStartAngle + 6);
-    const activeEnd = cycleArcPoint(activeEndAngle - 6);
-    const activePath = `M${activeStart.x.toFixed(2)} ${activeStart.y.toFixed(2)} A82 82 0 0 1 ${activeEnd.x.toFixed(2)} ${activeEnd.y.toFixed(2)}`;
-    ring.innerHTML = `
-      <svg viewBox="0 0 200 200" focusable="false">
-        <path class="cycle-ring-path" d="M100 18 A82 82 0 1 1 99.9 18"></path>
-        <path class="cycle-ring-active-halo" d="${activePath}"></path>
-        <path class="cycle-ring-active-path" d="${activePath}"></path>
-      </svg>
-    `;
+    ring.innerHTML = cycleRingSvg(cycle.length, currentIndex);
     flow.appendChild(ring);
+    const center = document.createElement("div");
+    center.className = "cycle-center";
+    const berries = ($("berryCount")?.textContent || "").trim();
+    center.innerHTML = `<b>나</b><span class="cycle-center-fruit" aria-hidden="true"></span>${berries && berries !== "-" ? `<small>열매 ${escapeHtml(berries)}</small>` : ""}`;
+    flow.appendChild(center);
   }
   cycle.forEach((person, index) => {
     const name = cyclePersonName(person);
     const personEl = document.createElement("div");
-    personEl.className = `cycle-person ${index === currentIndex ? "current" : ""}`;
+    const sent = cycle.length > 1 && index < currentIndex;
+    personEl.className = `cycle-person ${index === currentIndex ? "current" : ""} ${sent ? "sent" : ""}`;
     if (cycle.length > 1) {
-      const angle = (-90 + (360 / cycle.length) * index) * (Math.PI / 180);
-      personEl.style.left = `calc(50% + ${Math.cos(angle) * 86}px)`;
-      personEl.style.top = `calc(50% + ${Math.sin(angle) * 76}px)`;
+      const point = cyclePoint(index, cycle.length);
+      personEl.style.left = `${point.x}%`;
+      personEl.style.top = `${point.y}%`;
     }
     personEl.innerHTML = `
       <span class="profile-avatar person-avatar" aria-hidden="true"><span>${escapeHtml(getInitial(name))}</span></span>
       <span class="cycle-name">${escapeHtml(name || "-")}</span>
+      ${index === currentIndex && cycle.length > 1 ? `<span class="cycle-next-badge">다음</span>` : ""}
+      ${sent ? `<span class="cycle-sent-check" aria-label="보냄">✓</span>` : ""}
       <button class="cycle-remove" type="button" aria-label="${escapeHtml(name || "직원")} 제외">×</button>
     `;
     applyAvatar(
@@ -1795,6 +1855,35 @@ function renderTargetCycle(state) {
     });
     flow.appendChild(personEl);
   });
+  maybeShowCycleRoundSheet(state, cycle, currentIndex, completedCount);
+}
+
+function maybeShowCycleRoundSheet(state, cycle, currentIndex, completedCount) {
+  const owner = String(state.ownerKey || state.sessionOwner || "me");
+  let seen = {};
+  try {
+    seen = JSON.parse(storeGet(cycleRoundSeenKey) || "{}") || {};
+  } catch (_err) {
+    seen = {};
+  }
+  const previous = seen[owner];
+  if (previous === undefined || completedCount < previous) {
+    seen[owner] = completedCount;
+    storeSet(cycleRoundSeenKey, JSON.stringify(seen));
+    return;
+  }
+  if (completedCount === previous || cycle.length < 2) return;
+  seen[owner] = completedCount;
+  storeSet(cycleRoundSeenKey, JSON.stringify(seen));
+  const modal = $("cycleRoundModal");
+  if (!modal) return;
+  $("cycleRoundTitle").textContent = "한 바퀴 완료! 순서를 섞었어요";
+  $("cycleRoundSub").textContent = `${completedCount + 1}바퀴째 시작`;
+  const list = $("cycleRoundOrder");
+  list.innerHTML = cycle
+    .map((person, index) => `<li class="${index === currentIndex ? "next" : ""}"><span>${index + 1}</span>${escapeHtml(cyclePersonName(person) || "-")}${index === currentIndex ? `<em>다음</em>` : ""}</li>`)
+    .join("");
+  modal.classList.remove("hidden");
 }
 
 function cachedStateValue() {
@@ -2872,7 +2961,7 @@ $("loginBtn").addEventListener("click", async () => {
   const id = $("loginId").value.trim();
   const password = $("loginPw").value;
   if (!id || !password) {
-    toast("아이디와 비밀번호를 입력하세요.");
+    toast("사번과 비밀번호를 입력하세요.");
     return;
   }
   try {
@@ -3284,6 +3373,10 @@ $("intervalResetBtn").addEventListener("click", () => {
   setIntervalMinutes(minIntervalMinutes);
 });
 
+$("cycleRoundClose").addEventListener("click", () => $("cycleRoundModal").classList.add("hidden"));
+$("cycleRoundModal").addEventListener("click", (event) => {
+  if (event.target === $("cycleRoundModal")) $("cycleRoundModal").classList.add("hidden");
+});
 $("historyModal").addEventListener("click", (event) => {
   if (event.target === $("historyModal")) closeHistoryModal();
 });

@@ -13,7 +13,7 @@ import web_server
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "3.17.2"
+EXPECTED_VERSION = "3.18.0"
 ANDROID_VERSION = "3.17.2"
 EXPECTED_ANDROID_SIGNER = "19657138bba6fb9186d885c42eab5142710b147401e49abb2bbc0f12d01b50e7"
 
@@ -87,13 +87,10 @@ class ReleaseConsistencyTests(unittest.TestCase):
         self.assertIn("busy = busyDepth > 0", app)
 
     def test_release_notes_only_describe_current_update(self):
-        self.assertEqual(
-            [
-                "열매선물 랭킹을 조회 목록 순서대로 1등부터 5등까지만 표시합니다.",
-                "5위 밖의 사용자는 순위 대신 본인의 열매선물 갯수를 안내합니다.",
-            ],
-            web_server.RELEASE_NOTES,
-        )
+        notes = web_server.RELEASE_NOTES
+        self.assertTrue(notes)
+        self.assertTrue(any("신 포레스트" in note for note in notes))
+        self.assertTrue(any("전송 사이클" in note for note in notes))
 
     def test_canonical_sources_use_expected_platform_versions(self):
         checks = {

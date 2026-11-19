@@ -5,13 +5,21 @@ import fruit_auto
 
 
 class FakeRankingClient:
-    def __init__(self, rows):
+    """새 OneFinger GET /rankings 흉내: 예전 행(empId·empNm·sumBerry)을 {top, me}로 바꿔 돌려준다."""
+
+    def __init__(self, rows, me_id="123"):
         self.rows = rows
+        self.me_id = me_id
         self.requests = []
 
-    def post_json(self, url, payload):
-        self.requests.append((url, payload))
-        return self.rows
+    def rankings(self, kind, month=None, year=None):
+        self.requests.append((kind, month, year))
+        top = [
+            {"employee": {"id": r["empId"], "name": r["empNm"]}, "rank": r.get("rnk") or 99, "value": r["sumBerry"], "level": None}
+            for r in self.rows
+        ]
+        me = next((t for t in top if t["employee"]["id"] == self.me_id), None)
+        return {"top": top, "me": me, "calculatedAt": "2026-07-31T00:00:00Z"}
 
 
 class GiftRankingTests(unittest.TestCase):
@@ -37,7 +45,7 @@ class GiftRankingTests(unittest.TestCase):
 
         self.assertEqual({"rank": 2, "name": "박근형", "count": 125}, result["my"])
         self.assertEqual([1, 2, 3], [item["rank"] for item in result["items"]])
-        self.assertEqual({"empId": "", "stdMt": "202607"}, client.requests[0][1])
+        self.assertEqual(("gift", "2026-07", "2026"), client.requests[0])
 
     def test_gift_ranking_assigns_no_rank_below_fifth_place(self):
         rows = [

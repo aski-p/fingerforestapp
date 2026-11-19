@@ -97,8 +97,15 @@ def update_versions(old, new):
         WWW / "sw.js",
         WWW / "styles.css",
     ]
+    android_version = current_android_version()
     for path in files:
         replace_version(path, old, new)
+    if android_version == old:
+        # 웹/iOS만 올릴 때 같은 숫자인 안드로이드 APK 표기까지 바뀌지 않게 되돌린다
+        server_path = ROOT / "web_server.py"
+        write(server_path, re.sub(r'ANDROID_APP_VERSION\s*=\s*"[^"]+"', f'ANDROID_APP_VERSION = "{android_version}"', read(server_path), count=1))
+        install_path = WWW / "install.html"
+        write(install_path, read(install_path).replace(f"fingerfruit-android-v{new}.apk", f"fingerfruit-android-v{android_version}.apk").replace(f"Android APK v{new}", f"Android APK v{android_version}"))
 
 
 def update_android_source_version(new):
@@ -260,7 +267,8 @@ def copy_ios(new):
 
 def main():
     old = current_version()
-    new = next_version(old)
+    # 큰 업데이트는 FINGERFRUIT_NEW_VERSION=3.18.0 처럼 직접 정한다(기본은 끝자리 +1)
+    new = os.environ.get("FINGERFRUIT_NEW_VERSION", "").strip() or next_version(old)
     android_version = current_android_version()
     print(f"Building fingerfruit {old} -> {new} (Android {android_version})")
     update_versions(old, new)

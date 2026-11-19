@@ -33,7 +33,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.17.2"
+APP_VERSION = "3.18.0"
 ANDROID_APP_VERSION = "3.17.2"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -55,8 +55,10 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "열매선물 랭킹을 조회 목록 순서대로 1등부터 5등까지만 표시합니다.",
-    "5위 밖의 사용자는 순위 대신 본인의 열매선물 갯수를 안내합니다.",
+    "신 포레스트(새 OneFinger)로 연결을 옮겼습니다. 앱에서 쓴 업무일지·열매 선물이 이제 신 포레스트에 바로 기록됩니다.",
+    "로그인은 OneFinger 사번과 비밀번호로 합니다. 기존 설정·자동전송은 그대로 이어집니다.",
+    "내역·업무 승인·왕관 랭킹도 신 포레스트 기준으로 보여 줍니다.",
+    "전송 사이클을 원형으로 새로 그렸습니다. 가운데 '나'에서 다음 받을 사람에게 빛나는 화살표가 가고, 한 바퀴를 돌면 섞인 새 순서를 알려 줍니다.",
 ]
 VALID_THEMES = {
     "default",

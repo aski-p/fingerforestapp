@@ -55,9 +55,10 @@ _SECRETS_LOCK = threading.RLock()
 _SECRETS_LOCK_STATE = threading.local()
 KST = dt.timezone(dt.timedelta(hours=9))
 
-PMS_LOGIN_PAGE = "http://pms.fingerservice.co.kr/tms/login"
-PMS_LOGIN_API = "http://pms.fingerservice.co.kr/tms/v1/common/login"
-FOREST_API = "https://forest2.fingerservice.co.kr/api/v1/dw"
+# 2026-11-19: 옛 PMS 로그인(pms.fingerservice.co.kr)과 옛 포레스트(forest2…/api/v1/dw)는 새 OneFinger로 옮겨졌다.
+# 모든 포레스트 호출은 onefinger.py(새 OneFinger /pms-api)로 간다. 아래 함수들은 예전 응답 모양을 그대로 돌려줘서
+# 나머지 코드(기록·랭킹·자동전송·업무일지)는 바꾸지 않는다.
+from onefinger import OneFingerClient, OneFingerError, LoginFailed
 
 DEFAULT_STATE = {
     "enabled": False,
@@ -1345,67 +1346,84 @@ def read_secret(name):
     return value
 
 
-class Client:
-    def __init__(self):
-        self.cookies = http.cookiejar.CookieJar()
-        self.opener = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(self.cookies)
-        )
-
-    def open(self, request, timeout=25):
-        try:
-            return self.opener.open(request, timeout=timeout)
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", "replace")
-            raise FruitAutoError(f"HTTP {exc.code}: {body[:500]}") from exc
-        except urllib.error.URLError as exc:
-            raise FruitAutoError(f"network error: {exc}") from exc
-
-    def get_text(self, url, headers=None):
-        req = urllib.request.Request(url, headers=headers or {})
-        return self.open(req).read().decode("utf-8", "replace")
+class Client(OneFingerClient):
+    """새 OneFinger 세션. 예전 Client(옛 포레스트 post_json)를 대신한다."""
 
     def post_json(self, url, payload=None):
-        body = b"" if payload is None else json.dumps(payload, ensure_ascii=False).encode()
-        headers = {
-            "Content-Type": "application/json;charset=UTF-8",
-            "Origin": "https://forest2.fingerservice.co.kr",
-            "Referer": "https://forest2.fingerservice.co.kr/",
-        }
-        req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-        text = self.open(req).read().decode("utf-8", "replace")
+        raise FruitAutoError("옛 포레스트 API는 더 이상 쓰지 않습니다(새 OneFinger로 이전).")
+
+
+def sso_employee_no(pms_id, owner_key=None):
+    """새 통합 로그인은 숫자 사번을 받는다. 예전에 PMS 아이디(영문)를 저장한 계정은 저장해 둔 사번을 쓴다."""
+    value = str(pms_id or "").strip()
+    if re.fullmatch(r"[1-9][0-9]{0,18}", value):
+        return value
+    if owner_key:
         try:
-            data = json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise FruitAutoError(f"invalid JSON from {url}: {text[:500]}") from exc
-        result = data.get("result") or {}
-        if str(result.get("code")) != "200":
-            raise FruitAutoError(f"{url} failed: {result}")
-        return result.get("content") or {}
+            saved = str((get_account_state(owner_key) or {}).get("loginEmployeeNo") or "").strip()
+        except Exception:
+            saved = ""
+        if re.fullmatch(r"[1-9][0-9]{0,18}", saved):
+            return saved
+    return value
 
 
-def pms_login(client, pms_id=None, pms_password=None):
+def pms_login(client, pms_id=None, pms_password=None, owner_key=None):
+    """새 OneFinger 통합 로그인. 예전 PMS 로그인과 같은 (token, dataset) 모양을 돌려준다."""
     pms_id = pms_id or read_secret("pms_id")
     pms_password = pms_password or read_secret("pms_password")
-    client.get_text(PMS_LOGIN_PAGE)
-    query = urllib.parse.urlencode({"user_id": pms_id, "user_password": pms_password})
-    headers = {
-        "Apikey": "vDw17TUSP83JziBu",
-        "Lang": "ko",
-        "SvcToken": "",
-        "DataPage": "1",
-        "DataNumber": "10",
+    try:
+        emp = client.login(sso_employee_no(pms_id, owner_key), pms_password)
+    except LoginFailed as exc:
+        raise FruitAutoError(str(exc)) from exc
+    except OneFingerError as exc:
+        raise FruitAutoError(f"OneFinger 로그인 실패: {exc}") from exc
+    employee_no = str(emp.get("employeeNo") or "").strip()
+    dataset = {
+        "SESS_USERNAME": emp.get("name") or "",
+        "SESS_USERID": employee_no or str(emp.get("id")),
+        "SESS_EMPNO": employee_no,
     }
-    text = client.get_text(f"{PMS_LOGIN_API}?{query}", headers=headers)
-    data = json.loads(text)
-    if not data.get("success"):
-        raise FruitAutoError(f"PMS login failed: {data}")
-    dataset = data.get("dataset") or {}
-    token = data.get("token") or dataset.get("SESS_TOKENVALUE")
-    if not token:
-        raise FruitAutoError("PMS login did not return a token")
-    return token, dataset
+    return "onefinger", dataset
 
+
+def _of_employee_row(e):
+    return {
+        "emp_id": str(e.get("id") or ""),
+        "emp_no": str(e.get("employeeNo") or ""),
+        "emp_nm": e.get("name") or "",
+        "dept_nm": e.get("organizationName") or "",
+        "pos_nm": e.get("positionName") or "",
+        "duty_id": "",
+        "duty_nm": "",
+    }
+
+
+def _kst_month(sep="-", when=None):
+    now = when or dt.datetime.now(KST)
+    return f"{now.year}{sep}{now.month:02d}"
+
+
+def forest_login(client, pms_token=None):
+    """내 직원 정보·씨앗·오늘 쓸 수 있는 프로젝트를 예전 getPmsEmployee 모양으로."""
+    emp = client.employee or {}
+    if not emp.get("id"):
+        raise FruitAutoError("OneFinger 직원 정보를 확인하지 못했습니다.")
+    try:
+        balance = client.balance(_kst_month())
+    except OneFingerError:
+        balance = {}
+    today = dt.datetime.now(KST).date().isoformat()
+    try:
+        projects = [p for p in client.projects(today) if p.get("writableAtDate") is not False]
+    except OneFingerError:
+        projects = []
+    return {
+        "resultMap": [_of_employee_row(emp)],
+        "forestAuth": [{"seedCnt": str(int(balance.get("seedAvailable") or 0))}],
+        "projEmp": [{"proj_id": str(p.get("id")), "proj_nm": p.get("name")} for p in projects if p.get("id") and p.get("name")],
+        "projInner": [],
+    }
 
 def save_credentials(pms_id, pms_password):
     client = Client()
@@ -1448,35 +1466,45 @@ def save_credentials(pms_id, pms_password):
     }
 
 
-def forest_login(client, pms_token):
-    content = client.post_json(f"{FOREST_API}/pmsForest", {"tokenNO": pms_token})
-    rows = content.get("resultMap") or []
-    if not rows:
-        raise FruitAutoError("Forest token exchange returned no employee")
-    emp_id = rows[0].get("emp_id")
-    if not emp_id:
-        raise FruitAutoError("Forest token exchange returned no emp_id")
 
-    content = client.post_json(f"{FOREST_API}/getPmsEmployee", {"empId": emp_id})
-    result_rows = content.get("resultMap") or []
-    auth_rows = content.get("forestAuth") or []
-    if not result_rows or not auth_rows:
-        raise FruitAutoError("Forest employee info is incomplete")
-    return content
-
-
-def current_seed_fruit(client, employee):
-    today = dt.datetime.now()
-    std_month = f"{today.year}{today.month:02d}"
-    payload = {
-        "empId": employee["emp_id"],
-        "stdMt": std_month,
-        "dutyId": employee["duty_id"],
-    }
-    content = client.post_json(f"{FOREST_API}/headerReset", payload)
-    berries = int((content.get("bryCnt") or [{"berryCnt": "0"}])[0].get("berryCnt") or 0)
-    seeds = int((content.get("seedCnt") or [{"seedCnt": "0"}])[0].get("seedCnt") or 0)
+def current_seed_fruit(client, employee=None):
+    """(씨앗, 선물할 수 있는 열매). 새 OneFinger 이번 달 잔고."""
+    month = _kst_month()
+    try:
+        bal = client.balance(month)
+        gift = client.balance(month, gift_view=True)
+    except OneFingerError as exc:
+        raise FruitAutoError(f"씨앗·열매 잔고를 읽지 못했습니다: {exc}") from exc
+    seeds = int(bal.get("seedAvailable") or 0)
+    berries = int(gift.get("giftableFruit") if gift.get("giftableFruit") is not None else bal.get("fruitAvailable") or 0)
     return seeds, berries
+
+
+_LEVEL_NO = {"seed1": "1", "seed2": "2", "fruit1": "3", "fruit2": "4", "tree": "5", "forest": "6"}
+
+
+def _ranking_rows(client, kind, std_month, my_employee_id):
+    """새 OneFinger /rankings → 예전 bryRank 행(berry면 첫 행이 나, gift·level은 순위 목록)."""
+    new_kind = {"berry": "fruit", "gift": "gift", "level": "level"}[kind]
+    month = f"{std_month[:4]}-{std_month[4:6]}"
+    try:
+        data = client.rankings(new_kind, month=month, year=std_month[:4])
+    except OneFingerError as exc:
+        raise FruitAutoError(f"랭킹을 읽지 못했습니다: {exc}") from exc
+
+    def row(r):
+        e = r.get("employee") or {}
+        value = int(r.get("value") or 0)
+        return {"empId": str(e.get("id") or ""), "empNm": e.get("name") or "-", "rnk": r.get("rank"), "rankNo": r.get("rank"),
+                "sumBerry": value, "yrBryCnt": value, "lvl": _LEVEL_NO.get(r.get("level") or "", "1")}
+
+    top = [row(r) for r in (data.get("top") or [])]
+    me = data.get("me")
+    if kind == "berry":
+        return [row(me) if me else {"empId": str(my_employee_id or ""), "rnk": 0, "sumBerry": 0}] + top
+    if me and not any(r["empId"] == str((me.get("employee") or {}).get("id") or "") for r in top):
+        top.append(row(me))
+    return top
 
 
 def forest_level_label(level):
@@ -1514,8 +1542,7 @@ def forest_ranking(kind="berry", month=None, owner_key=None, limit=None):
     else:
         raise FruitAutoError("알 수 없는 랭킹 종류입니다.")
 
-    content = client.post_json(f"{FOREST_API}/bryRank", payload)
-    rows = content if isinstance(content, list) else content.get("resultMap") or []
+    rows = _ranking_rows(client, kind, std_month, sender_employee_id)
     rows = list(rows or [])
     my_row = None
     my_position = 0
@@ -1793,6 +1820,76 @@ def work_approval_message_day(value):
     if not match:
         return None
     return parse_int(match.group(1), None)
+
+
+_EMPLOYEE_NAMES = {"at": 0.0, "byId": {}}
+
+
+def _employee_names(client):
+    """직원 id → 이름(10분 캐시). 열매 내역에서 상대 이름을 찾는 데 쓴다."""
+    if time.monotonic() - _EMPLOYEE_NAMES["at"] > 600 or not _EMPLOYEE_NAMES["byId"]:
+        try:
+            _EMPLOYEE_NAMES["byId"] = {str(e.get("id")): e.get("name") or "" for e in client.employees()}
+            _EMPLOYEE_NAMES["at"] = time.monotonic()
+        except OneFingerError:
+            pass
+    return _EMPLOYEE_NAMES["byId"]
+
+
+def _ledger_rows(client, std_month):
+    """새 OneFinger 열매·씨앗 내역(/me/reward-ledger) → 예전 dwBerySeed 행.
+    stdDt '일', stdDBerryPmCnt 증감, stdMBerryCnt '열매/씨앗'(잔고는 없어 0/0), tgtEmpNm 상대, tgtMsg 메시지(씨앗이면 '씨앗' 포함)."""
+    month = f"{str(std_month)[:4]}-{str(std_month)[4:6]}"
+    try:
+        entries = client.ledger(month)
+    except OneFingerError as exc:
+        raise FruitAutoError(f"열매·씨앗 내역을 읽지 못했습니다: {exc}") from exc
+    names = _employee_names(client)
+    rows = []
+    for e in entries:
+        try:
+            posted = dt.datetime.fromisoformat(str(e.get("postedAt")).replace("Z", "+00:00")).astimezone(KST)
+        except ValueError:
+            continue
+        text = str(e.get("displayText") or "")
+        gifts = e.get("giftMessages") or []
+        message = next((g.get("message") for g in gifts if g.get("message")), "") or text
+        counterpart = ""
+        for g in gifts:
+            if names.get(str(g.get("recipientId"))):
+                counterpart = names[str(g.get("recipientId"))]
+                break
+        if not counterpart:
+            counterpart = next((n for n in sorted(set(names.values()), key=len, reverse=True) if n and len(n) >= 2 and n in text), "")
+        if e.get("asset") == "seed" and "씨앗" not in message:
+            message = f"[씨앗] {message}"
+        rows.append({
+            "stdDt": f"{posted.day}일",
+            "stdDBerryPmCnt": int(e.get("delta") or 0),
+            "stdMBerryCnt": "0/0",
+            "tgtEmpNm": counterpart,
+            "tgtMsg": message or "[열매선물]",
+            "postedAt": posted.isoformat(),
+            "asset": e.get("asset"),
+            "type": e.get("type"),
+        })
+    return rows
+
+
+def _approval_rows(client, std_month):
+    """새 OneFinger 업무일지 달력(/me/worklog-calendar)의 승인된 날 → 예전 '[업무승인] N일' 행."""
+    month = f"{str(std_month)[:4]}-{str(std_month)[4:6]}"
+    try:
+        days = client.worklog_calendar(month)
+    except OneFingerError as exc:
+        raise FruitAutoError(f"업무일지 승인 현황을 읽지 못했습니다: {exc}") from exc
+    rows = []
+    for d in days:
+        if d.get("state") not in ("approved", "partial") or not d.get("date"):
+            continue
+        day = int(str(d["date"])[8:10])
+        rows.append({"stdDt": f"{day}일", "tgtMsg": f"[업무승인] {day}일", "tgtEmpNm": "", "approvedTotal": d.get("approvedTotal")})
+    return rows
 
 
 def parse_seed_berry_counts(value):
@@ -2231,7 +2328,7 @@ def official_received_history_rows(client, owner_key, employee_id, employee_name
         parsed_date = dt.datetime.now(KST).date()
     month = parsed_date.strftime("%Y%m")
     selected_day = parsed_date.day
-    content = client.post_json(f"{FOREST_API}/dwBerySeed", {"stdMt": month, "empId": employee_id})
+    content = _ledger_rows(client, month)
     if not isinstance(content, list):
         return []
     rows = []
@@ -2545,7 +2642,7 @@ def official_history(limit=40, owner_key=None, date=None, timezone_offset_minute
     sender_position_name = state.get("senderPositionName") or ""
     month = selected_history_month(date, timezone_offset_minutes)
     selected_day = selected_history_day(date)
-    content = client.post_json(f"{FOREST_API}/dwBerySeed", {"stdMt": month, "empId": sender_employee_id})
+    content = _ledger_rows(client, month)
     if not isinstance(content, list):
         raise FruitAutoError("FOREST history did not return a list")
 
@@ -2884,9 +2981,7 @@ def worklog_approvals(owner_key=None, month=None):
     selected_month = normalize_history_month(month)
     local_events = local_worklog_events_by_date(owner_key, selected_month)
     client, _employee_info, _login_dataset, _employee, sender_employee_id, _sender_employee_name = account_login(owner_key)
-    content = client.post_json(f"{FOREST_API}/dwBerySeed", {"stdMt": selected_month, "empId": sender_employee_id})
-    if not isinstance(content, list):
-        raise FruitAutoError("FOREST history did not return a list")
+    content = _approval_rows(client, selected_month)
     approvals = {}
     for row in content:
         message = row.get("tgtMsg") or ""
@@ -2991,15 +3086,17 @@ def notification_items(limit=20, owner_key=None):
 
 
 def list_employees(client):
-    content = client.post_json(f"{FOREST_API}/getEmployee", {})
-    return [row for row in (content.get("resultMap") or []) if row.get("emp_id")]
+    try:
+        return [_of_employee_row(e) for e in client.employees()]
+    except OneFingerError as exc:
+        raise FruitAutoError(f"직원 목록을 읽지 못했습니다: {exc}") from exc
 
 
 def find_target_employee(client, name, emp_id=None):
+    """받는 사람. 저장된 id가 예전 포레스트 id라 새 목록에 없으면 이름으로 찾는다(동명이인이면 오류)."""
     employees = list_employees(client)
-    if emp_id:
-        matches = [row for row in employees if row.get("emp_id") == emp_id]
-    else:
+    matches = [row for row in employees if emp_id and row.get("emp_id") == str(emp_id)]
+    if not matches and name:
         matches = [row for row in employees if row.get("emp_nm") == name]
     if not matches:
         raise FruitAutoError(f"target employee not found: {name or emp_id}")
@@ -3038,24 +3135,14 @@ def search_employees(query):
 
 
 def give_all_berries(client, employee_info, target, berry_count, message):
+    """열매 선물: 새 OneFinger POST /fruit-gifts."""
     employee = employee_info["resultMap"][0]
-    auth = employee_info["forestAuth"][0]
-    payload = {
-        "berrySeedGit": [
-            {
-                "empId": employee["emp_id"],
-                "empNm": employee["emp_nm"],
-                "tgtEmpId": target["emp_id"],
-                "tgtEmpNm": target["emp_nm"],
-                "dutyCd": target["duty_id"],
-                "dutyCds": employee["duty_id"],
-                "seedCnt": auth.get("seedCnt"),
-                "pfmBerryCnt": str(berry_count),
-                "tgtMsg": message,
-            }
-        ]
-    }
-    return client.post_json(f"{FOREST_API}/insBryGit", payload)
+    if str(target.get("emp_id")) == str(employee.get("emp_id")):
+        raise FruitAutoError("나 자신에게는 열매를 보낼 수 없습니다.")
+    try:
+        return client.give_fruit(target["emp_id"], berry_count, message)
+    except OneFingerError as exc:
+        raise FruitAutoError(f"열매 선물 실패: {exc}") from exc
 
 
 def transfer_balance_confirmed(before_berries, sent_berries, after_berries):
@@ -3800,6 +3887,23 @@ def is_push_enabled(owner_key):
     return account.get("pushEnabled", DEFAULT_STATE["pushEnabled"]) is not False
 
 
+def existing_owner_for_employee_no(employee_no, default_key):
+    """같은 사번으로 저장된 계정 키(예전 포레스트 id 기준). 없으면 default_key."""
+    employee_no = str(employee_no or "").strip()
+    if not employee_no:
+        return default_key
+    try:
+        accounts = (load_all_state() or {}).get("accounts", {})
+    except Exception:
+        return default_key
+    if default_key in accounts:
+        return default_key
+    for key, account in accounts.items():
+        if str((account or {}).get("loginEmployeeNo") or "").strip() == employee_no:
+            return key
+    return default_key
+
+
 def account_credentials(owner_key):
     owner_key = require_owner(owner_key)
     account = load_secrets().get("accounts", {}).get(owner_key) or {}
@@ -3811,14 +3915,17 @@ def account_credentials(owner_key):
 def account_login(owner_key):
     pms_id, pms_password = account_credentials(owner_key)
     client = Client()
-    pms_token, login_dataset = pms_login(client, pms_id, pms_password)
+    pms_token, login_dataset = pms_login(client, pms_id, pms_password, owner_key)
     employee_info = forest_login(client, pms_token)
     employee = employee_info["resultMap"][0]
     actual_owner_key, sender_employee_id, sender_employee_name = employee_identity(
         employee, login_dataset.get("SESS_USERID")
     )
     if actual_owner_key != owner_key:
-        raise FruitAutoError("저장된 계정 정보가 현재 세션과 일치하지 않습니다. 다시 로그인하세요.")
+        # 새 OneFinger 직원 id는 옛 포레스트 id와 다를 수 있다: 같은 사번이면 같은 사람(계정 키는 그대로 둔다)
+        saved_no = str((get_account_state(owner_key) or {}).get("loginEmployeeNo") or "")
+        if not saved_no or saved_no != str(login_dataset.get("SESS_EMPNO") or ""):
+            raise FruitAutoError("저장된 계정 정보가 현재 세션과 일치하지 않습니다. 다시 로그인하세요.")
     return client, employee_info, login_dataset, employee, sender_employee_id, sender_employee_name
 
 
@@ -3832,6 +3939,8 @@ def save_credentials(pms_id, pms_password, device_id=None):
     )
     if not owner_key:
         raise FruitAutoError("Forest employee id를 확인하지 못했습니다.")
+    # 옛 포레스트 id로 만들어진 계정이 있으면(같은 사번) 그 계정을 그대로 이어 쓴다: 설정·기록·자동전송 유지
+    owner_key = existing_owner_for_employee_no(dataset.get("SESS_EMPNO"), owner_key)
     store_worklog_project_cache(owner_key, worklog_projects_from_employee_info(employee_info))
 
     with secrets_transaction():
@@ -4849,6 +4958,50 @@ def worklog_run_key_for_next_run(account):
     return next_run.astimezone(KST).strftime("%Y-%m-%dT%H:%M")
 
 
+def _save_worklog_onefinger(client, employee_info, state, target_date, seed_count):
+    """업무일지를 신 포레스트(새 OneFinger PUT /me/worklogs/{date})에 저장한다.
+    그날 이미 적힌 항목이 있으면 덮어쓰지 않고 'exists'(PUT은 그날 기록 전체를 바꾸므로 사람이 쓴 내용을 지우지 않기 위함)."""
+    date = target_date.isoformat()
+    projects = worklog_projects_from_employee_info(employee_info)
+    pid, pname = str(state.get("worklogProjectId") or ""), state.get("worklogProjectName") or ""
+    project = next((p for p in projects if str(p["id"]) == pid), None) or next((p for p in projects if p["name"] == pname), None)
+    if not project:
+        raise FruitAutoError(f"신 포레스트에서 프로젝트 '{pname or pid}'를 찾지 못했습니다. 업무일지 프로젝트를 다시 선택해 주세요.")
+    try:
+        current = client.worklog(date)
+    except OneFingerError as exc:
+        raise FruitAutoError(f"업무일지를 읽지 못했습니다: {exc}") from exc
+    if current and current.get("items"):
+        return "exists"
+    scheduled = int((current or {}).get("scheduledMinutes") or 480) or 480
+    minutes = max(30, min(1440, round(scheduled / 30) * 30))
+    seed_gift = None
+    if seed_count:
+        target = find_target_employee(client, state.get("worklogTargetEmployeeName"), state.get("worklogTargetEmployeeId"))
+        seed_gift = {"recipients": [{"employeeId": target["emp_id"], "amount": int(seed_count), "message": str(state.get("worklogSeedMessage") or "")[:2000]}]}
+    body = {
+        "expectedVersion": int((current or {}).get("version") or 0),
+        "selfPraise": 3,
+        "items": [{
+            "clientItemKey": str(uuid.uuid4()),
+            "entryKind": "project",
+            "projectId": str(project["id"]),
+            "taskId": None,
+            "workTypeId": None,
+            "minutes": minutes,
+            "body": str(state.get("worklogContent") or "")[:10000],
+            "progress": None,
+            "sortOrder": 0,
+        }],
+        "seedGift": seed_gift,
+    }
+    try:
+        client.save_worklog(date, body)
+    except OneFingerError as exc:
+        raise FruitAutoError(f"업무일지 저장 실패: {exc}") from exc
+    return "saved"
+
+
 def save_worklog_once(owner_key=None, run_date=None, force=False):
     owner_key = require_owner(owner_key)
     state = get_account_state(owner_key)
@@ -4891,39 +5044,8 @@ def save_worklog_once(owner_key=None, run_date=None, force=False):
         else:
             matches, scheduled = worklog_schedule_matches(state, local_now)
             target_date = scheduled.date() if matches else local_now.date()
-        std_dt = target_date.strftime("%Y%m%d")
-        std_mt = target_date.strftime("%Y%m")
-        std_yr = target_date.strftime("%Y")
-        data = {
-            "empId": employee["emp_id"],
-            "stdDt": std_dt,
-            "projId": state.get("worklogProjectId"),
-            "stdMt": std_mt,
-            "stdYr": std_yr,
-            "empNm": employee.get("emp_nm"),
-            "projNm": state.get("worklogProjectName"),
-            "workProsRate": 100,
-            "workDesc": state.get("worklogContent"),
-            "cfmYn": "N",
-            "workStTm": f"{std_dt}0900",
-            "workEdTm": f"{std_dt}1800",
-            "slfWorkPfmBerryCnt": 3,
-            "regId": employee["emp_id"],
-            "modId": employee["emp_id"],
-        }
-        if seed_count:
-            data.update(
-                {
-                    "tgtEmpId": state.get("worklogTargetEmployeeId"),
-                    "tgtEmpNm": state.get("worklogTargetEmployeeName"),
-                    "dutyCd": state.get("worklogTargetDutyId"),
-                    "dutyCds": employee.get("duty_id"),
-                    "seedCnt": seed_count,
-                    "tgtMsg": state.get("worklogSeedMessage") or "",
-                }
-            )
         api_called_at = now_iso()
-        client.post_json(f"{FOREST_API}/saveDw", {"dwInsList": [data]})
+        save_result = _save_worklog_onefinger(client, employee_info, state, target_date, seed_count)
         remaining_seeds = available_seeds
         remaining_berries = available_berries
         if seed_count:
@@ -4944,7 +5066,7 @@ def save_worklog_once(owner_key=None, run_date=None, force=False):
             {
                 "worklogLastRunAt": now_iso(),
                 "worklogLastRunKey": run_key,
-                "worklogLastResult": "sent",
+                "worklogLastResult": "sent" if save_result == "saved" else "exists",
                 "worklogLastError": None,
                 "worklogRunningRunKey": None,
                 "worklogRunningAt": None,
