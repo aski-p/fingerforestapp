@@ -33,7 +33,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.18.7"
+APP_VERSION = "3.18.8"
 ANDROID_APP_VERSION = "3.17.2"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -55,13 +55,20 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "왕관(랭킹)이 팝업 대신 별도 페이지로 열려요. 동물 캐릭터와 함께 순위가 보이고, 내 순위 줄이 강조돼요. 뒤로가기로 홈에 돌아와요.",
-    "통합 로그인에 요청이 몰려 '429'로 막히던 문제를 줄였어요. 로그인 세션을 서버 안에서 함께 쓰고, 막히면 잠시 쉬었다가 다시 시도해요.",
+    "스킨이 10가지가 됐어요: 숲속 다이어리·성장 정원·클린·봄 벚꽃 피크닉·여름 계곡·겨울 눈마을·반딧불 밤숲·동물 마을 장터·바닷가 캠핑·하늘 축제. 설정 > 스킨에서 골라 보세요.",
+    "모든 스킨의 배경을 동물 친구들이 뛰어노는 꽉 찬 그림으로 바꿨어요.",
 ]
 VALID_THEMES = {
     "diary",
     "clean",
     "garden",
+    "spring",
+    "summer",
+    "winter",
+    "night",
+    "village",
+    "seaside",
+    "balloon",
     "default",
     "dark",
     "berry",

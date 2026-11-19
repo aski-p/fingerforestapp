@@ -84,8 +84,8 @@ body.theme-garden {
 }
 
 /* ---------- 공통: 배경 ---------- */
-:is(body.theme-diary, body.theme-clean, body.theme-garden),
-:is(body.theme-diary, body.theme-clean, body.theme-garden).main-bg-scene {
+body.skin-on,
+body.skin-on.main-bg-scene {
   background: var(--bg);
   background-attachment: scroll;
 }
@@ -100,12 +100,12 @@ body.theme-clean.main-bg-scene .launch-splash {
 }
 
 /* ---------- 상단 바 ---------- */
-:is(body.theme-diary, body.theme-clean, body.theme-garden) .hero {
+body.skin-on .hero {
   border-bottom-color: transparent;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
 }
 
-:is(body.theme-diary, body.theme-clean, body.theme-garden) :is(.ranking-button, .settings-button, .push-control, .logout) {
+body.skin-on :is(.ranking-button, .settings-button, .push-control, .logout) {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--surface);
@@ -122,7 +122,7 @@ body.theme-garden .ranking-button img {
   display: none;
 }
 
-:is(body.theme-diary, body.theme-garden) .skin-banner {
+body.skin-on .skin-banner {
   position: relative;
   display: grid;
   align-content: start;
@@ -133,7 +133,7 @@ body.theme-garden .ranking-button img {
   background: var(--sk-banner) center top / cover no-repeat;
 }
 
-:is(body.theme-diary, body.theme-garden) .skin-banner strong {
+body.skin-on .skin-banner strong {
   color: var(--text-strong);
   font-size: 26px;
   font-weight: 950;
@@ -141,7 +141,7 @@ body.theme-garden .ranking-button img {
   text-shadow: 0 1px 0 rgba(255, 255, 255, .7);
 }
 
-:is(body.theme-diary, body.theme-garden) .skin-banner span {
+body.skin-on .skin-banner span {
   max-width: 54%;
   color: var(--muted);
   font-size: 13px;
@@ -156,45 +156,45 @@ body.theme-garden .skin-banner strong {
 
 /* 배너 아래로 첫 카드가 살짝 겹치게: 카드가 배너 위에 떠 있도록 */
 /* 배너 위에 떠야 하는 건 로그인 카드·작업 영역뿐. 팝업(.modal)·토스트 등은 건드리지 않는다(fixed 유지). */
-:is(body.theme-diary, body.theme-garden) .skin-banner ~ :is(.login-wordmark, .login-card, .workspace) {
+body.skin-on .skin-banner ~ :is(.login-wordmark, .login-card, .workspace) {
   position: relative;
   z-index: 1;
 }
 
 /* ---------- 카드 공통 ---------- */
-:is(body.theme-diary, body.theme-clean, body.theme-garden) :is(.card, .metric, .balance-toolbar, .workspace-tabs, .fruit-unified-block, .login-profile, .worklog-block) {
+body.skin-on :is(.card, .metric, .balance-toolbar, .workspace-tabs, .fruit-unified-block, .login-profile, .worklog-block) {
   border: 1px solid var(--line);
   border-radius: var(--sk-radius);
   background: var(--surface);
   box-shadow: 0 8px 22px var(--shadow);
 }
 
-:is(body.theme-diary, body.theme-clean, body.theme-garden) :is(.fruit-unified-block, .worklog-block, .login-profile) {
+body.skin-on :is(.fruit-unified-block, .worklog-block, .login-profile) {
   box-shadow: none;
   background: var(--surface-soft);
 }
 
-:is(body.theme-diary, body.theme-clean, body.theme-garden) .metric:nth-child(n) {
+body.skin-on .metric:nth-child(n) {
   background: var(--surface);
 }
 
-:is(body.theme-diary, body.theme-clean, body.theme-garden) :is(.metric span, .balance-toolbar span, .section-title p) {
+body.skin-on :is(.metric span, .balance-toolbar span, .section-title p) {
   color: var(--muted);
 }
 
-:is(body.theme-diary, body.theme-clean, body.theme-garden) :is(h2, h3, .metric strong, .balance-toolbar strong) {
+body.skin-on :is(h2, h3, .metric strong, .balance-toolbar strong) {
   color: var(--text-strong);
 }
 
 /* 씨앗·열매 카드: 큰 숫자 + 그림 아이콘 */
-:is(body.theme-diary, body.theme-clean, body.theme-garden) .status-grid .metric:nth-child(3),
-:is(body.theme-diary, body.theme-clean, body.theme-garden) .status-grid .metric:nth-child(4) {
+body.skin-on .status-grid .metric:nth-child(3),
+body.skin-on .status-grid .metric:nth-child(4) {
   position: relative;
   overflow: hidden;
 }
 
-:is(body.theme-diary, body.theme-clean, body.theme-garden) .status-grid .metric:nth-child(3) strong,
-:is(body.theme-diary, body.theme-clean, body.theme-garden) .status-grid .metric:nth-child(4) strong {
+body.skin-on .status-grid .metric:nth-child(3) strong,
+body.skin-on .status-grid .metric:nth-child(4) strong {
   font-size: 32px;
   font-weight: 950;
   font-variant-numeric: tabular-nums;
@@ -209,8 +209,8 @@ body.theme-garden .status-grid .metric:nth-child(4) strong {
   color: #c4610c;
 }
 
-:is(body.theme-diary, body.theme-garden) .status-grid .metric:nth-child(3)::after,
-:is(body.theme-diary, body.theme-garden) .status-grid .metric:nth-child(4)::after {
+body.skin-on .status-grid .metric:nth-child(3)::after,
+body.skin-on .status-grid .metric:nth-child(4)::after {
   content: "";
   position: absolute;
   right: 10px;
@@ -221,58 +221,58 @@ body.theme-garden .status-grid .metric:nth-child(4) strong {
   pointer-events: none;
 }
 
-:is(body.theme-diary, body.theme-garden) .status-grid .metric:nth-child(4)::after {
+body.skin-on .status-grid .metric:nth-child(4)::after {
   background-image: var(--sk-fruit);
 }
 
 /* ---------- 버튼 ---------- */
-:is(body.theme-diary, body.theme-clean, body.theme-garden) .primary {
+body.skin-on .primary {
   border-radius: 12px;
   background: var(--sk-cta);
   color: var(--sk-cta-text);
   font-weight: 900;
 }
 
-:is(body.theme-diary, body.theme-clean, body.theme-garden) .primary.soft,
-:is(body.theme-diary, body.theme-clean, body.theme-garden) #refreshBalanceBtn,
-:is(body.theme-diary, body.theme-clean, body.theme-garden) .history-chip {
+body.skin-on .primary.soft,
+body.skin-on #refreshBalanceBtn,
+body.skin-on .history-chip {
   border-radius: 12px;
   background: var(--accent);
   color: #fff;
 }
 
-:is(body.theme-diary, body.theme-clean, body.theme-garden) .secondary {
+body.skin-on .secondary {
   border-radius: 12px;
   background: var(--sk-chip);
   color: var(--sk-chip-text);
 }
 
-:is(body.theme-diary, body.theme-clean, body.theme-garden) .badge.ok,
-:is(body.theme-diary, body.theme-clean, body.theme-garden) .badge.neutral {
+body.skin-on .badge.ok,
+body.skin-on .badge.neutral {
   background: var(--sk-chip);
   color: var(--sk-chip-text);
 }
 
 /* 탭 */
-:is(body.theme-diary, body.theme-clean, body.theme-garden) .workspace-tabs {
+body.skin-on .workspace-tabs {
   padding: 4px;
   background: var(--surface-tint);
   box-shadow: none;
 }
 
-:is(body.theme-diary, body.theme-clean, body.theme-garden) .workspace-tabs button {
+body.skin-on .workspace-tabs button {
   border-radius: calc(var(--sk-radius) - 4px);
   color: var(--muted);
 }
 
-:is(body.theme-diary, body.theme-clean, body.theme-garden) .workspace-tabs button.active {
+body.skin-on .workspace-tabs button.active {
   background: var(--accent);
   color: #fff;
   box-shadow: 0 6px 14px var(--shadow);
 }
 
 /* 입력칸 */
-:is(body.theme-diary, body.theme-clean, body.theme-garden) :is(input[type="text"], input[type="number"], input[type="password"], input:not([type]), textarea, select) {
+body.skin-on :is(input[type="text"], input[type="number"], input[type="password"], input:not([type]), textarea, select) {
   border-color: var(--line-strong);
   border-radius: 12px;
   background: #fff;
@@ -280,7 +280,7 @@ body.theme-garden .status-grid .metric:nth-child(4) strong {
 }
 
 /* 순환 카드 */
-:is(body.theme-diary, body.theme-clean, body.theme-garden) .target-cycle-card {
+body.skin-on .target-cycle-card {
   border-color: var(--line);
   border-radius: var(--sk-radius);
   background: var(--surface);
@@ -299,7 +299,7 @@ body.theme-garden .target-cycle-card {
 }
 
 /* 로그인 전 화면 */
-:is(body.theme-diary, body.theme-clean, body.theme-garden) .login-wordmark span {
+body.skin-on .login-wordmark span {
   color: var(--accent);
   background: none;
   -webkit-text-fill-color: currentColor;
@@ -315,19 +315,19 @@ body.theme-clean :is(.card, .metric, .balance-toolbar) {
 }
 
 /* 로그인 후: 바깥 로그인 카드 틀은 지우고 안쪽 사용자 카드만 */
-:is(body.theme-diary, body.theme-clean, body.theme-garden).authenticated .login-card {
+body.skin-on.authenticated .login-card {
   border: 0;
   background: none;
   box-shadow: none;
   padding: 0;
 }
 
-:is(body.theme-diary, body.theme-clean, body.theme-garden).authenticated .login-card .login-profile {
+body.skin-on.authenticated .login-card .login-profile {
   background: var(--surface);
   box-shadow: 0 8px 22px var(--shadow);
 }
 
-:is(body.theme-diary, body.theme-garden) .skin-banner span {
+body.skin-on .skin-banner span {
   max-width: 62%;
   font-size: 12px;
 }
@@ -342,12 +342,12 @@ body.theme-diary .skin-banner span {
 body.theme-diary { --sk-full: url("/assets/skins/a-full.webp"); }
 body.theme-garden { --sk-full: url("/assets/skins/c-full.webp"); }
 
-:is(body.theme-diary, body.theme-garden),
-:is(body.theme-diary, body.theme-garden).main-bg-scene {
+body.skin-on,
+body.skin-on.main-bg-scene {
   background: transparent;
 }
 
-:is(body.theme-diary, body.theme-garden)::before {
+body.skin-on::before {
   content: "";
   position: fixed;
   inset: 0;
@@ -360,14 +360,14 @@ html:has(body.theme-diary) { background: #f7f3e8; }
 html:has(body.theme-garden) { background: #eef7ee; }
 
 /* 배너는 그림 없이 제목만: 전체 배경 그림이 비쳐 보이게 */
-:is(body.theme-diary, body.theme-garden) .skin-banner {
+body.skin-on .skin-banner {
   min-height: 0;
   margin: -6px 0 10px;
   padding: 8px 4px 0;
   background: none;
 }
 
-:is(body.theme-diary, body.theme-garden) .skin-banner span {
+body.skin-on .skin-banner span {
   max-width: none;
   background: none;
   padding: 0;
@@ -386,7 +386,7 @@ body.theme-garden :is(.card, .metric, .balance-toolbar, .target-cycle-card, .log
   backdrop-filter: blur(6px);
 }
 
-:is(body.theme-diary, body.theme-garden) .hero {
+body.skin-on .hero {
   background: color-mix(in srgb, var(--bg) 70%, transparent);
 }
 
@@ -397,11 +397,11 @@ body.theme-garden.main-bg-scene .launch-splash {
 }
 
 /* 로그인 전 화면: 그림 위에 카드가 떠 보이도록 */
-:is(body.theme-diary, body.theme-garden).logged-out .login-card {
+body.skin-on.logged-out .login-card {
   background: rgba(255, 252, 245, 0.92);
 }
 
-:is(body.theme-diary, body.theme-garden) .skin-banner span {
+body.skin-on .skin-banner span {
   justify-self: start;
   padding: 3px 10px;
   border-radius: 999px;
@@ -426,7 +426,7 @@ body.page-ranking .app > :not(#rankingModal):not(#appNotice) {
 
 .ranking-page.hidden { display: none; }
 
-:is(body.theme-diary, body.theme-garden) .ranking-page { background: transparent; }
+body.skin-on .ranking-page { background: transparent; }
 
 .ranking-page-hero {
   position: relative;
@@ -611,3 +611,130 @@ body.theme-diary .rk-fruit { background-image: url("/assets/skins/a-fruit.webp")
 .ranking-page .ranking-tabs button.active .rk-ico { filter: drop-shadow(0 0 2px rgba(255, 255, 255, .8)); }
 .ranking-page { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
 .ranking-page-title p { max-width: none; white-space: nowrap; }
+
+
+/* ================= 3.18.8: 스킨 10종 (모두 화면 전체 그림 배경) ================= */
+body.theme-clean { --sk-full: url("/assets/skins/bg-clean.webp"); }
+body.theme-diary { --sk-full: url("/assets/skins/bg-diary.webp"); }
+body.theme-garden { --sk-full: url("/assets/skins/bg-garden.webp"); }
+
+body.theme-spring {
+  --bg: #fcf1f4; --surface: #fffafb; --surface-soft: #fff4f7; --surface-tint: #fbe4ec;
+  --line: #f1d6df; --line-strong: #e6bfcc; --text: #4a2b36; --text-strong: #3a1f29; --muted: #8a6673;
+  --accent: #c0567a; --accent-bright: #e07a9c; --accent-soft: #fbe4ec; --button: #c0567a; --button-text: #fff;
+  --shadow: rgba(160, 70, 100, .1); --sk-radius: 18px; --sk-cta: #c0567a; --sk-cta-text: #fff;
+  --sk-chip: #fbe4ec; --sk-chip-text: #a8405f;
+  --sk-full: url("/assets/skins/bg-spring.webp");
+}
+
+body.theme-summer {
+  --bg: #e8f7f6; --surface: #fbffff; --surface-soft: #f1fbfa; --surface-tint: #d9f1ef;
+  --line: #c9e8e5; --line-strong: #a9d9d4; --text: #17393a; --text-strong: #0f2b2c; --muted: #4f7473;
+  --accent: #128a85; --accent-bright: #22b3ac; --accent-soft: #d9f1ef; --button: #128a85; --button-text: #fff;
+  --shadow: rgba(18, 110, 105, .1); --sk-radius: 18px; --sk-cta: #e8613c; --sk-cta-text: #fff;
+  --sk-chip: #d9f1ef; --sk-chip-text: #0f6f6b;
+  --sk-full: url("/assets/skins/bg-summer.webp");
+}
+
+body.theme-winter {
+  --bg: #f1f5fa; --surface: #ffffff; --surface-soft: #f6f9fc; --surface-tint: #e4edf6;
+  --line: #d8e3ee; --line-strong: #c2d2e2; --text: #1d2f45; --text-strong: #13233a; --muted: #5d7089;
+  --accent: #2f5f97; --accent-bright: #4f86c6; --accent-soft: #e4edf6; --button: #2f5f97; --button-text: #fff;
+  --shadow: rgba(40, 80, 130, .1); --sk-radius: 16px; --sk-cta: #c2413b; --sk-cta-text: #fff;
+  --sk-chip: #e4edf6; --sk-chip-text: #2f5f97;
+  --sk-full: url("/assets/skins/bg-winter.webp");
+}
+
+body.theme-night {
+  --bg: #121c18; --surface: #1c2a24; --surface-soft: #22322b; --surface-tint: #2a3d34;
+  --line: #34493f; --line-strong: #46604f; --text: #e8f1ea; --text-strong: #ffffff; --muted: #a9bdb1;
+  --accent: #5fd08a; --accent-bright: #8ef0b0; --accent-soft: #24402f; --button: #5fd08a; --button-text: #0d1a13;
+  --shadow: rgba(0, 0, 0, .35); --sk-radius: 16px; --sk-cta: #f2c14e; --sk-cta-text: #1a1406;
+  --sk-chip: #24402f; --sk-chip-text: #8ef0b0;
+  --sk-full: url("/assets/skins/bg-night.webp");
+}
+
+body.theme-village {
+  --bg: #fbf3e6; --surface: #fffaf2; --surface-soft: #fdf5e9; --surface-tint: #f5e6cf;
+  --line: #ecdcc2; --line-strong: #dfc8a4; --text: #3d2a1b; --text-strong: #2e1e12; --muted: #85694f;
+  --accent: #2f7d78; --accent-bright: #3fa39c; --accent-soft: #e2f0ee; --button: #2f7d78; --button-text: #fff;
+  --shadow: rgba(120, 80, 40, .1); --sk-radius: 16px; --sk-cta: #c4552f; --sk-cta-text: #fff;
+  --sk-chip: #f5e6cf; --sk-chip-text: #8a4d1f;
+  --sk-full: url("/assets/skins/bg-village.webp");
+}
+
+body.theme-seaside {
+  --bg: #fff6e9; --surface: #fffcf6; --surface-soft: #fff8ee; --surface-tint: #e3f1f8;
+  --line: #f0e2cc; --line-strong: #e3cfae; --text: #213a4a; --text-strong: #14293a; --muted: #5f7686;
+  --accent: #1f6f9c; --accent-bright: #3d97c9; --accent-soft: #e3f1f8; --button: #1f6f9c; --button-text: #fff;
+  --shadow: rgba(30, 90, 130, .1); --sk-radius: 18px; --sk-cta: #e86f58; --sk-cta-text: #fff;
+  --sk-chip: #e3f1f8; --sk-chip-text: #1f6f9c;
+  --sk-full: url("/assets/skins/bg-seaside.webp");
+}
+
+body.theme-balloon {
+  --bg: #f3eefb; --surface: #fdfbff; --surface-soft: #f8f4fd; --surface-tint: #e9e0f7;
+  --line: #e2d7f2; --line-strong: #cfbfe8; --text: #33284a; --text-strong: #241a39; --muted: #74688c;
+  --accent: #6c4fb3; --accent-bright: #8f74d6; --accent-soft: #ece4f9; --button: #6c4fb3; --button-text: #fff;
+  --shadow: rgba(90, 60, 150, .1); --sk-radius: 20px; --sk-cta: #f08a5d; --sk-cta-text: #fff;
+  --sk-chip: #ece4f9; --sk-chip-text: #5a3fa0;
+  --sk-full: url("/assets/skins/bg-balloon.webp");
+}
+
+/* 그림 아이콘: 수채화 계열은 a-, 입체 계열은 c- */
+body.skin-on { --sk-seed: url("/assets/skins/a-seed.webp"); --sk-fruit: url("/assets/skins/a-fruit.webp"); }
+body.skin-on:is(.theme-garden, .theme-summer, .theme-balloon, .theme-clean) { --sk-seed: url("/assets/skins/c-seed.webp"); --sk-fruit: url("/assets/skins/c-fruit.webp"); }
+
+/* 공통: 화면 고정 전체 그림 + 비치는 카드 */
+body.skin-on, body.skin-on.main-bg-scene { background: transparent; }
+body.skin-on::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--sk-full) center / cover no-repeat, var(--bg);
+  pointer-events: none;
+}
+html:has(body.skin-on) { background: #f7f3e8; }
+html:has(body.theme-night) { background: #121c18; }
+
+body.skin-on :is(.card, .metric, .balance-toolbar, .target-cycle-card, .login-card .login-profile, .ranking-page-body) {
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+body.skin-on .metric:nth-child(n) { background: color-mix(in srgb, var(--surface) 88%, transparent); }
+body.skin-on.logged-out .login-card { background: color-mix(in srgb, var(--surface) 90%, transparent); }
+body.skin-on .hero { background: color-mix(in srgb, var(--bg) 70%, transparent); }
+body.skin-on.main-bg-scene .launch-splash { background: var(--sk-full) center / cover no-repeat, var(--bg); }
+body.skin-on .launch-flower { display: none; }
+body.skin-on .launch-splash .launch-wordmark,
+body.skin-on .launch-splash [class*="wordmark"] {
+  padding: 8px 18px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+}
+body.skin-on .ranking-page-hero { background: var(--sk-full) center 18% / cover no-repeat, var(--bg); }
+body.theme-diary .ranking-page-hero { background: url("/assets/skins/rank-deer.webp") right center / cover no-repeat, #f7f3e8; }
+body.skin-on .ranking-page-title h2 { display: inline-block; padding: 0 10px; border-radius: 12px; background: color-mix(in srgb, var(--surface) 80%, transparent); }
+body.theme-night .status-grid .metric:nth-child(n) strong { color: var(--text-strong); }
+body.theme-night :is(input, textarea, select) { background: #22322b !important; color: #fff !important; }
+
+/* 배너 제목도 그림 위에서 읽히게 */
+body.skin-on .skin-banner strong {
+  justify-self: start;
+  padding: 2px 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  color: var(--text-strong);
+  text-shadow: none;
+}
+body.skin-on .skin-banner span { background: color-mix(in srgb, var(--surface) 84%, transparent); color: var(--text); }
+
+/* 밤숲(어두운 스킨): 글자색 보정 */
+body.theme-night :is(.target-cycle-head span, .cycle-name, .cycle-next-line, .target-cycle-summary, .ranking-name, .ranking-summary, h2, h3, label, .section-title *) { color: var(--text-strong); }
+body.theme-night .cycle-center { background: radial-gradient(circle at 50% 40%, #2f4a3b, #1c2a24); color: #fff; box-shadow: 0 0 0 4px #34493f; }
+body.theme-night .cycle-shuffle-chip { background: #24402f; color: #cfeedd; }
+body.theme-night .cycle-edit-btn { background: #22322b; color: #8ef0b0; border-color: #46604f; }
+body.theme-night .ranking-page .ranking-row { background: #1c2a24; }
+body.theme-night :is(.cycle-center small, .cycle-next-line span, .cycle-progress-count, .target-cycle-summary .cycle-progress-count) { color: var(--accent-bright); }

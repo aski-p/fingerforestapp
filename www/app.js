@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV87";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.18.7";
+const appVersion = "3.18.8";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -317,6 +317,13 @@ const themes = [
   { id: "diary", label: "숲속 다이어리", category: "special", swatch: ["#f7f3e8", "#3e6b3a", "#a75a12"] },
   { id: "clean", label: "클린", category: "special", swatch: ["#f5f7f8", "#126447", "#15241e"] },
   { id: "garden", label: "성장 정원", category: "special", swatch: ["#eef7ee", "#2e8b3d", "#f08a1c"] },
+  { id: "spring", label: "봄 벚꽃 피크닉", category: "special", swatch: ["#fcf1f4", "#c0567a", "#4a2b36"] },
+  { id: "summer", label: "여름 계곡", category: "special", swatch: ["#e8f7f6", "#128a85", "#e8613c"] },
+  { id: "winter", label: "겨울 눈마을", category: "special", swatch: ["#f1f5fa", "#2f5f97", "#c2413b"] },
+  { id: "night", label: "반딧불 밤숲", category: "special", swatch: ["#121c18", "#5fd08a", "#f2c14e"] },
+  { id: "village", label: "동물 마을 장터", category: "special", swatch: ["#fbf3e6", "#2f7d78", "#c4552f"] },
+  { id: "seaside", label: "바닷가 캠핑", category: "special", swatch: ["#fff6e9", "#1f6f9c", "#e86f58"] },
+  { id: "balloon", label: "하늘 축제", category: "special", swatch: ["#f3eefb", "#6c4fb3", "#f08a5d"] },
   { id: "default", label: "Fresh (기존)", swatch: ["#f7f9fc", "#10b981", "#111827"] },
   { id: "dark", label: "Dark", swatch: ["#101418", "#34d399", "#e8edf2"] },
   { id: "berry", label: "Berry", swatch: ["#fff0f7", "#ec4899", "#9d174d"] },
@@ -788,6 +795,7 @@ function previewAppearance(settings = appearanceSettings()) {
   document.body.classList.remove(...themes.map((item) => `theme-${item.id}`));
   document.body.classList.remove(...fonts.map((item) => `font-${item.id}`));
   if (theme !== "default") document.body.classList.add(`theme-${theme}`);
+  document.body.classList.toggle("skin-on", SKIN_IDS.has(theme));
   renderSkinBanner(theme);
   document.body.classList.add(`font-${font}`);
   updateAppearanceSelection({ theme, font });
@@ -829,10 +837,19 @@ const DEFAULT_SKIN = "diary";
 const skinBannerText = {
   diary: ["숲속 다이어리", "숲에서 쌓이는 우리의 업무와 마음 기록"],
   garden: ["성장 정원", "함께 가꾸는 우리 팀의 성장 정원"],
+  clean: ["FingerForest", "동료에게 열매를, 한 번에"],
+  spring: ["봄 벚꽃 피크닉", "꽃잎처럼 가볍게 마음을 전해요"],
+  summer: ["여름 계곡", "시원하게 열매를 띄워 보내요"],
+  winter: ["겨울 눈마을", "따뜻한 열매 한 잔 건네요"],
+  night: ["반딧불 밤숲", "밤에도 숲은 자라요"],
+  village: ["동물 마을 장터", "오늘의 열매를 나눠요"],
+  seaside: ["바닷가 캠핑", "파도 따라 마음이 닿아요"],
+  balloon: ["하늘 축제", "열매를 실은 풍선이 날아가요"],
 };
+const SKIN_IDS = new Set(Object.keys(skinBannerText));
 
 function migratedTheme(theme) {
-  // 3.18.7 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
+  // 3.18.8 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
   if ((!theme || theme === "default") && storeGet(skinMigrationKey) !== "1") {
     storeSet(skinMigrationKey, "1");
     return DEFAULT_SKIN;
@@ -1188,8 +1205,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.18.7",
-        badge: "/icons/app-icon-192.png?v=3.18.7",
+        icon: "/icons/app-icon-192.png?v=3.18.8",
+        badge: "/icons/app-icon-192.png?v=3.18.8",
         data: { url: item.url || "/" },
       });
       return true;

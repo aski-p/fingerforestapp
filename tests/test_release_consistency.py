@@ -13,7 +13,7 @@ import web_server
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "3.18.7"
+EXPECTED_VERSION = "3.18.8"
 ANDROID_VERSION = "3.17.2"
 EXPECTED_ANDROID_SIGNER = "19657138bba6fb9186d885c42eab5142710b147401e49abb2bbc0f12d01b50e7"
 
