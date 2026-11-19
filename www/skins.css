@@ -738,3 +738,36 @@ body.theme-night .cycle-shuffle-chip { background: #24402f; color: #cfeedd; }
 body.theme-night .cycle-edit-btn { background: #22322b; color: #8ef0b0; border-color: #46604f; }
 body.theme-night .ranking-page .ranking-row { background: #1c2a24; }
 body.theme-night :is(.cycle-center small, .cycle-next-line span, .cycle-progress-count, .target-cycle-summary .cycle-progress-count) { color: var(--accent-bright); }
+
+/* ================= 3.18.9: 스킨별 로딩 캐릭터 ================= */
+body.skin-on .busy-overlay-card img {
+  width: min(62vw, 180px);
+  margin: -4px 0 10px;
+  animation: skinLoaderHop 0.9s ease-in-out infinite;
+  transform-origin: 50% 100%;
+}
+body.theme-diary .busy-overlay-card img { content: url("/assets/loading/diary.webp"); }
+body.theme-garden .busy-overlay-card img { content: url("/assets/loading/garden.webp"); }
+body.theme-clean .busy-overlay-card img { content: url("/assets/loading/clean.webp"); }
+body.theme-spring .busy-overlay-card img { content: url("/assets/loading/spring.webp"); }
+body.theme-summer .busy-overlay-card img { content: url("/assets/loading/summer.webp"); }
+body.theme-winter .busy-overlay-card img { content: url("/assets/loading/winter.webp"); }
+body.theme-night .busy-overlay-card img { content: url("/assets/loading/night.webp"); animation-name: skinLoaderFloat; }
+body.theme-village .busy-overlay-card img { content: url("/assets/loading/village.webp"); }
+body.theme-seaside .busy-overlay-card img { content: url("/assets/loading/seaside.webp"); }
+body.theme-balloon .busy-overlay-card img { content: url("/assets/loading/balloon.webp"); animation-name: skinLoaderFloat; animation-duration: 1.8s; }
+body.theme-clean .busy-overlay-card img { filter: drop-shadow(0 0 0 #fff) drop-shadow(0 10px 14px rgba(15, 23, 42, .3)); }
+
+@keyframes skinLoaderHop {
+  0%, 100% { transform: translateY(0) rotate(-3deg) scale(1, 1); }
+  45% { transform: translateY(-16px) rotate(3deg) scale(.98, 1.03); }
+  55% { transform: translateY(-16px) rotate(3deg) scale(.98, 1.03); }
+  92% { transform: translateY(0) rotate(-3deg) scale(1.04, .96); }
+}
+@keyframes skinLoaderFloat {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-12px) rotate(2deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.skin-on .busy-overlay-card img { animation: none; }
+}

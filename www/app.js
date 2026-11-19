@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV87";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.18.8";
+const appVersion = "3.18.9";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -849,7 +849,7 @@ const skinBannerText = {
 const SKIN_IDS = new Set(Object.keys(skinBannerText));
 
 function migratedTheme(theme) {
-  // 3.18.8 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
+  // 3.18.9 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
   if ((!theme || theme === "default") && storeGet(skinMigrationKey) !== "1") {
     storeSet(skinMigrationKey, "1");
     return DEFAULT_SKIN;
@@ -1205,8 +1205,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.18.8",
-        badge: "/icons/app-icon-192.png?v=3.18.8",
+        icon: "/icons/app-icon-192.png?v=3.18.9",
+        badge: "/icons/app-icon-192.png?v=3.18.9",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1691,9 +1691,9 @@ function setLockedState(unlocked) {
 }
 
 function employeeLabel(name, employeeNo) {
+  // 이름만 보여 준다(내부 직원 번호는 화면에 붙이지 않음). 이름이 없을 때만 번호로 대신한다.
   const safeName = String(name || "").trim();
   const safeNo = String(employeeNo || "").trim();
-  if (safeName && safeNo) return `${safeName} ${safeNo}`;
   return safeName || safeNo || "로그인 필요";
 }
 

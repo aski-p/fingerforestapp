@@ -33,7 +33,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.18.8"
+APP_VERSION = "3.18.9"
 ANDROID_APP_VERSION = "3.17.2"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -55,8 +55,8 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "스킨이 10가지가 됐어요: 숲속 다이어리·성장 정원·클린·봄 벚꽃 피크닉·여름 계곡·겨울 눈마을·반딧불 밤숲·동물 마을 장터·바닷가 캠핑·하늘 축제. 설정 > 스킨에서 골라 보세요.",
-    "모든 스킨의 배경을 동물 친구들이 뛰어노는 꽉 찬 그림으로 바꿨어요.",
+    "로딩 중에 나오는 캐릭터가 스킨마다 달라졌어요. 다람쥐·새싹이·고양이·토끼·수달·펭귄·부엉이·여우·시바·햄스터가 사과를 배달해요.",
+    "직원 이름 뒤에 붙던 숫자를 모든 화면에서 없앴어요.",
 ]
 VALID_THEMES = {
     "diary",
