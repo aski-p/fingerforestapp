@@ -34,7 +34,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.19.5"
+APP_VERSION = "3.20.0"
 ANDROID_APP_VERSION = "3.17.2"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -56,10 +56,13 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "앱 사용자끼리 대화·친구·쪽지 기능이 들어갔어요(오른쪽 아래 말풍선). 저장소 준비가 끝나면 바로 쓸 수 있어요.",
-    "차례인 사람의 불꽃 오라를 조금 줄여 불기둥이 더 잘 보여요.",
+    "🎄 크리스마스 에디션: 눈 내리는 빨간 숲 마을, 산타 모자를 쓴 동물 친구들, 순록 로딩 캐릭터.",
+    "캐럴 3곡 중 하나가 무작위로 흘러나와요(왼쪽 아래 🎵로 끄고 켜기). 한 번 받은 곡은 기기에 저장돼요.",
+    "업무일지 날짜 칩이 스킨마다 다른 그림 배지로 바뀌었어요.",
+    "설정 > 스킨에서 원래 테마로 언제든 돌아갈 수 있어요.",
 ]
 VALID_THEMES = {
+    "christmas",
     "diary",
     "clean",
     "garden",

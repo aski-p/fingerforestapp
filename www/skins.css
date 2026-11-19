@@ -1074,3 +1074,109 @@ body.theme-night input { color-scheme: dark; }
 .social-note-to strong { color: var(--text-strong); }
 /* 오라를 조금 줄여 대각선 방향에서도 불기둥이 보이게 */
 .cycle-aura { width: 88px; height: 88px; }
+
+/* ================= 크리스마스 에디션 ================= */
+body.theme-christmas {
+  --bg: #fff8f2; --surface: #fffaf6; --surface-soft: #fff4ee; --surface-tint: #fbe3e1;
+  --line: #f0cfc9; --line-strong: #e2aaa2; --text: #3a0d14; --text-strong: #2a070d; --muted: #7d4a50;
+  --accent: #1f5b3a; --accent-bright: #2f8a57; --accent-soft: #e2f1e7; --button: #c8102e; --button-text: #fff;
+  --shadow: rgba(142, 14, 34, .14); --sk-radius: 18px; --sk-cta: #c8102e; --sk-cta-text: #fff;
+  --sk-chip: #fbe3e1; --sk-chip-text: #a30d25;
+  --sk-full: url("/assets/skins/bg-christmas.webp");
+  --sk-seed: url("/assets/skins/a-seed.webp"); --sk-fruit: url("/assets/skins/a-fruit.webp");
+}
+html:has(body.theme-christmas) { background: #8e0e22; }
+body.theme-christmas :is(.card, .metric, .balance-toolbar, .target-cycle-card, .login-card .login-profile, .ranking-page-body) {
+  background: color-mix(in srgb, #fffaf6 92%, transparent);
+  border: 1.5px solid #f2c14e;
+  box-shadow: 0 10px 24px rgba(142, 14, 34, .18);
+}
+/* 카드 위쪽 빨강·초록 리본 줄 */
+body.theme-christmas :is(.card, .target-cycle-card, .ranking-page-body) { background-image: linear-gradient(90deg, #c8102e 0 33%, #fff 33% 36%, #1f5b3a 36% 64%, #fff 64% 67%, #c8102e 67%); background-size: 100% 5px; background-repeat: no-repeat; background-color: color-mix(in srgb, #fffaf6 92%, transparent); }
+body.theme-christmas .hero { background: linear-gradient(180deg, rgba(142, 14, 34, .92), rgba(200, 16, 46, .82)); border-bottom: 2px solid #f2c14e; }
+body.theme-christmas .hero :is(.ranking-button, .settings-button, .push-control, .logout) { background: #fffaf6; border-color: #f2c14e; }
+body.theme-christmas .status-grid .metric:nth-child(3) strong,
+body.theme-christmas .status-grid .metric:nth-child(4) strong { color: #c8102e; }
+body.theme-christmas .workspace-tabs button.active,
+body.theme-christmas .ranking-page .ranking-tabs button.active { background: #c8102e; }
+body.theme-christmas .day-chip { background: #c8102e; color: #fff; }
+body.theme-christmas .day-chip.weekend { background: #1f5b3a; }
+body.theme-christmas .cycle-next-badge { background: linear-gradient(90deg, #c8102e, #f2c14e); }
+body.theme-christmas .login-wordmark span { color: #fff; text-shadow: 0 2px 0 #8e0e22, 0 0 18px rgba(242, 193, 78, .7); }
+body.theme-christmas.main-bg-scene .launch-splash { background: linear-gradient(180deg, rgba(142, 14, 34, .35), rgba(142, 14, 34, .1) 40%, rgba(0, 0, 0, 0)), var(--sk-full) center / cover no-repeat, #8e0e22; }
+body.theme-christmas .launch-splash .launch-wordmark { background: rgba(200, 16, 46, .88); color: #fff; }
+body.theme-christmas .launch-splash .launch-wordmark * { color: #fff !important; }
+
+/* 눈 내림 (터치 방해 없음) */
+.xmas-snow { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
+body.modal-open .xmas-snow, body.page-ranking .xmas-snow { z-index: 1; }
+
+/* 캐럴 음소거 버튼 */
+.xmas-bgm-btn {
+  position: fixed;
+  left: 14px;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  z-index: 96;
+  width: 46px;
+  height: 46px;
+  border: 2px solid #f2c14e;
+  border-radius: 50%;
+  background: #c8102e;
+  color: #fff;
+  font-size: 20px;
+  box-shadow: 0 6px 16px rgba(142, 14, 34, .35);
+}
+
+/* 강제 적용 안내 바 */
+.xmas-notice {
+  position: fixed;
+  left: 50%;
+  top: calc(12px + env(safe-area-inset-top));
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(94vw, 420px);
+  padding: 10px 10px 10px 14px;
+  border: 1.5px solid #f2c14e;
+  border-radius: 16px;
+  background: #c8102e;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  transform: translateX(-50%);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .25);
+}
+.xmas-notice span { flex: 1; }
+.xmas-notice button { min-height: 32px; padding: 0 10px; border: 0; border-radius: 999px; background: #fff; color: #c8102e; font-weight: 900; }
+.xmas-notice [data-xmas-close] { width: 32px; padding: 0; background: rgba(255, 255, 255, .2); color: #fff; }
+
+body.theme-christmas .ranking-page-hero { background: var(--sk-full) center 30% / cover no-repeat, #8e0e22; }
+body.theme-christmas .social-tabs button.active { background: #c8102e; }
+
+/* ================= 날짜 칩: 스킨별 그림 배지 ================= */
+body.skin-on .day-chip,
+body.skin-on .day-chip.weekend {
+  width: 60px;
+  height: 60px;
+  background: var(--chip-img) center / contain no-repeat transparent;
+  color: var(--text-strong);
+  box-shadow: none;
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, .14));
+}
+body.skin-on .day-chip b { font-size: 17px; }
+body.skin-on .day-chip.weekend b, body.skin-on .day-chip.weekend small { color: #c8102e; }
+body.theme-night .day-chip, body.theme-night .day-chip.weekend { color: #f4f7f2; }
+body.theme-night .day-chip.weekend b, body.theme-night .day-chip.weekend small { color: #f2c14e; }
+body.skin-on .day-chip i { top: 0; right: 0; }
+body.theme-diary { --chip-img: url("/assets/chips/diary.webp"); }
+body.theme-garden { --chip-img: url("/assets/chips/garden.webp"); }
+body.theme-clean { --chip-img: url("/assets/chips/clean.webp"); }
+body.theme-spring { --chip-img: url("/assets/chips/spring.webp"); }
+body.theme-summer { --chip-img: url("/assets/chips/summer.webp"); }
+body.theme-winter { --chip-img: url("/assets/chips/winter.webp"); }
+body.theme-night { --chip-img: url("/assets/chips/night.webp"); }
+body.theme-village { --chip-img: url("/assets/chips/village.webp"); }
+body.theme-seaside { --chip-img: url("/assets/chips/seaside.webp"); }
+body.theme-balloon { --chip-img: url("/assets/chips/balloon.webp"); }
+body.theme-christmas { --chip-img: url("/assets/chips/christmas.webp"); }

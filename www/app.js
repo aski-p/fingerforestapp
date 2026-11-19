@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV87";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.19.5";
+const appVersion = "3.20.0";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -314,6 +314,7 @@ window.addEventListener("resize", updateVisualViewportMetrics);
 ["loginId", "loginPw"].forEach((id) => enableReliableInputFocus($(id)));
 
 const themes = [
+  { id: "christmas", label: "크리스마스 에디션", category: "special", swatch: ["#fff8f2", "#c8102e", "#1f5b3a"] },
   { id: "diary", label: "숲속 다이어리", category: "special", swatch: ["#f7f3e8", "#3e6b3a", "#a75a12"] },
   { id: "clean", label: "클린", category: "special", swatch: ["#f5f7f8", "#126447", "#15241e"] },
   { id: "garden", label: "성장 정원", category: "special", swatch: ["#eef7ee", "#2e8b3d", "#f08a1c"] },
@@ -784,7 +785,7 @@ function applyAppearance() {
 
 function initializeAppearanceSettings() {
   setAppearanceSettings({
-    theme: migratedTheme(storeGet(themeKey) || ""),
+    theme: forceChristmasOnce(migratedTheme(storeGet(themeKey) || "")),
     font: storeGet(fontKey) || "pretendard",
   });
 }
@@ -797,6 +798,11 @@ function previewAppearance(settings = appearanceSettings()) {
   if (theme !== "default") document.body.classList.add(`theme-${theme}`);
   document.body.classList.toggle("skin-on", SKIN_IDS.has(theme));
   applySkinCharacters(theme);
+  if (typeof currentState === "object" && currentState && Array.isArray(currentState.targetCycle)) {
+    try { renderTargetCycle(currentState); } catch (_err) { /* 첫 렌더 전 */ }
+  }
+  // 파일 끝에서 선언되는 크리스마스 효과는 스크립트를 다 읽은 뒤에 켠다
+  window.setTimeout(() => { if (typeof xmasEffects === "function" && typeof xmas === "object" && xmas) xmasEffects(theme === "christmas"); }, 0);
   renderSkinBanner(theme);
   document.body.classList.add(`font-${font}`);
   updateAppearanceSelection({ theme, font });
@@ -836,6 +842,7 @@ function appearanceSettings() {
 const skinMigrationKey = "fruitSkinDiaryV318";
 const DEFAULT_SKIN = "diary";
 const skinBannerText = {
+  christmas: ["크리스마스 에디션", "눈 내리는 숲에서 열매 선물을 나눠요"],
   diary: ["숲속 다이어리", "숲에서 쌓이는 우리의 업무와 마음 기록"],
   garden: ["성장 정원", "함께 가꾸는 우리 팀의 성장 정원"],
   clean: ["FingerForest", "동료에게 열매를, 한 번에"],
@@ -849,8 +856,38 @@ const skinBannerText = {
 };
 const SKIN_IDS = new Set(Object.keys(skinBannerText));
 
+const xmasForcedKey = "fruitXmasEdition2026";
+const xmasPrevThemeKey = "fruitXmasPrevTheme";
+
+// 크리스마스 에디션: 기기마다 한 번 강제로 적용한다. '원래 테마로'를 누른 사람은 다시 바꾸지 않는다.
+function forceChristmasOnce(theme) {
+  if (storeGet(xmasForcedKey)) return theme;
+  storeSet(xmasForcedKey, "applied");
+  storeSet(xmasPrevThemeKey, theme && theme !== "christmas" ? theme : "diary");
+  window.setTimeout(showXmasNotice, 2600);
+  return "christmas";
+}
+
+function showXmasNotice() {
+  if (document.getElementById("xmasNotice")) return;
+  const bar = document.createElement("div");
+  bar.id = "xmasNotice";
+  bar.className = "xmas-notice";
+  bar.innerHTML = '<span>🎄 크리스마스 에디션 적용!</span><button type="button" data-xmas-restore>원래 테마로</button><button type="button" data-xmas-close aria-label="닫기">×</button>';
+  document.body.appendChild(bar);
+  bar.querySelector("[data-xmas-close]").addEventListener("click", () => bar.remove());
+  bar.querySelector("[data-xmas-restore]").addEventListener("click", () => {
+    const prev = storeGet(xmasPrevThemeKey) || "diary";
+    storeSet(xmasForcedKey, "restored");
+    setAppearanceSettings({ ...appearanceSettings(), theme: prev });
+    if (isUnlocked()) api("/api/profile-settings", appearanceSettings()).catch(() => {});
+    bar.remove();
+    toast("원래 테마로 돌아왔어요. 설정 > 스킨에서 언제든 크리스마스를 고를 수 있어요.");
+  });
+}
+
 function migratedTheme(theme) {
-  // 3.19.5 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
+  // 3.20.0 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
   if ((!theme || theme === "default") && storeGet(skinMigrationKey) !== "1") {
     storeSet(skinMigrationKey, "1");
     return DEFAULT_SKIN;
@@ -909,7 +946,7 @@ async function loadProfileSettings({ silent = true } = {}) {
   if (!isUnlocked()) return;
   try {
     const settings = await api("/api/profile-settings");
-    if (!settings.theme || settings.theme === "default") {
+    if (!settings.theme || settings.theme === "default" || storeGet(xmasForcedKey) === "applied") {
       const local = storeGet(themeKey);
       if (local && local !== "default") settings.theme = local;
     }
@@ -1222,8 +1259,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.19.5",
-        badge: "/icons/app-icon-192.png?v=3.19.5",
+        icon: "/icons/app-icon-192.png?v=3.20.0",
+        badge: "/icons/app-icon-192.png?v=3.20.0",
         data: { url: item.url || "/" },
       });
       return true;
@@ -1885,7 +1922,8 @@ function cycleAvatarIndex(person) {
 }
 
 function animalAvatarUrl(index) {
-  return `/assets/avatars/animal-${String(index + 1).padStart(2, "0")}.webp`;
+  const xmas = document.body.classList.contains("theme-christmas") ? "xmas-" : "";
+  return `/assets/avatars/animal-${xmas}${String(index + 1).padStart(2, "0")}.webp`;
 }
 
 // 사람마다 동물 캐릭터 하나(같은 사람은 늘 같은 동물). used를 주면 그 목록 안에서는 겹치지 않게 다음 동물로 민다.
@@ -4309,3 +4347,137 @@ $("socialNoteForm").addEventListener("submit", async (event) => {
 window.setInterval(() => { if (isUnlocked() && !document.hidden) refreshSocialSummary(); }, 20000);
 window.setTimeout(() => refreshSocialSummary(), 4000);
 if (location.hash === "#chat") window.setTimeout(() => openChatPopup(), 1500);
+
+// ================= 크리스마스 에디션: 눈 내림 + 캐럴 BGM =================
+var XMAS_BGM = ["/assets/bgm/jingle-bells.mp3", "/assets/bgm/we-wish-you.mp3", "/assets/bgm/deck-the-halls.mp3"];
+var XMAS_BGM_CACHE = "ff-bgm-v1";
+var xmasMuteKey = "fruitXmasBgmMuted";
+var xmas = { on: false, snow: null, raf: 0, flakes: [], audio: null, track: "", started: false };
+
+function xmasReducedMotion() {
+  return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function startSnow() {
+  if (xmas.snow || xmasReducedMotion()) return;
+  const canvas = document.createElement("canvas");
+  canvas.id = "xmasSnow";
+  canvas.className = "xmas-snow";
+  canvas.setAttribute("aria-hidden", "true");
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext("2d");
+  const resize = () => {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = innerWidth * dpr;
+    canvas.height = innerHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const count = Math.round(Math.min(80, Math.max(30, (innerWidth * innerHeight) / 9000)));
+    xmas.flakes = Array.from({ length: count }, () => ({
+      x: Math.random() * innerWidth, y: Math.random() * innerHeight,
+      r: 1 + Math.random() * 2.6, v: 0.35 + Math.random() * 0.9, w: Math.random() * Math.PI * 2, o: 0.55 + Math.random() * 0.4,
+    }));
+  };
+  resize();
+  window.addEventListener("resize", resize);
+  let last = 0;
+  const frame = (t) => {
+    xmas.raf = requestAnimationFrame(frame);
+    if (document.hidden || t - last < 33) return; // 약 30fps, 숨겨지면 쉼
+    last = t;
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    for (const f of xmas.flakes) {
+      f.y += f.v; f.w += 0.02; f.x += Math.sin(f.w) * 0.4;
+      if (f.y > innerHeight + 4) { f.y = -4; f.x = Math.random() * innerWidth; }
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${f.o})`; ctx.fill();
+    }
+  };
+  xmas.raf = requestAnimationFrame(frame);
+  xmas.snow = canvas;
+}
+
+function stopSnow() {
+  if (xmas.raf) cancelAnimationFrame(xmas.raf);
+  xmas.raf = 0;
+  xmas.snow?.remove();
+  xmas.snow = null;
+}
+
+// 한 번 받은 곡은 기기 저장소(Cache Storage)에 두고 다시 받지 않는다. 저장소가 지워졌을 때만 다시 받는다.
+async function xmasTrackUrl(url) {
+  try {
+    if (!("caches" in window)) return url;
+    const cache = await caches.open(XMAS_BGM_CACHE);
+    let res = await cache.match(url);
+    if (!res) {
+      const fresh = await fetch(url, { cache: "no-store" });
+      if (!fresh.ok) return url;
+      await cache.put(url, fresh.clone());
+      res = fresh;
+    }
+    return URL.createObjectURL(await res.blob());
+  } catch (_err) {
+    return url;
+  }
+}
+
+function renderXmasMuteButton() {
+  let btn = document.getElementById("xmasBgmBtn");
+  if (!xmas.on) { btn?.remove(); return; }
+  if (!btn) {
+    btn = document.createElement("button");
+    btn.id = "xmasBgmBtn";
+    btn.type = "button";
+    btn.className = "xmas-bgm-btn";
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const muted = storeGet(xmasMuteKey) !== "1";
+      storeSet(xmasMuteKey, muted ? "1" : "0");
+      if (muted) xmas.audio?.pause(); else playXmasBgm();
+      renderXmasMuteButton();
+    });
+    document.body.appendChild(btn);
+  }
+  const muted = storeGet(xmasMuteKey) === "1";
+  btn.textContent = muted ? "🔇" : "🎵";
+  btn.setAttribute("aria-label", muted ? "캐럴 켜기" : "캐럴 끄기");
+}
+
+async function playXmasBgm() {
+  if (!xmas.on || storeGet(xmasMuteKey) === "1") return;
+  if (!xmas.audio) {
+    xmas.track = XMAS_BGM[Math.floor(Math.random() * XMAS_BGM.length)];
+    xmas.audio = new Audio();
+    xmas.audio.loop = true;
+    xmas.audio.volume = 0.45;
+    xmas.audio.src = await xmasTrackUrl(xmas.track);
+  }
+  try { await xmas.audio.play(); xmas.started = true; } catch (_err) { /* 첫 터치 전에는 막힌다 */ }
+}
+
+function xmasFirstGesture() {
+  if (!xmas.started) playXmasBgm();
+}
+
+function xmasEffects(on) {
+  xmas.on = on;
+  document.body.classList.toggle("xmas-on", on);
+  if (on) {
+    startSnow();
+    renderXmasMuteButton();
+    playXmasBgm();
+    document.addEventListener("pointerdown", xmasFirstGesture, { passive: true });
+  } else {
+    stopSnow();
+    xmas.audio?.pause();
+    renderXmasMuteButton();
+    document.removeEventListener("pointerdown", xmasFirstGesture);
+  }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (!xmas.audio) return;
+  if (document.hidden) xmas.audio.pause();
+  else if (xmas.on && xmas.started && storeGet(xmasMuteKey) !== "1") xmas.audio.play().catch(() => {});
+});
+if (document.body.classList.contains("theme-christmas")) xmasEffects(true);
