@@ -336,3 +336,75 @@ body.theme-diary .skin-banner span {
   background: linear-gradient(90deg, rgba(251, 246, 234, .85), rgba(251, 246, 234, 0));
   padding: 2px 8px 2px 0;
 }
+
+/* ---------- 3.18.6: 그림을 위쪽 배너가 아니라 화면 전체 배경으로 ----------
+   iOS Safari는 background-attachment: fixed를 무시하므로 화면에 고정된 ::before 층에 깐다. */
+body.theme-diary { --sk-full: url("/assets/skins/a-full.webp"); }
+body.theme-garden { --sk-full: url("/assets/skins/c-full.webp"); }
+
+:is(body.theme-diary, body.theme-garden),
+:is(body.theme-diary, body.theme-garden).main-bg-scene {
+  background: transparent;
+}
+
+:is(body.theme-diary, body.theme-garden)::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--sk-full) center / cover no-repeat, var(--bg);
+  pointer-events: none;
+}
+
+html:has(body.theme-diary) { background: #f7f3e8; }
+html:has(body.theme-garden) { background: #eef7ee; }
+
+/* 배너는 그림 없이 제목만: 전체 배경 그림이 비쳐 보이게 */
+:is(body.theme-diary, body.theme-garden) .skin-banner {
+  min-height: 0;
+  margin: -6px 0 10px;
+  padding: 8px 4px 0;
+  background: none;
+}
+
+:is(body.theme-diary, body.theme-garden) .skin-banner span {
+  max-width: none;
+  background: none;
+  padding: 0;
+}
+
+/* 카드는 살짝 비치는 종이/유리 느낌 */
+body.theme-diary :is(.card, .metric, .balance-toolbar, .target-cycle-card, .login-card .login-profile) {
+  background: rgba(255, 252, 245, 0.9);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+body.theme-garden :is(.card, .metric, .balance-toolbar, .target-cycle-card, .login-card .login-profile) {
+  background: rgba(255, 255, 255, 0.88);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+:is(body.theme-diary, body.theme-garden) .hero {
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+
+/* 스플래시도 전체 배경 그림 */
+body.theme-diary.main-bg-scene .launch-splash,
+body.theme-garden.main-bg-scene .launch-splash {
+  background: var(--sk-full) center / cover no-repeat, var(--bg);
+}
+
+/* 로그인 전 화면: 그림 위에 카드가 떠 보이도록 */
+:is(body.theme-diary, body.theme-garden).logged-out .login-card {
+  background: rgba(255, 252, 245, 0.92);
+}
+
+:is(body.theme-diary, body.theme-garden) .skin-banner span {
+  justify-self: start;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 252, 245, 0.82);
+  color: var(--text);
+}

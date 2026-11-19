@@ -33,7 +33,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.18.5"
+APP_VERSION = "3.18.6"
 ANDROID_APP_VERSION = "3.17.2"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -55,8 +55,8 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "공지·설정 같은 팝업이 화면 중간에 끼어 보이던 문제를 고쳤습니다. 이제 화면 전체를 덮고 가운데 떠요.",
-    "동료 얼굴은 귀여운 동물 캐릭터 20종으로 보여요.",
+    "숲속 다이어리·성장 정원 스킨의 그림을 화면 위쪽 띠가 아니라 화면 전체 배경으로 바꿨습니다. 카드는 살짝 비치는 종이처럼 보여요.",
+    "공지·왕관 같은 팝업이 화면 밖에서 열려 반응이 없어 보이던 문제를 고쳤습니다.",
 ]
 VALID_THEMES = {
     "diary",
