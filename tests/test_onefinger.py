@@ -354,3 +354,39 @@ class WorklogRetryTests(unittest.TestCase):
             self.assertNotEqual(first, "NEXT-DAY")
         self.assertEqual(store["worklogNextRunAt"], "NEXT-DAY")
         self.assertEqual(store["worklogRetryCount"], 0)
+
+
+class SaveWorklogOnceTests(unittest.TestCase):
+    def _run(self, save_result):
+        import datetime as _dt
+        state = {
+            "worklogEnabled": True, "worklogProjectId": "525", "worklogProjectName": "P", "worklogContent": "내용",
+            "worklogSeedCount": 3, "worklogTargetEmployeeId": "144", "worklogTargetEmployeeName": "대상",
+            "worklogScheduleTime": "09:05", "worklogScheduleDates": ["2026-11-20"],
+        }
+        events = []
+        seeds = []
+        with mock.patch.object(fruit_auto, "require_owner", lambda k: "o"), \
+                mock.patch.object(fruit_auto, "get_account_state", lambda k: dict(state)), \
+                mock.patch.object(fruit_auto, "save_account_state", lambda k, st: state.update(st)), \
+                mock.patch.object(fruit_auto, "account_login", lambda k: (object(), {}, {}, {}, "133", "나")), \
+                mock.patch.object(fruit_auto, "current_seed_fruit", lambda c, e=None: (20, 10)), \
+                mock.patch.object(fruit_auto, "_save_worklog_onefinger", lambda *a: save_result), \
+                mock.patch.object(fruit_auto, "log_event", lambda e: events.append(e)), \
+                mock.patch.object(fruit_auto, "append_jsonl", lambda p, e: None), \
+                mock.patch.object(fruit_auto, "record_seed_transfer_history", lambda e: seeds.append(e)):
+            result = fruit_auto.save_worklog_once(owner_key="o", run_date="2026-11-20", force=True)
+        return result, events, seeds, state
+
+    def test_saved_worklog_records_history_and_seed(self):
+        result, events, seeds, state = self._run("saved")
+        self.assertEqual(result["action"], "worklog_sent")
+        self.assertEqual(result["stdDt"], "20261120")
+        self.assertTrue(any(e.get("action") == "worklog_sent" for e in events))
+        self.assertEqual(len(seeds), 1)
+        self.assertEqual(state["worklogLastResult"], "sent")
+
+    def test_existing_worklog_does_not_record_a_seed_gift(self):
+        result, events, seeds, state = self._run("exists")
+        self.assertEqual(seeds, [])
+        self.assertEqual(state["worklogLastResult"], "exists")

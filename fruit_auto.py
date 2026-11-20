@@ -5231,8 +5231,11 @@ def save_worklog_once(owner_key=None, run_date=None, force=False):
         else:
             matches, scheduled = worklog_schedule_matches(state, local_now)
             target_date = scheduled.date() if matches else local_now.date()
+        std_dt = target_date.strftime("%Y%m%d")  # 예전 포레스트 기록 형식(YYYYMMDD)을 그대로 쓴다
         api_called_at = now_iso()
         save_result = _save_worklog_onefinger(client, employee_info, state, target_date, seed_count)
+        if save_result != "saved":
+            seed_count = 0  # 이미 있던 일지라 이번에 씨앗을 보내지 않았다
         remaining_seeds = available_seeds
         remaining_berries = available_berries
         if seed_count:
