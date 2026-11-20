@@ -118,6 +118,7 @@
 
 
 
+
 			iVBORw0KGgoAAAANSUhEUgAAAMAAAADAEAYAAAACTLBEAAAABGdBTUEAALGPC/xh
 			BQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAA
 			BmJLR0QAAAAAAAD5Q7t/AAAAB3RJTUUH6gYEAjo5AgFyrAAAgABJREFUeNrsnXec
@@ -1388,7 +1389,7 @@
 			<key>Precomposed</key>
 			<true/>
 			<key>URL</key>
-			<string>https://web-production-011c4.up.railway.app/?v=3.20.1</string>
+			<string>https://web-production-011c4.up.railway.app/?v=3.20.2</string>
 		</dict>
 	</array>
 	<key>PayloadDescription</key>

@@ -322,3 +322,35 @@ class WorklogBodyTests(unittest.TestCase):
         self.assertEqual(captured["body"]["selfPraise"], 0)
         self.assertEqual(captured["body"]["expectedVersion"], 0)
         self.assertIsNone(captured["body"]["seedGift"])
+
+
+class WorklogRetryTests(unittest.TestCase):
+    def test_failed_scheduled_run_retries_same_day_then_gives_up(self):
+        import datetime as _dt
+        store = {"worklogEnabled": True, "worklogNextRunAt": (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(minutes=1)).isoformat()}
+        saved = {}
+
+        def get_state(_k):
+            return dict(store)
+
+        def save_state(_k, st):
+            store.clear(); store.update(st); saved["n"] = saved.get("n", 0) + 1
+
+        with mock.patch.object(fruit_auto, "get_account_state", get_state), \
+                mock.patch.object(fruit_auto, "save_account_state", save_state), \
+                mock.patch.object(fruit_auto, "expire_stale_worklog_run", lambda st: False), \
+                mock.patch.object(fruit_auto, "worklog_due", lambda st: True), \
+                mock.patch.object(fruit_auto, "next_worklog_run_at", lambda st, now=None: "NEXT-DAY"), \
+                mock.patch.object(fruit_auto, "save_worklog_once", side_effect=fruit_auto.FruitAutoError("400")):
+            first = None
+            for attempt in range(4):
+                with self.assertRaises(fruit_auto.FruitAutoError):
+                    fruit_auto.run_worklog_if_due("o")
+                if attempt == 0:
+                    first = store["worklogNextRunAt"]
+        now_kst_day = _dt.datetime.now(fruit_auto.KST).date()
+        retry_day = _dt.datetime.fromisoformat(first).astimezone(fruit_auto.KST).date()
+        if retry_day == now_kst_day:
+            self.assertNotEqual(first, "NEXT-DAY")
+        self.assertEqual(store["worklogNextRunAt"], "NEXT-DAY")
+        self.assertEqual(store["worklogRetryCount"], 0)

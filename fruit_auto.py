@@ -5362,6 +5362,10 @@ def expire_stale_worklog_run(account, now=None):
     return True
 
 
+WORKLOG_RETRY_MINUTES = 10
+WORKLOG_MAX_RETRIES = 3
+
+
 def run_worklog_if_due(owner_key):
     state = get_account_state(owner_key)
     if expire_stale_worklog_run(state):
@@ -5374,21 +5378,42 @@ def run_worklog_if_due(owner_key):
         })
         return {"action": "skipped", "reason": "worklog_stale", "ownerKey": owner_key, "nextRunAt": state.get("worklogNextRunAt")}
     if not worklog_due(state):
+        if int(state.get("worklogRetryCount") or 0) > 0:
+            pending = parse_iso(state.get("worklogNextRunAt"))
+            now = dt.datetime.now(dt.timezone.utc)
+            if pending and pending > now and pending.astimezone(KST).date() == now.astimezone(KST).date():
+                return {"action": "skipped", "reason": "worklog_retry_pending", "ownerKey": owner_key, "nextRunAt": state.get("worklogNextRunAt")}
         next_run = next_worklog_run_at(state)
         if next_run != state.get("worklogNextRunAt"):
             state["worklogNextRunAt"] = next_run
             save_account_state(owner_key, state)
         return {"action": "skipped", "reason": "worklog_not_due", "ownerKey": owner_key}
     try:
-        return save_worklog_once(owner_key=owner_key)
+        result = save_worklog_once(owner_key=owner_key)
+        latest = get_account_state(owner_key)
+        if latest.get("worklogRetryCount"):
+            latest["worklogRetryCount"] = 0
+            save_account_state(owner_key, latest)
+        return result
     except Exception as exc:
         state = get_account_state(owner_key)
+        retries = int(state.get("worklogRetryCount") or 0)
+        now = dt.datetime.now(dt.timezone.utc)
+        retry_at = now + dt.timedelta(minutes=WORKLOG_RETRY_MINUTES)
+        # 같은 날 안에서는 10분 뒤에 다시(최대 3번). 그래도 안 되면 다음 예약 날짜로 넘어간다.
+        same_day = retry_at.astimezone(KST).date() == now.astimezone(KST).date()
+        if retries < WORKLOG_MAX_RETRIES and same_day:
+            next_run = retry_at.isoformat()
+            state["worklogRetryCount"] = retries + 1
+        else:
+            next_run = next_worklog_run_at(state)
+            state["worklogRetryCount"] = 0
         state.update(
             {
                 "worklogLastRunAt": now_iso(),
                 "worklogLastResult": "failed",
                 "worklogLastError": str(exc),
-                "worklogNextRunAt": next_worklog_run_at(state),
+                "worklogNextRunAt": next_run,
                 "updatedAt": now_iso(),
             }
         )
