@@ -302,3 +302,23 @@ class LoginLockoutGuardTests(unittest.TestCase):
                 fruit_auto.pms_login(fruit_auto.Client(), "12345678", "old")
             fruit_auto.pms_login(fruit_auto.Client(), "12345678", "new")
         self.assertEqual(state["n"], 2)
+
+
+class WorklogBodyTests(unittest.TestCase):
+    def test_new_worklog_sends_self_praise_zero(self):
+        import datetime as _dt
+        captured = {}
+
+        class C:
+            def worklog(self, date):
+                return None
+
+            def save_worklog(self, date, body):
+                captured["body"] = body
+
+        state = {"worklogProjectId": "525", "worklogProjectName": "P", "worklogContent": "내용"}
+        with mock.patch.object(fruit_auto, "worklog_projects_from_employee_info", lambda info: [{"id": "525", "name": "P"}]):
+            self.assertEqual(fruit_auto._save_worklog_onefinger(C(), {}, state, _dt.date(2026, 11, 20), 0), "saved")
+        self.assertEqual(captured["body"]["selfPraise"], 0)
+        self.assertEqual(captured["body"]["expectedVersion"], 0)
+        self.assertIsNone(captured["body"]["seedGift"])

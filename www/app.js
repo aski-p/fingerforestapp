@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV87";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.20.0";
+const appVersion = "3.20.1";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -616,7 +616,7 @@ function renderUrgentNotice(info = latestAppInfo) {
     el.classList.remove("hidden");
     return;
   }
-  // 3.20.0+ Android app: newer APK on the server -> one tap downloads it and opens the system installer.
+  // 3.20.1+ Android app: newer APK on the server -> one tap downloads it and opens the system installer.
   const androidVersion = info?.androidVersion || "";
   if (window.FruitAndroid?.installUpdate && androidVersion && info?.androidApkUrl && compareVersions(androidVersion, installed) > 0) {
     el.textContent = "";
@@ -908,7 +908,7 @@ function showXmasNotice() {
 }
 
 function migratedTheme(theme) {
-  // 3.20.0 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
+  // 3.20.1 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
   if ((!theme || theme === "default") && storeGet(skinMigrationKey) !== "1") {
     storeSet(skinMigrationKey, "1");
     return DEFAULT_SKIN;
@@ -1280,8 +1280,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.20.0",
-        badge: "/icons/app-icon-192.png?v=3.20.0",
+        icon: "/icons/app-icon-192.png?v=3.20.1",
+        badge: "/icons/app-icon-192.png?v=3.20.1",
         data: { url: item.url || "/" },
       });
       return true;
@@ -2297,6 +2297,8 @@ function openSuccessModal(title, message, ok = true) {
   $("worklogSuccessTitle").textContent = title;
   $("worklogSuccessMessage").textContent = message;
   $("worklogSuccessModal").classList.toggle("is-warn", !ok);
+  const mark = $("worklogSuccessModal").querySelector(".success-mark");
+  if (mark) mark.textContent = ok ? "✓" : "!";
   $("worklogSuccessModal").classList.remove("hidden");
   document.body.classList.add("modal-open");
 }

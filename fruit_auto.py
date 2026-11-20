@@ -5168,7 +5168,7 @@ def _save_worklog_onefinger(client, employee_info, state, target_date, seed_coun
         seed_gift = {"recipients": [{"employeeId": target["emp_id"], "amount": int(seed_count), "message": str(state.get("worklogSeedMessage") or "")[:2000]}]}
     body = {
         "expectedVersion": int((current or {}).get("version") or 0),
-        "selfPraise": 3,
+        "selfPraise": 0,  # 신 포레스트는 새 일지에 셀프 칭찬 0만 받는다(칭찬은 별도 기능)
         "items": [{
             "clientItemKey": str(uuid.uuid4()),
             "entryKind": "project",

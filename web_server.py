@@ -34,7 +34,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.20.0"
+APP_VERSION = "3.20.1"
 ANDROID_APP_VERSION = "3.20.0"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -56,10 +56,8 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "🎄 크리스마스 에디션: 눈 내리는 빨간 숲 마을, 산타 모자를 쓴 동물 친구들, 순록 로딩 캐릭터.",
-    "캐럴 3곡 중 하나가 무작위로 흘러나와요(왼쪽 아래 🎵로 끄고 켜기). 한 번 받은 곡은 기기에 저장돼요.",
-    "업무일지 날짜 칩이 스킨마다 다른 그림 배지로 바뀌었어요.",
-    "설정 > 스킨에서 원래 테마로 언제든 돌아갈 수 있어요.",
+    "업무일지 자동·즉시 작성이 신 포레스트에서 거절(400)되던 문제를 고쳤어요. 오늘 예약분은 자동으로 다시 작성돼요.",
+    "앱 사용자끼리 대화·친구·쪽지를 바로 쓸 수 있어요(오른쪽 아래 말풍선).",
 ]
 VALID_THEMES = {
     "christmas",
@@ -939,7 +937,7 @@ def app_info(handler):
         "iosProfileUrl": f"{base_url}/downloads/{ios_name}" if base_url else f"/downloads/{ios_name}",
         "message": "새 버전이 있습니다. 업데이트 후 다시 실행해주세요.",
         "notice": {
-            # 3.20.0 moved Android to a new app id and a permanent key; old installs (<= 3.17.2) cannot
+            # 3.20.1 moved Android to a new app id and a permanent key; old installs (<= 3.17.2) cannot
             # update in place, so they get a one-tap link to the new APK. The new app offers to remove the old one.
             "enabled": True,
             "maxVersion": "3.17.2",
