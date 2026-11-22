@@ -34,7 +34,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.20.3"
+APP_VERSION = "3.20.4"
 ANDROID_APP_VERSION = "3.20.0"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -937,7 +937,7 @@ def app_info(handler):
         "iosProfileUrl": f"{base_url}/downloads/{ios_name}" if base_url else f"/downloads/{ios_name}",
         "message": "새 버전이 있습니다. 업데이트 후 다시 실행해주세요.",
         "notice": {
-            # 3.20.3 moved Android to a new app id and a permanent key; old installs (<= 3.17.2) cannot
+            # 3.20.4 moved Android to a new app id and a permanent key; old installs (<= 3.17.2) cannot
             # update in place, so they get a one-tap link to the new APK. The new app offers to remove the old one.
             "enabled": True,
             "maxVersion": "3.17.2",
@@ -1457,7 +1457,7 @@ def send_no_cache_headers(handler):
 
 
 def static_cache_control(path, query):
-    versioned_assets = {"/app.js", "/styles.css", "/skins.css", "/request_coordinator.js"}
+    versioned_assets = {"/app.js", "/styles.css", "/skins.css", "/request_coordinator.js", "/social_feed.js"}
     query_version = urllib.parse.parse_qs(query or "").get("v", [None])[0]
     if path in versioned_assets and query_version == APP_VERSION:
         return "public, max-age=31536000, immutable"
@@ -1843,6 +1843,41 @@ def social_error(exc):
     return text
 
 
+_SOCIAL_ONCE = {}
+_SOCIAL_ONCE_LOCK = threading.Lock()
+SOCIAL_ONCE_TTL_SECONDS = 600
+
+
+def social_once(scope, client_id, action):
+    """같은 clientId 로 다시 온 전송(재시도·연타)은 저장·알림을 반복하지 않고 첫 결과를 돌려준다.
+    clientId 가 없는 옛 클라이언트는 그대로 실행한다. 서버 프로세스 메모리에만 둔다(10분)."""
+    client_id = str(client_id or "").strip()[:80]
+    if not client_id:
+        return action()
+    key = (*scope, client_id)
+    now = time.monotonic()
+    with _SOCIAL_ONCE_LOCK:
+        for stale in [k for k, v in _SOCIAL_ONCE.items() if v["expires"] < now]:
+            del _SOCIAL_ONCE[stale]
+        entry = _SOCIAL_ONCE.get(key)
+        if entry is None:
+            entry = _SOCIAL_ONCE[key] = {"lock": threading.Lock(), "expires": now + SOCIAL_ONCE_TTL_SECONDS, "done": False}
+    with entry["lock"]:
+        if entry["done"]:
+            return entry["result"]
+        try:
+            result = action()
+        except Exception:
+            # 실패한 전송은 기억하지 않는다: 같은 clientId 로 다시 보내면 새로 시도한다
+            with _SOCIAL_ONCE_LOCK:
+                if _SOCIAL_ONCE.get(key) is entry:
+                    del _SOCIAL_ONCE[key]
+            raise
+        entry["result"] = result
+        entry["done"] = True
+        return result
+
+
 def social_get(path, query, owner_key):
     svc = social_service()
     me, _name = social_identity(owner_key)
@@ -1872,17 +1907,23 @@ def social_post(path, payload, owner_key):
     if path == "/api/social/room-open":
         return {"room": svc.open_room(me, name, payload.get("members") or [], payload.get("title") or "")}
     if path == "/api/social/send":
-        sent = svc.send(me, name, payload.get("room"), payload.get("body"))
-        social_push(sent["recipients"], name or "새 메시지", str(payload.get("body") or ""), f"room-{payload.get('room')}")
-        return {"id": sent["id"]}
+        def send_message():
+            sent = svc.send(me, name, payload.get("room"), payload.get("body"))
+            social_push(sent["recipients"], name or "새 메시지", str(payload.get("body") or ""), f"room-{payload.get('room')}")
+            return {"id": sent["id"]}
+
+        return social_once(("send", me, str(payload.get("room"))), payload.get("clientId"), send_message)
     if path == "/api/social/read":
         return {"status": svc.mark_read(me, payload.get("room"), payload.get("lastId"))}
     if path == "/api/social/leave":
         return {"status": svc.leave(me, payload.get("room"))}
     if path == "/api/social/note":
-        result = svc.send_note(me, name, payload.get("to"), payload.get("toName"), payload.get("body"))
-        social_push([str(payload.get("to"))], f"쪽지 · {name}", str(payload.get("body") or ""), f"note-{result['id']}")
-        return result
+        def send_note():
+            result = svc.send_note(me, name, payload.get("to"), payload.get("toName"), payload.get("body"))
+            social_push([str(payload.get("to"))], f"쪽지 · {name}", str(payload.get("body") or ""), f"note-{result['id']}")
+            return result
+
+        return social_once(("note", me, str(payload.get("to"))), payload.get("clientId"), send_note)
     if path == "/api/social/note-read":
         return {"status": svc.read_note(me, payload.get("id"))}
     return None

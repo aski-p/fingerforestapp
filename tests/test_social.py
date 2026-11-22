@@ -100,3 +100,84 @@ class SocialAvailabilityTests(unittest.TestCase):
                     web_server.social_service()
         self.assertEqual(calls["n"], 2)
         self.assertIsNone(web_server._SOCIAL)
+
+
+class SocialSendIdempotencyTests(unittest.TestCase):
+    """같은 clientId 로 두 번 닿은 전송(재시도·연타)은 한 번만 저장·알림된다."""
+
+    def setUp(self):
+        import web_server
+        self.ws = web_server
+        web_server._SOCIAL_ONCE.clear()
+        self.sent = []
+        self.pushes = []
+
+        class FakeSvc:
+            def send(inner, me, name, room, body):
+                self.sent.append((me, room, body))
+                return {"id": len(self.sent), "recipients": ["2"]}
+
+            def send_note(inner, me, name, to, to_name, body):
+                self.sent.append((me, to, body))
+                return {"id": len(self.sent)}
+
+        from unittest import mock
+        self.patches = [
+            mock.patch.object(web_server, "social_service", lambda: FakeSvc()),
+            mock.patch.object(web_server, "social_identity", lambda key: ("1", "가")),
+            mock.patch.object(web_server, "social_push", lambda *a, **k: self.pushes.append(a)),
+        ]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        self.ws._SOCIAL_ONCE.clear()
+
+    def test_send_with_same_client_id_is_stored_once(self):
+        payload = {"room": 5, "body": "안녕", "clientId": "c-1"}
+        first = self.ws.social_post("/api/social/send", payload, "k")
+        second = self.ws.social_post("/api/social/send", dict(payload), "k")
+        self.assertEqual(first, second)
+        self.assertEqual(len(self.sent), 1)
+        self.assertEqual(len(self.pushes), 1)
+
+    def test_different_client_ids_and_missing_client_id_still_send(self):
+        self.ws.social_post("/api/social/send", {"room": 5, "body": "a", "clientId": "c-1"}, "k")
+        self.ws.social_post("/api/social/send", {"room": 5, "body": "a", "clientId": "c-2"}, "k")
+        self.ws.social_post("/api/social/send", {"room": 5, "body": "a"}, "k")
+        self.ws.social_post("/api/social/send", {"room": 5, "body": "a"}, "k")
+        self.assertEqual(len(self.sent), 4)
+
+    def test_concurrent_duplicates_run_the_action_once(self):
+        import threading
+        results = []
+        threads = [threading.Thread(target=lambda: results.append(
+            self.ws.social_post("/api/social/send", {"room": 5, "body": "동시", "clientId": "c-9"}, "k")))
+            for _ in range(8)]
+        [t.start() for t in threads]
+        [t.join() for t in threads]
+        self.assertEqual(len(self.sent), 1)
+        self.assertEqual(len({r["id"] for r in results}), 1)
+
+    def test_failed_send_is_not_remembered_so_retry_works(self):
+        calls = {"n": 0}
+
+        def flaky():
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("일시 오류")
+            return {"id": 7}
+
+        with self.assertRaises(RuntimeError):
+            self.ws.social_once(("send", "1", "5"), "c-3", flaky)
+        self.assertEqual(self.ws.social_once(("send", "1", "5"), "c-3", flaky), {"id": 7})
+        self.assertEqual(calls["n"], 2)
+
+    def test_note_with_same_client_id_is_stored_once(self):
+        payload = {"to": "2", "toName": "나", "body": "쪽지", "clientId": "n-1"}
+        self.ws.social_post("/api/social/note", payload, "k")
+        self.ws.social_post("/api/social/note", dict(payload), "k")
+        self.assertEqual(len(self.sent), 1)
+        self.assertEqual(len(self.pushes), 1)

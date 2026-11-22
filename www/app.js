@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV87";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.20.3";
+const appVersion = "3.20.4";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -616,7 +616,7 @@ function renderUrgentNotice(info = latestAppInfo) {
     el.classList.remove("hidden");
     return;
   }
-  // 3.20.3+ Android app: newer APK on the server -> one tap downloads it and opens the system installer.
+  // 3.20.4+ Android app: newer APK on the server -> one tap downloads it and opens the system installer.
   const androidVersion = info?.androidVersion || "";
   if (window.FruitAndroid?.installUpdate && androidVersion && info?.androidApkUrl && compareVersions(androidVersion, installed) > 0) {
     el.textContent = "";
@@ -908,7 +908,7 @@ function showXmasNotice() {
 }
 
 function migratedTheme(theme) {
-  // 3.20.3 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
+  // 3.20.4 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
   if ((!theme || theme === "default") && storeGet(skinMigrationKey) !== "1") {
     storeSet(skinMigrationKey, "1");
     return DEFAULT_SKIN;
@@ -1280,8 +1280,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.20.3",
-        badge: "/icons/app-icon-192.png?v=3.20.3",
+        icon: "/icons/app-icon-192.png?v=3.20.4",
+        badge: "/icons/app-icon-192.png?v=3.20.4",
         data: { url: item.url || "/" },
       });
       return true;
@@ -4113,7 +4113,7 @@ $("chatForm").addEventListener("submit", async (event) => {
   await sendChatMessage();
 });
 $("chatInput").addEventListener("keydown", async (event) => {
-  if (event.key === "Enter" && !event.shiftKey) {
+  if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
     event.preventDefault();
     await sendChatMessage();
   }
@@ -4156,6 +4156,9 @@ setTimeout(() => checkReceivedNotifications({ silent: true }), 2500);
 
 // ================= 사용자 채팅: 대화 · 친구 · 쪽지 =================
 const social = { tab: "rooms", summary: null, roomId: null, roomTitle: "", lastId: 0, noteTo: null, pollTimer: null, roomTimer: null };
+const socialFeed = window.FingerForestSocialFeed.createMessageFeed();
+const socialSendGate = window.FingerForestSocialFeed.createSendGate();
+const socialNoteGate = window.FingerForestSocialFeed.createSendGate();
 
 function socialTimeLabel(iso) {
   if (!iso) return "";
@@ -4283,15 +4286,19 @@ function renderSocialMessages(items, append) {
 }
 
 async function loadSocialMessages(initial) {
-  if (!social.roomId) return;
+  const roomId = social.roomId;
+  if (!roomId) return;
   try {
-    const data = await api(`/api/social/messages?room=${social.roomId}&after=${initial ? 0 : social.lastId}`);
-    const items = data.items || [];
+    const data = await api(`/api/social/messages?room=${roomId}&after=${initial ? 0 : socialFeed.lastId}`);
+    // 4초 폴링과 전송 직후 조회가 겹치면 같은 after 값으로 같은 메시지를 두 번 받는다.
+    // 이미 그린 id는 버리고, 그 사이 다른 방으로 옮겼으면 응답 전체를 버린다.
+    const items = socialFeed.accept(roomId, data.items || []);
+    if (social.roomId !== roomId) return;
     if (initial) renderSocialMessages(items, false);
     else if (items.length) { $("socialMessages").querySelector(".chat-empty")?.remove(); renderSocialMessages(items, true); }
+    social.lastId = socialFeed.lastId;
     if (items.length) {
-      social.lastId = items[items.length - 1].id;
-      api("/api/social/read", { room: social.roomId, lastId: social.lastId }).catch(() => {});
+      api("/api/social/read", { room: roomId, lastId: socialFeed.lastId }).catch(() => {});
     }
   } catch (err) { if (initial) toast(err.message); }
 }
@@ -4305,6 +4312,7 @@ async function openSocialRoom(roomId, title) {
   social.roomId = roomId;
   social.roomTitle = title || "대화";
   social.lastId = 0;
+  socialFeed.open(roomId);
   $("socialRoomTitle").textContent = social.roomTitle;
   showSocialView("room");
   await loadSocialMessages(true);
@@ -4344,12 +4352,17 @@ $("socialSendForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const input = $("socialInput");
   const body = (input.value || "").trim();
-  if (!body || !social.roomId) return;
+  const room = social.roomId;
+  if (!body || !room || socialSendGate.busy) return;
   input.value = "";
-  try {
-    await api("/api/social/send", { room: social.roomId, body });
-    await loadSocialMessages(false);
-  } catch (err) { input.value = body; toast(err.message); }
+  // clientId: 같은 전송이 서버에 두 번 닿아도(재시도·연타) 한 번만 저장되게 하는 번호
+  const clientId = randomId();
+  await socialSendGate.run(async () => {
+    try {
+      await api("/api/social/send", { room, body, clientId });
+      await loadSocialMessages(false);
+    } catch (err) { if (!input.value) input.value = body; toast(err.message); }
+  });
 });
 $("socialInput").addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); $("socialSendForm").requestSubmit(); }
@@ -4359,13 +4372,17 @@ $("socialNoteForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const body = ($("socialNoteInput").value || "").trim();
   if (!social.noteTo) { toast("친구 탭에서 받는 사람을 먼저 골라 주세요."); return; }
-  if (!body) return;
-  try {
-    await api("/api/social/note", { to: social.noteTo.id, toName: social.noteTo.name, body });
-    $("socialNoteInput").value = "";
-    toast(`${social.noteTo.name}님에게 쪽지를 보냈어요.`);
-    refreshSocialNotes();
-  } catch (err) { toast(err.message); }
+  if (!body || socialNoteGate.busy) return;
+  const to = social.noteTo;
+  const clientId = randomId();
+  await socialNoteGate.run(async () => {
+    try {
+      await api("/api/social/note", { to: to.id, toName: to.name, body, clientId });
+      $("socialNoteInput").value = "";
+      toast(`${to.name}님에게 쪽지를 보냈어요.`);
+      refreshSocialNotes();
+    } catch (err) { toast(err.message); }
+  });
 });
 window.setInterval(() => { if (isUnlocked() && !document.hidden) refreshSocialSummary(); }, 20000);
 window.setTimeout(() => refreshSocialSummary(), 4000);
