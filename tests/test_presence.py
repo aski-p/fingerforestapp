@@ -37,21 +37,23 @@ class PresenceTests(unittest.TestCase):
         p = self.people(1000, rows, accounts={"forest:7": {"senderEmployeeId": "7", "senderEmployeeName": "사"}})
         self.assertEqual([(u["id"], u["name"]) for u in p["items"]], [("7", "사")])
 
-    def test_same_name_old_id_merges_into_new_id_and_photo_moves(self):
-        old = "2026-11-10T00:00:00+00:00"
-        new = "2026-11-22T00:00:00+00:00"
+    def test_old_ids_merge_by_new_directory_and_photo_moves(self):
+        directory = {"12": "박승원", "13": "전수현", "14": "김동명", "15": "김동명", "16": "고성진", "1": "박근형"}
         rows = [
-            {"employee_id": "900", "name": "박승원", "updated_at": old, "profile_image_path": "900/avatar.jpg"},
-            {"employee_id": "12", "name": "박승원", "updated_at": new},
-            {"employee_id": "901", "name": "전수현", "updated_at": old},
-            {"employee_id": "13", "name": "전수현", "updated_at": new, "profile_image_url": "https://x/13.jpg"},
-            {"employee_id": "14", "name": "김동명", "updated_at": new},
-            {"employee_id": "15", "name": "김동명", "updated_at": new},  # 둘 다 새 ID: 동명이인일 수 있어 그대로
-            {"employee_id": "902", "name": "옛사람", "updated_at": old},  # 아직 옛 ID뿐: 그대로
+            {"employee_id": "900", "name": "박승원", "profile_image_path": "900/avatar.jpg", "updated_at": "2026-11-10"},
+            {"employee_id": "12", "name": "박승원", "updated_at": "2026-11-22"},
+            {"employee_id": "901", "name": "전수현", "profile_image_url": "https://x/901.jpg"},
+            {"employee_id": "13", "name": "전수현", "profile_image_url": "https://x/13.jpg"},
+            {"employee_id": "902", "name": "김동명"},            # 새 목록에 동명이인 둘: 건드리지 않음
+            {"employee_id": "14", "name": "김동명"},
+            {"employee_id": "903", "name": "퇴사자"},            # 새 목록에 없음: 그대로
+            {"employee_id": "904", "name": "고성진"},            # 새 ID로 아직 접속 안 함(행 없음): 그대로
+            {"employee_id": "forest:905", "name": "박근형", "profile_image_path": "905/a.jpg"},
+            {"employee_id": "1", "name": "박근형"},
         ]
-        people, moves = web_server.merge_profile_rows(rows)
-        self.assertEqual(sorted(p["id"] for p in people), ["12", "13", "14", "15", "902"])
-        self.assertEqual([(eid, d["employee_id"]) for eid, d in moves], [("12", "900")])
+        plans = web_server.plan_old_id_merges(rows, directory)
+        got = {(old, new, donor["employee_id"] if donor else None) for old, new, donor in plans}
+        self.assertEqual(got, {("900", "12", "900"), ("901", "13", None), ("forest:905", "1", "forest:905")})
 
     def test_mark_presence_skips_non_forest_owner(self):
         web_server.mark_presence("legacy-user", now=1)
