@@ -17,7 +17,7 @@ const worklogApprovalCachePrefix = "fruitWorklogApprovalCache:";
 const securityMigrationKey = "fruitSecurityMigrationV87";
 const releaseNotesSnoozeKey = "fruitReleaseNotesSnoozeUntil";
 const supportUrl = "https://qr.kakaopay.com/Ej7ruxJDq";
-const appVersion = "3.20.4";
+const appVersion = "3.20.5";
 const primaryApiBaseUrl = "https://web-production-011c4.up.railway.app";
 const fallbackBaseUrl = "https://web-production-011c4.up.railway.app";
 const activeApiBaseKey = "fruitActiveApiBaseV26";
@@ -616,7 +616,7 @@ function renderUrgentNotice(info = latestAppInfo) {
     el.classList.remove("hidden");
     return;
   }
-  // 3.20.4+ Android app: newer APK on the server -> one tap downloads it and opens the system installer.
+  // 3.20.5+ Android app: newer APK on the server -> one tap downloads it and opens the system installer.
   const androidVersion = info?.androidVersion || "";
   if (window.FruitAndroid?.installUpdate && androidVersion && info?.androidApkUrl && compareVersions(androidVersion, installed) > 0) {
     el.textContent = "";
@@ -880,8 +880,20 @@ const SKIN_IDS = new Set(Object.keys(skinBannerText));
 const xmasForcedKey = "fruitXmasEdition2026";
 const xmasPrevThemeKey = "fruitXmasPrevTheme";
 
+// 크리스마스 에디션은 12/25(한국 시간)까지. 12/26 0시부터는 자동 적용된 기기를 원래 테마로 되돌린다.
+const XMAS_END_MS = Date.parse("2026-12-25T15:00:00Z");
+function xmasOver(now = Date.now()) { return now >= XMAS_END_MS; }
+function xmasPrevTheme() { return storeGet(xmasPrevThemeKey) || "diary"; }
+
 // 크리스마스 에디션: 기기마다 한 번 강제로 적용한다. '원래 테마로'를 누른 사람은 다시 바꾸지 않는다.
 function forceChristmasOnce(theme) {
+  if (xmasOver()) {
+    if (storeGet(xmasForcedKey) === "applied") {
+      storeSet(xmasForcedKey, "expired");
+      if (theme === "christmas") return xmasPrevTheme();
+    }
+    return theme;
+  }
   if (storeGet(xmasForcedKey)) return theme;
   storeSet(xmasForcedKey, "applied");
   storeSet(xmasPrevThemeKey, theme && theme !== "christmas" ? theme : "diary");
@@ -908,7 +920,7 @@ function showXmasNotice() {
 }
 
 function migratedTheme(theme) {
-  // 3.20.4 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
+  // 3.20.5 리디자인: 아직 기본(Fresh)을 쓰던 기기는 한 번만 '숲속 다이어리'로 옮긴다. 이후 Fresh를 고르면 그대로 둔다.
   if ((!theme || theme === "default") && storeGet(skinMigrationKey) !== "1") {
     storeSet(skinMigrationKey, "1");
     return DEFAULT_SKIN;
@@ -971,7 +983,15 @@ async function loadProfileSettings({ silent = true } = {}) {
       const local = storeGet(themeKey);
       if (local && local !== "default") settings.theme = local;
     }
+    // 이벤트가 끝나 자동 적용분을 되돌린 기기: 서버에 남은 크리스마스도 원래 테마로 맞춘다(한 번만)
+    let xmasSync = false;
+    if (xmasOver() && storeGet(xmasForcedKey) === "expired" && settings.theme === "christmas") {
+      settings.theme = xmasPrevTheme();
+      xmasSync = true;
+    }
+    if (xmasOver() && storeGet(xmasForcedKey) === "expired") storeSet(xmasForcedKey, "expired-synced");
     setAppearanceSettings(settings);
+    if (xmasSync) api("/api/profile-settings", appearanceSettings()).catch(() => {});
   } catch (err) {
     if (!silent) toast(`설정 불러오기 실패: ${err.message}`);
   }
@@ -1280,8 +1300,8 @@ async function showDeviceNotification(item) {
       await registration.showNotification(title, {
         body,
         tag: item.tag || item.id,
-        icon: "/icons/app-icon-192.png?v=3.20.4",
-        badge: "/icons/app-icon-192.png?v=3.20.4",
+        icon: "/icons/app-icon-192.png?v=3.20.5",
+        badge: "/icons/app-icon-192.png?v=3.20.5",
         data: { url: item.url || "/" },
       });
       return true;

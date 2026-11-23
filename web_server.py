@@ -34,7 +34,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.20.4"
+APP_VERSION = "3.20.5"
 ANDROID_APP_VERSION = "3.20.0"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -56,8 +56,8 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
-    "업무일지가 저장된 뒤 'std_dt' 오류가 뜨던 문제를 고쳤어요(일지와 씨앗은 정상 전송됐어요).",
-    "이미 작성된 날짜는 씨앗을 다시 보내지 않고, 내역에도 남기지 않아요.",
+    "크리스마스 에디션은 12월 25일까지예요. 26일부터는 자동으로 원래 쓰던 스킨으로 돌아가요.",
+    "설정 > 스킨에서 크리스마스를 직접 고른 분은 그대로 유지돼요.",
 ]
 VALID_THEMES = {
     "christmas",
