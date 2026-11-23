@@ -1630,6 +1630,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_json(200, {"ok": True, "result": fruit_auto.worklog_approvals_local(owner_key=owner_key, month=selected_month)})
                 elif parsed.path == "/api/social-merge-status":
                     st = {k: _MERGE[k] for k in ("ok", "error", "directory", "merged", "finishedAt", "running")}
+                    st["duplicates"] = duplicate_diagnostics()
                     self.send_json(200, {"ok": True, "result": {**st, "version": APP_VERSION}})
                 elif parsed.path.startswith("/api/social/"):
                     owner_key, _session_token = self.require_session_owner()
@@ -2074,6 +2075,32 @@ def hide_old_ids(users, directory):
         target["photo"] = target.get("photo") or u.get("photo") or ""
         out.pop(eid, None)
     return out
+
+
+def duplicate_diagnostics():
+    """이름이 두 번 이상 나오는 사용자 묶음의 출처만(이름·ID 없이) 보여 준다: 원인 확인용."""
+    try:
+        users = app_users()
+        directory = _DIRECTORY["ids"]
+        dir_names = {}
+        for eid, name in directory.items():
+            dir_names[str(name or "").strip()] = dir_names.get(str(name or "").strip(), 0) + 1
+        accounts = fruit_auto.load_all_state().get("accounts") or {}
+        acct_ids = {str(a.get("senderEmployeeId") or "") for a in accounts.values()}
+        by_name = {}
+        for eid, u in users.items():
+            by_name.setdefault(str(u.get("name") or "").strip(), []).append(eid)
+        out = []
+        for name, ids in by_name.items():
+            if len(ids) < 2:
+                continue
+            out.append({
+                "sameNameInDirectory": dir_names.get(name, 0),
+                "ids": [{"inDirectory": eid in directory, "fromAccounts": eid in acct_ids, "idDigits": len(eid), "hasPhoto": bool(users[eid].get("photo"))} for eid in ids],
+            })
+        return out[:30]
+    except Exception as exc:
+        return [{"error": type(exc).__name__}]
 
 
 def social_people(me, now=None):
