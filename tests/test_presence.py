@@ -55,6 +55,15 @@ class PresenceTests(unittest.TestCase):
         got = {(old, new, donor["employee_id"] if donor else None) for old, new, donor in plans}
         self.assertEqual(got, {("900", "12", "900"), ("901", "13", None), ("forest:905", "1", "forest:905")})
 
+    def test_hide_old_ids_keeps_new_and_carries_photo(self):
+        directory = {"12": "박승원", "14": "김동명", "15": "김동명"}
+        users = {"12": {"name": "박승원", "photo": ""}, "900": {"name": "박승원", "photo": "p.jpg"},
+                 "14": {"name": "김동명", "photo": ""}, "902": {"name": "김동명", "photo": ""}}
+        out = web_server.hide_old_ids(users, directory)
+        self.assertEqual(out["12"]["photo"], "p.jpg")
+        self.assertNotIn("900", out)
+        self.assertIn("902", out)  # 동명이인이면 그대로
+
     def test_mark_presence_skips_non_forest_owner(self):
         web_server.mark_presence("legacy-user", now=1)
         self.assertEqual(web_server._PRESENCE, {})

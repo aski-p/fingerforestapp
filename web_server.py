@@ -1628,6 +1628,9 @@ class Handler(BaseHTTPRequestHandler):
                     params = urllib.parse.parse_qs(parsed.query)
                     selected_month = (params.get("month") or [""])[0]
                     self.send_json(200, {"ok": True, "result": fruit_auto.worklog_approvals_local(owner_key=owner_key, month=selected_month)})
+                elif parsed.path == "/api/social-merge-status":
+                    st = {k: _MERGE[k] for k in ("ok", "error", "directory", "merged", "finishedAt", "running")}
+                    self.send_json(200, {"ok": True, "result": {**st, "version": APP_VERSION}})
                 elif parsed.path.startswith("/api/social/"):
                     owner_key, _session_token = self.require_session_owner()
                     try:
@@ -1951,7 +1954,9 @@ def plan_old_id_merges(rows, directory):
 
 
 MERGE_INTERVAL_SECONDS = 600
-_MERGE = {"at": 0.0, "running": False}
+MERGE_RETRY_SECONDS = 60
+_MERGE = {"at": 0.0, "running": False, "ok": None, "error": "", "directory": 0, "merged": 0, "finishedAt": ""}
+_DIRECTORY = {"ids": {}}
 _MERGE_LOCK = threading.Lock()
 
 
@@ -1963,8 +1968,11 @@ def merge_old_profile_ids(owner_key):
     table = urllib.parse.quote(config["table"], safe="")
     client = fruit_auto.account_login(owner_key)[0]
     directory = {str(r.get("emp_id")): r.get("emp_nm") for r in fruit_auto.list_employees(client) if r.get("emp_id")}
+    _MERGE["directory"] = len(directory)
     if len(directory) < 5:
-        return []  # 목록을 제대로 못 읽었으면 아무것도 지우지 않는다
+        raise fruit_auto.FruitAutoError("직원 목록이 비어 있음")  # 목록을 제대로 못 읽었으면 아무것도 지우지 않는다
+    _DIRECTORY["ids"] = directory
+    _USER_LIST["at"] = 0.0
     rows = supabase_request("GET", f"/rest/v1/{table}?select=employee_id,name,profile_image_url,profile_image_path,updated_at&limit=5000") or []
     done = []
     for old_raw, new_id, donor in plan_old_id_merges(rows if isinstance(rows, list) else [], directory):
@@ -1978,8 +1986,10 @@ def merge_old_profile_ids(owner_key):
             supabase_request("DELETE", f"/rest/v1/{table}?employee_id=eq.{urllib.parse.quote(old_raw, safe='')}")
             fruit_auto.log_event({"action": "profile_old_id_merged", "oldEmployeeId": old_raw, "newEmployeeId": new_id, "photoMoved": bool(donor)})
             done.append((old_raw, new_id))
-        except Exception:
+        except Exception as exc:
+            _MERGE["error"] = f"merge {old_raw}: {str(exc)[:160]}"
             continue
+    _MERGE["merged"] += len(done)
     if done:
         _USER_LIST["at"] = 0.0
         with _PROFILE_LOOKUP_CACHE_LOCK:
@@ -1997,12 +2007,17 @@ def schedule_profile_merge(owner_key):
     def run():
         try:
             merge_old_profile_ids(owner_key)
+            _MERGE["ok"] = True
         except Exception as exc:
+            _MERGE["ok"] = False
+            _MERGE["error"] = f"{type(exc).__name__}: {str(exc)[:200]}"
+            _MERGE["at"] = time.time() - MERGE_INTERVAL_SECONDS + MERGE_RETRY_SECONDS  # 실패하면 1분 뒤 다시
             try:
                 fruit_auto.log_event({"action": "profile_old_id_merge_failed", "error": str(exc)[:200]})
             except Exception:
                 pass
         finally:
+            _MERGE["finishedAt"] = datetime.now(timezone.utc).isoformat()
             with _MERGE_LOCK:
                 _MERGE["running"] = False
 
@@ -2041,8 +2056,28 @@ def app_users():
     return {k: dict(v) for k, v in users.items()}
 
 
+def hide_old_ids(users, directory):
+    """새 직원 목록 기준으로 옛 ID를 목록에서 뺀다(같은 이름의 새 ID가 딱 하나 있을 때). 사진은 새 ID에 없으면 옛 것을 쓴다."""
+    if not directory:
+        return users
+    by_name = {}
+    for eid, name in directory.items():
+        by_name.setdefault(str(name or "").strip(), []).append(str(eid))
+    out = {k: dict(v) for k, v in users.items()}
+    for eid, u in users.items():
+        if eid in directory:
+            continue
+        targets = by_name.get(str(u.get("name") or "").strip()) or []
+        if len(targets) != 1:
+            continue
+        target = out.setdefault(targets[0], {"name": u.get("name") or "", "photo": ""})
+        target["photo"] = target.get("photo") or u.get("photo") or ""
+        out.pop(eid, None)
+    return out
+
+
 def social_people(me, now=None):
-    users = app_users()
+    users = hide_old_ids(app_users(), _DIRECTORY["ids"])
     online = online_employee_ids(now)
     for eid in online:
         if eid not in users:
