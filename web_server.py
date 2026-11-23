@@ -1629,7 +1629,7 @@ class Handler(BaseHTTPRequestHandler):
                     selected_month = (params.get("month") or [""])[0]
                     self.send_json(200, {"ok": True, "result": fruit_auto.worklog_approvals_local(owner_key=owner_key, month=selected_month)})
                 elif parsed.path == "/api/social-merge-status":
-                    st = {k: _MERGE[k] for k in ("ok", "error", "directory", "merged", "finishedAt", "running")}
+                    st = {k: _MERGE.get(k) for k in ("ok", "error", "directory", "merged", "aliases", "friends", "finishedAt", "running")}
                     st["duplicates"] = duplicate_diagnostics()
                     self.send_json(200, {"ok": True, "result": {**st, "version": APP_VERSION}})
                 elif parsed.path.startswith("/api/social/"):
@@ -1825,7 +1825,7 @@ def social_service():
 
 def social_identity(owner_key):
     state = fruit_auto.get_account_state(owner_key) or {}
-    me = str(state.get("senderEmployeeId") or fruit_auto.employee_id_from_owner_key(owner_key) or "")
+    me = to_new_id(state.get("senderEmployeeId") or fruit_auto.employee_id_from_owner_key(owner_key) or "")
     if not me.isdigit():
         raise fruit_auto.FruitAutoError("채팅은 신 포레스트로 다시 로그인한 뒤 쓸 수 있어요. 다시 로그인하세요.")
     name = state.get("senderEmployeeName") or state.get("loginUser") or ""
@@ -1894,7 +1894,7 @@ _USER_LIST = {"at": 0.0, "users": {}}
 
 
 def mark_presence(owner_key, now=None):
-    eid = str(fruit_auto.employee_id_from_owner_key(owner_key) or "")
+    eid = to_new_id(fruit_auto.employee_id_from_owner_key(owner_key) or "")
     if not eid.isdigit():
         return
     with _PRESENCE_LOCK:
@@ -1923,46 +1923,77 @@ def _has_photo(row):
     return bool(row.get("profile_image_url") or row.get("profile_image_path"))
 
 
-# 신 포레스트(3.18.0)로 옮기며 직원 ID가 바뀌었다. 새 직원 목록에 없는 ID = 옛 ID.
-# 옛 ID 행은 새 목록에서 이름이 같은 사람이 딱 한 명이고, 그 사람이 새 ID로 접속해 프로필 행이 있을 때만
-# 그 사람으로 합친다: 옛 ID에 사진이 있고 새 ID에 없으면 사진을 옮겨 저장하고, 옛 ID 행은 지운다.
-def plan_old_id_merges(rows, directory):
-    """rows: 프로필 행, directory: {새 직원ID: 이름}. -> [(옛ID원본값, 새ID, 사진 옮길 행 or None)]"""
-    by_id = {}
-    for row in rows:
-        by_id.setdefault(_norm_id(row.get("employee_id")), []).append(row)
-    by_name = {}
-    for eid, name in directory.items():
-        by_name.setdefault(str(name or "").strip(), []).append(str(eid))
-    plans = []
-    photo_given = set()
-    for eid, group in by_id.items():
-        if not eid.isdigit() or eid in directory:
-            continue
-        name = next((str(r.get("name") or "").strip() for r in group if str(r.get("name") or "").strip()), "")
-        targets = by_name.get(name) or []
-        if not name or len(targets) != 1 or targets[0] not in by_id:
-            continue
-        new_id = targets[0]
-        new_has_photo = any(_has_photo(r) for r in by_id[new_id]) or new_id in photo_given
-        for row in sorted(group, key=lambda r: str(r.get("updated_at") or ""), reverse=True):
-            donor = row if (_has_photo(row) and not new_has_photo) else None
-            if donor:
-                photo_given.add(new_id)
-                new_has_photo = True
-            plans.append((str(row.get("employee_id")), new_id, donor))
-    return plans
-
-
 MERGE_INTERVAL_SECONDS = 600
 MERGE_RETRY_SECONDS = 60
 _MERGE = {"at": 0.0, "running": False, "ok": None, "error": "", "directory": 0, "merged": 0, "finishedAt": ""}
 _DIRECTORY = {"ids": {}}
+_ALIAS = {"map": {}}  # 옛 포레스트 ID -> 신 포레스트 ID (같은 사람)
+
+
+def to_new_id(value):
+    eid = str(value or "").strip()
+    return _ALIAS["map"].get(eid, eid)
 _MERGE_LOCK = threading.Lock()
 
 
+def build_alias(directory, named_ids):
+    """named_ids: [(id, 이름)] (프로필 행·로그인 계정). 새 목록에 없는 ID가 같은 이름의 새 ID 딱 하나로 이어지면 옛 ID."""
+    by_name = {}
+    for eid, name in directory.items():
+        by_name.setdefault(str(name or "").strip(), []).append(str(eid))
+    alias = {}
+    for eid, name in named_ids:
+        eid, name = _norm_id(eid), str(name or "").strip()
+        if not eid.isdigit() or eid in directory or not name:
+            continue
+        targets = by_name.get(name) or []
+        if len(targets) == 1 and targets[0] != eid:
+            alias[eid] = targets[0]
+    return alias
+
+
+_STATUS_RANK = {"blocked": 3, "accepted": 2, "pending": 1}
+
+
+def migrate_friend_rows(store, alias):
+    """fruit_friends 의 옛 ID를 새 ID로 바꾸고, 양쪽에서 서로 신청만 해 둔 사이는 친구로 만든다. -> 바꾼 행 수"""
+    if not alias:
+        return 0
+    rows = store.select("fruit_friends") or []
+    orig = {(r.get("owner"), r.get("friend")): r for r in rows}
+    final, requesters = {}, {}
+    for r in rows:
+        owner, friend = to_new_id(r.get("owner")), to_new_id(r.get("friend"))
+        if owner == friend:
+            continue
+        r2 = {**r, "owner": owner, "friend": friend, "requested_by": to_new_id(r.get("requested_by"))}
+        key = (owner, friend)
+        if r2.get("status") == "pending":
+            requesters.setdefault(frozenset(key), set()).add(r2["requested_by"])
+        prev = final.get(key)
+        if prev is None or _STATUS_RANK.get(r2.get("status"), 0) > _STATUS_RANK.get(prev.get("status"), 0):
+            final[key] = r2
+    for key, r in final.items():
+        if r.get("status") == "pending" and len(requesters.get(frozenset(key), set())) > 1:
+            final[key] = {**r, "status": "accepted"}  # 둘 다 신청함 = 서로 원함
+    changed = 0
+    for key, r in orig.items():
+        if key not in final:
+            store.delete("fruit_friends", {"owner": key[0], "friend": key[1]})
+            changed += 1
+    for key, r in final.items():
+        o = orig.get(key)
+        if o is None or o.get("status") != r.get("status") or o.get("requested_by") != r.get("requested_by"):
+            store.upsert("fruit_friends", {k: r.get(k) for k in ("owner", "friend", "friend_name", "status", "requested_by", "updated_at")}, ["owner", "friend"])
+            changed += 1
+    return changed
+
+
 def merge_old_profile_ids(owner_key):
-    """로그인한 사용자의 신 포레스트 세션으로 직원 목록을 읽어 옛 ID 프로필을 정리한다(10분에 한 번, 백그라운드)."""
+    """로그인한 사용자의 신 포레스트 세션으로 직원 목록을 읽어 옛 ID를 정리한다(10분에 한 번, 백그라운드).
+    - 옛 ID -> 새 ID 대응표(_ALIAS)를 만든다
+    - 프로필: 새 ID 행이 없으면 옛 행을 새 ID로 옮기고, 있으면 사진만(새 행에 없을 때) 옮긴 뒤 옛 행을 지운다
+    - 친구: 옛 ID로 남은 신청·친구를 새 ID로 바꾸고, 서로 신청한 사이는 친구로 만든다"""
     config = supabase_config()
     if not config:
         return []
@@ -1973,28 +2004,54 @@ def merge_old_profile_ids(owner_key):
     if len(directory) < 5:
         raise fruit_auto.FruitAutoError("직원 목록이 비어 있음")  # 목록을 제대로 못 읽었으면 아무것도 지우지 않는다
     _DIRECTORY["ids"] = directory
-    _USER_LIST["at"] = 0.0
-    rows = supabase_request("GET", f"/rest/v1/{table}?select=employee_id,name,profile_image_url,profile_image_path,updated_at&limit=5000") or []
+    rows = supabase_request("GET", f"/rest/v1/{table}?select=*&limit=5000") or []
+    rows = rows if isinstance(rows, list) else []
+    named = [(r.get("employee_id"), r.get("name")) for r in rows]
+    for key, acc in (fruit_auto.load_all_state().get("accounts") or {}).items():
+        nm = acc.get("senderEmployeeName") or acc.get("loginUser")
+        named.append((acc.get("senderEmployeeId"), nm))
+        named.append((fruit_auto.employee_id_from_owner_key(key), nm))
+    alias = build_alias(directory, named)
+    _ALIAS["map"] = alias
+    # 로그인 계정의 owner key가 아직 옛 ID인 사람은 설정이 그 행에 저장되므로(행 ID는 owner key에서만 정함)
+    # 그 행은 지우지 않고 목록에서만 새 ID로 합친다
+    live_owner_ids = {_norm_id(fruit_auto.employee_id_from_owner_key(k)) for k in (fruit_auto.load_all_state().get("accounts") or {})}
+    by_id = {}
+    for r in rows:
+        by_id.setdefault(_norm_id(r.get("employee_id")), []).append(r)
     done = []
-    for old_raw, new_id, donor in plan_old_id_merges(rows if isinstance(rows, list) else [], directory):
-        try:
-            if donor:
-                supabase_request(
-                    "PATCH",
-                    f"/rest/v1/{table}?employee_id=eq.{urllib.parse.quote(new_id, safe='')}",
-                    body={"profile_image_url": donor.get("profile_image_url"), "profile_image_path": donor.get("profile_image_path"), "updated_at": datetime.now(timezone.utc).isoformat()},
-                )
-            supabase_request("DELETE", f"/rest/v1/{table}?employee_id=eq.{urllib.parse.quote(old_raw, safe='')}")
-            fruit_auto.log_event({"action": "profile_old_id_merged", "oldEmployeeId": old_raw, "newEmployeeId": new_id, "photoMoved": bool(donor)})
-            done.append((old_raw, new_id))
-        except Exception as exc:
-            _MERGE["error"] = f"merge {old_raw}: {str(exc)[:160]}"
-            continue
+    for old_id, new_id in alias.items():
+        for old_row in sorted(by_id.get(old_id, []), key=lambda r: str(r.get("updated_at") or ""), reverse=True):
+            try:
+                new_rows = by_id.get(new_id) or []
+                if not new_rows:
+                    body = {k: v for k, v in old_row.items() if k not in ("id", "created_at")}
+                    body["employee_id"] = new_id
+                    supabase_request("POST", f"/rest/v1/{table}", body=body, extra_headers={"Prefer": "resolution=merge-duplicates,return=minimal"})
+                    by_id[new_id] = [body]
+                elif _has_photo(old_row) and not any(_has_photo(r) for r in new_rows):
+                    supabase_request(
+                        "PATCH",
+                        f"/rest/v1/{table}?employee_id=eq.{urllib.parse.quote(new_id, safe='')}",
+                        body={"profile_image_url": old_row.get("profile_image_url"), "profile_image_path": old_row.get("profile_image_path")},
+                    )
+                    for r in new_rows:
+                        r["profile_image_url"], r["profile_image_path"] = old_row.get("profile_image_url"), old_row.get("profile_image_path")
+                if old_id not in live_owner_ids:
+                    supabase_request("DELETE", f"/rest/v1/{table}?employee_id=eq.{urllib.parse.quote(str(old_row.get('employee_id')), safe='')}")
+                fruit_auto.log_event({"action": "profile_old_id_merged", "oldEmployeeId": old_id, "newEmployeeId": new_id, "deleted": old_id not in live_owner_ids})
+                done.append((old_id, new_id))
+            except Exception as exc:
+                _MERGE["error"] = f"merge {old_id}: {str(exc)[:160]}"
+    try:
+        _MERGE["friends"] = migrate_friend_rows(social_service().store, alias)
+    except Exception as exc:
+        _MERGE["error"] = f"friends: {type(exc).__name__}: {str(exc)[:160]}"
+    _MERGE["aliases"] = len(alias)
     _MERGE["merged"] += len(done)
-    if done:
-        _USER_LIST["at"] = 0.0
-        with _PROFILE_LOOKUP_CACHE_LOCK:
-            _PROFILE_LOOKUP_CACHE.clear()
+    _USER_LIST["at"] = 0.0
+    with _PROFILE_LOOKUP_CACHE_LOCK:
+        _PROFILE_LOOKUP_CACHE.clear()
     return done
 
 
@@ -2103,8 +2160,19 @@ def duplicate_diagnostics():
         return [{"error": type(exc).__name__}]
 
 
+def drop_aliases(users, alias):
+    out = {k: dict(v) for k, v in users.items()}
+    for old_id, new_id in alias.items():
+        if old_id in out:
+            u = out.pop(old_id)
+            target = out.setdefault(new_id, {"name": u.get("name") or "", "photo": ""})
+            target["photo"] = target.get("photo") or u.get("photo") or ""
+            target["name"] = target.get("name") or u.get("name") or ""
+    return out
+
+
 def social_people(me, now=None):
-    users = hide_old_ids(app_users(), _DIRECTORY["ids"])
+    users = hide_old_ids(drop_aliases(app_users(), _ALIAS["map"]), _DIRECTORY["ids"])
     online = online_employee_ids(now)
     for eid in online:
         if eid not in users:
@@ -2130,6 +2198,13 @@ def social_get(path, query, owner_key):
 def social_post(path, payload, owner_key):
     svc = social_service()
     me, name = social_identity(owner_key)
+    # 옛 포레스트 ID로 고른 사람도 그 사람의 새 ID로 보낸다
+    payload = dict(payload or {})
+    for key in ("employeeId", "to"):
+        if payload.get(key):
+            payload[key] = to_new_id(payload[key])
+    if isinstance(payload.get("members"), list):
+        payload["members"] = [{**m, "id": to_new_id(m.get("id"))} if isinstance(m, dict) else m for m in payload["members"]]
     if path == "/api/social/friend-request":
         result = svc.request_friend(me, name, payload.get("employeeId"), payload.get("name"))
         if result == "requested":

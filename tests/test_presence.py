@@ -37,23 +37,35 @@ class PresenceTests(unittest.TestCase):
         p = self.people(1000, rows, accounts={"forest:7": {"senderEmployeeId": "7", "senderEmployeeName": "사"}})
         self.assertEqual([(u["id"], u["name"]) for u in p["items"]], [("7", "사")])
 
-    def test_old_ids_merge_by_new_directory_and_photo_moves(self):
-        directory = {"12": "박승원", "13": "전수현", "14": "김동명", "15": "김동명", "16": "고성진", "1": "박근형"}
-        rows = [
-            {"employee_id": "900", "name": "박승원", "profile_image_path": "900/avatar.jpg", "updated_at": "2026-11-10"},
-            {"employee_id": "12", "name": "박승원", "updated_at": "2026-11-22"},
-            {"employee_id": "901", "name": "전수현", "profile_image_url": "https://x/901.jpg"},
-            {"employee_id": "13", "name": "전수현", "profile_image_url": "https://x/13.jpg"},
-            {"employee_id": "902", "name": "김동명"},            # 새 목록에 동명이인 둘: 건드리지 않음
-            {"employee_id": "14", "name": "김동명"},
-            {"employee_id": "903", "name": "퇴사자"},            # 새 목록에 없음: 그대로
-            {"employee_id": "904", "name": "고성진"},            # 새 ID로 아직 접속 안 함(행 없음): 그대로
-            {"employee_id": "forest:905", "name": "박근형", "profile_image_path": "905/a.jpg"},
-            {"employee_id": "1", "name": "박근형"},
-        ]
-        plans = web_server.plan_old_id_merges(rows, directory)
-        got = {(old, new, donor["employee_id"] if donor else None) for old, new, donor in plans}
-        self.assertEqual(got, {("900", "12", "900"), ("901", "13", None), ("forest:905", "1", "forest:905")})
+    def test_alias_maps_old_ids_by_new_directory_name(self):
+        directory = {"12": "박승원", "13": "전수현", "14": "김동명", "15": "김동명"}
+        named = [("20190012", "박승원"), ("forest:20190013", "전수현"), ("20190014", "김동명"), ("20180001", "퇴사자"), ("12", "박승원")]
+        self.assertEqual(web_server.build_alias(directory, named), {"20190012": "12", "20190013": "13"})
+
+    def test_friend_rows_move_to_new_ids_and_mutual_requests_become_friends(self):
+        import tempfile, social
+        from pathlib import Path
+        tmp = tempfile.TemporaryDirectory()
+        try:
+            s = social.Social(social.SqliteStore(Path(tmp.name) / "s.db"))
+            s.request_friend("1", "박근형", "20190002", "장미정")   # 나는 장미정의 옛 ID에 신청
+            s.request_friend("2", "장미정", "1", "박근형")          # 장미정(새 ID)은 나에게 신청
+            s.request_friend("1", "박근형", "20190003", "김혜주")   # 김혜주 옛 ID: 한쪽 신청만
+            web_server._ALIAS["map"] = {"20190002": "2", "20190003": "3"}
+            web_server.migrate_friend_rows(s.store, web_server._ALIAS["map"])
+            self.assertEqual([f["friend"] for f in s.friends("1")["friends"]], ["2"])
+            self.assertEqual([f["friend"] for f in s.friends("2")["friends"]], ["1"])
+            self.assertEqual([f["friend"] for f in s.friends("1")["outgoing"]], ["3"])
+            self.assertEqual([f["friend"] for f in s.friends("3")["incoming"]], ["1"])
+            self.assertEqual(s.store.select("fruit_friends", {"owner": "20190002"}), [])
+        finally:
+            web_server._ALIAS["map"] = {}
+            tmp.cleanup()
+
+    def test_people_list_joins_alias_into_new_id_with_old_photo(self):
+        users = {"2": {"name": "장미정", "photo": ""}, "20190002": {"name": "장미정", "photo": "old.jpg"}}
+        out = web_server.drop_aliases(users, {"20190002": "2"})
+        self.assertEqual(out, {"2": {"name": "장미정", "photo": "old.jpg"}})
 
     def test_hide_old_ids_keeps_new_and_carries_photo(self):
         directory = {"12": "박승원", "14": "김동명", "15": "김동명"}
