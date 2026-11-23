@@ -34,7 +34,7 @@ CHECK_LOCK = threading.Lock()
 PROFILE_LOOKUP_CACHE_TTL_SECONDS = 5 * 60
 _PROFILE_LOOKUP_CACHE = {}
 _PROFILE_LOOKUP_CACHE_LOCK = threading.RLock()
-APP_VERSION = "3.20.5"
+APP_VERSION = "3.20.6"
 ANDROID_APP_VERSION = "3.20.0"
 IOS_APP_VERSION = APP_VERSION
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"
@@ -56,8 +56,8 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "신 포레스트로 옮기며 두 번 보이던 같은 사람을 하나로 정리했어요. 예전 계정에 올린 프로필 사진이 있으면 그 사진으로 옮겨 저장해요.",
     "채팅에 지금 접속 중인 사람과 전체 사용자 수가 보여요. 친구 탭에서 오프라인 사용자까지 바로 친구 신청할 수 있어요.",
-    "크리스마스 에디션은 12월 25일까지예요. 26일부터는 자동으로 원래 쓰던 스킨으로 돌아가요.",
 ]
 VALID_THEMES = {
     "christmas",
@@ -1903,37 +1903,97 @@ def online_employee_ids(now=None):
         return {eid for eid, seen in _PRESENCE.items() if now - seen <= PRESENCE_ONLINE_SECONDS}
 
 
+# 신 포레스트(3.18.0, 2026-11-19 16:31 KST)로 옮기며 직원 ID가 바뀌었다. 그 전에만 갱신된 같은 이름의 옛 ID 행은
+# 새 ID 행과 같은 사람으로 본다(둘 다 그 뒤에 갱신됐으면 동명이인일 수 있어 합치지 않는다).
+NEW_FOREST_CUTOVER = "2026-11-19T07:31:00+00:00"
+
+
+def _profile_photo(row, config):
+    url = row.get("profile_image_url") or ""
+    if not url and row.get("profile_image_path"):
+        url = profile_public_url(config, row["profile_image_path"])
+    return url
+
+
+def _after_cutover(row):
+    try:
+        return datetime.fromisoformat(str(row.get("updated_at") or "").replace("Z", "+00:00")) >= datetime.fromisoformat(NEW_FOREST_CUTOVER)
+    except ValueError:
+        return False
+
+
+def merge_profile_rows(rows):
+    """프로필 행 -> (사람 목록, 새 ID에 옮겨 저장할 사진 목록). 사람 = {id, name, photo, row}."""
+    by_id = {}
+    for row in rows:
+        eid = str(row.get("employee_id") or "")
+        eid = eid.split(":", 1)[1] if eid.startswith("forest:") else eid
+        if not eid.isdigit():
+            continue
+        prev = by_id.get(eid)
+        if prev is None or str(row.get("updated_at") or "") > str(prev.get("updated_at") or ""):
+            by_id[eid] = {**row, "employee_id": eid}
+    by_name = {}
+    for eid, row in by_id.items():
+        name = str(row.get("name") or "").strip()
+        if not name or name.startswith("forest:") or name.isdigit():
+            name = ""
+        by_name.setdefault(name or f"#{eid}", []).append(row)
+    people, photo_moves = [], []
+    for key, group in by_name.items():
+        new_rows = [r for r in group if _after_cutover(r)]
+        old_rows = [r for r in group if not _after_cutover(r)]
+        if key.startswith("#") or len(group) == 1 or len(new_rows) != 1 or not old_rows:
+            keep, merged = group, []
+        else:
+            keep, merged = new_rows, old_rows
+        for row in keep:
+            people.append({"id": row["employee_id"], "name": "" if key.startswith("#") else key, "row": row, "mergedIds": [r["employee_id"] for r in merged]})
+            if merged and not (row.get("profile_image_url") or row.get("profile_image_path")):
+                donor = max((r for r in merged if r.get("profile_image_url") or r.get("profile_image_path")), key=lambda r: str(r.get("updated_at") or ""), default=None)
+                if donor:
+                    photo_moves.append((row["employee_id"], donor))
+    return people, photo_moves
+
+
 def app_users():
-    """앱을 쓰는 전체 사용자(직원번호 -> 이름). 프로필 테이블 + 이 서버가 아는 계정, 5분 캐시."""
+    """앱을 쓰는 전체 사용자(직원번호 -> {name, photo}). 프로필 테이블 + 이 서버가 아는 계정, 5분 캐시."""
     now = time.time()
     if now - _USER_LIST["at"] < USER_LIST_TTL_SECONDS and _USER_LIST["users"]:
-        return dict(_USER_LIST["users"])
-    users = {}
+        return {k: dict(v) for k, v in _USER_LIST["users"].items()}
+    users, merged_ids = {}, set()
     config = supabase_config()
     if config:
         try:
             table = urllib.parse.quote(config["table"], safe="")
-            rows = supabase_request("GET", f"/rest/v1/{table}?select=employee_id,name&limit=5000") or []
-            for row in rows if isinstance(rows, list) else []:
-                eid = str(row.get("employee_id") or "")
-                eid = eid.split(":", 1)[1] if eid.startswith("forest:") else eid
-                if eid.isdigit():
-                    name = str(row.get("name") or "")
-                    if name and not name.startswith("forest:") and not name.isdigit():
-                        users[eid] = name
-                    else:
-                        users.setdefault(eid, "")
+            rows = supabase_request("GET", f"/rest/v1/{table}?select=employee_id,name,profile_image_url,profile_image_path,updated_at&limit=5000") or []
+            people, photo_moves = merge_profile_rows(rows if isinstance(rows, list) else [])
+            moved = {}
+            for eid, donor in photo_moves:
+                # 옛 ID에 저장해 둔 사진을 새 ID 프로필에 저장한다(새 ID에 사진이 없을 때만)
+                try:
+                    supabase_request(
+                        "PATCH",
+                        f"/rest/v1/{table}?employee_id=eq.{urllib.parse.quote(eid, safe='')}",
+                        body={"profile_image_url": donor.get("profile_image_url"), "profile_image_path": donor.get("profile_image_path")},
+                    )
+                    moved[eid] = _profile_photo(donor, config)
+                except Exception:
+                    pass
+            for p in people:
+                users[p["id"]] = {"name": p["name"], "photo": moved.get(p["id"]) or _profile_photo(p["row"], config)}
+                merged_ids.update(p["mergedIds"])
         except Exception:
             pass
     for account_key, account in (fruit_auto.load_all_state().get("accounts") or {}).items():
         eid = str(account.get("senderEmployeeId") or fruit_auto.employee_id_from_owner_key(account_key) or "")
-        if eid.isdigit():
-            name = account.get("senderEmployeeName") or account.get("loginUser") or ""
-            if name or eid not in users:
-                users[eid] = users.get(eid) or str(name)
+        if eid.isdigit() and eid not in merged_ids:
+            name = str(account.get("senderEmployeeName") or account.get("loginUser") or "")
+            entry = users.setdefault(eid, {"name": "", "photo": ""})
+            entry["name"] = entry["name"] or name
     _USER_LIST["at"] = now
     _USER_LIST["users"] = users
-    return dict(users)
+    return {k: dict(v) for k, v in users.items()}
 
 
 def social_people(me, now=None):
@@ -1941,8 +2001,8 @@ def social_people(me, now=None):
     online = online_employee_ids(now)
     for eid in online:
         if eid not in users:
-            users[eid] = fruit_auto.known_employee_name(eid) or ""
-    people = [{"id": eid, "name": name or eid, "online": eid in online, "me": eid == me} for eid, name in users.items()]
+            users[eid] = {"name": fruit_auto.known_employee_name(eid) or "", "photo": ""}
+    people = [{"id": eid, "name": u["name"] or eid, "photo": u.get("photo") or "", "online": eid in online, "me": eid == me} for eid, u in users.items()]
     people.sort(key=lambda p: (not p["me"], not p["online"], p["name"]))
     return {"items": people, "total": len(people), "online": sum(1 for p in people if p["online"])}
 
