@@ -56,8 +56,8 @@ CHAT_SUMMARY_TRIGGER_MESSAGES = 16
 CHAT_SUMMARY_BATCH_LIMIT = 24
 RAILWAY_PUBLIC_BASE_URL = os.environ.get("FINGERFRUIT_PUBLIC_BASE_URL", "https://web-production-011c4.up.railway.app").rstrip("/")
 RELEASE_NOTES = [
+    "채팅에 지금 접속 중인 사람과 전체 사용자 수가 보여요. 친구 탭에서 오프라인 사용자까지 바로 친구 신청할 수 있어요.",
     "크리스마스 에디션은 12월 25일까지예요. 26일부터는 자동으로 원래 쓰던 스킨으로 돌아가요.",
-    "설정 > 스킨에서 크리스마스를 직접 고른 분은 그대로 유지돼요.",
 ]
 VALID_THEMES = {
     "christmas",
@@ -1517,6 +1517,7 @@ class Handler(BaseHTTPRequestHandler):
         expected_owner = self.expected_owner()
         if expected_owner and expected_owner != owner_key:
             raise fruit_auto.FruitAutoError("현재 기기의 로그인 정보와 서버 세션이 일치하지 않습니다. 다시 로그인하세요.")
+        mark_presence(owner_key)
         return owner_key, session_token
 
     def read_json(self):
@@ -1878,11 +1879,79 @@ def social_once(scope, client_id, action):
         return result
 
 
+# 접속자 ---------------------------------------------------------------
+# 로그인한 앱이 서버에 요청을 보낼 때마다(30초 새로고침, 20초 채팅 요약) 마지막 접속 시각을 남긴다.
+# 서버 메모리에만 두므로 재배포 직후에는 잠깐 모두 오프라인으로 보인다.
+PRESENCE_ONLINE_SECONDS = 90
+USER_LIST_TTL_SECONDS = 300
+_PRESENCE = {}
+_PRESENCE_LOCK = threading.Lock()
+_USER_LIST = {"at": 0.0, "users": {}}
+
+
+def mark_presence(owner_key, now=None):
+    eid = str(fruit_auto.employee_id_from_owner_key(owner_key) or "")
+    if not eid.isdigit():
+        return
+    with _PRESENCE_LOCK:
+        _PRESENCE[eid] = time.time() if now is None else now
+
+
+def online_employee_ids(now=None):
+    now = time.time() if now is None else now
+    with _PRESENCE_LOCK:
+        return {eid for eid, seen in _PRESENCE.items() if now - seen <= PRESENCE_ONLINE_SECONDS}
+
+
+def app_users():
+    """앱을 쓰는 전체 사용자(직원번호 -> 이름). 프로필 테이블 + 이 서버가 아는 계정, 5분 캐시."""
+    now = time.time()
+    if now - _USER_LIST["at"] < USER_LIST_TTL_SECONDS and _USER_LIST["users"]:
+        return dict(_USER_LIST["users"])
+    users = {}
+    config = supabase_config()
+    if config:
+        try:
+            table = urllib.parse.quote(config["table"], safe="")
+            rows = supabase_request("GET", f"/rest/v1/{table}?select=employee_id,name&limit=5000") or []
+            for row in rows if isinstance(rows, list) else []:
+                eid = str(row.get("employee_id") or "")
+                eid = eid.split(":", 1)[1] if eid.startswith("forest:") else eid
+                if eid.isdigit():
+                    name = str(row.get("name") or "")
+                    if name and not name.startswith("forest:") and not name.isdigit():
+                        users[eid] = name
+                    else:
+                        users.setdefault(eid, "")
+        except Exception:
+            pass
+    for account_key, account in (fruit_auto.load_all_state().get("accounts") or {}).items():
+        eid = str(account.get("senderEmployeeId") or fruit_auto.employee_id_from_owner_key(account_key) or "")
+        if eid.isdigit():
+            name = account.get("senderEmployeeName") or account.get("loginUser") or ""
+            if name or eid not in users:
+                users[eid] = users.get(eid) or str(name)
+    _USER_LIST["at"] = now
+    _USER_LIST["users"] = users
+    return dict(users)
+
+
+def social_people(me, now=None):
+    users = app_users()
+    online = online_employee_ids(now)
+    for eid in online:
+        if eid not in users:
+            users[eid] = fruit_auto.known_employee_name(eid) or ""
+    people = [{"id": eid, "name": name or eid, "online": eid in online, "me": eid == me} for eid, name in users.items()]
+    people.sort(key=lambda p: (not p["me"], not p["online"], p["name"]))
+    return {"items": people, "total": len(people), "online": sum(1 for p in people if p["online"])}
+
+
 def social_get(path, query, owner_key):
     svc = social_service()
     me, _name = social_identity(owner_key)
     if path == "/api/social/summary":
-        return svc.summary(me)
+        return {**svc.summary(me), "people": social_people(me)}
     if path == "/api/social/messages":
         return {"items": svc.messages(me, (query.get("room") or ["0"])[0], after=int((query.get("after") or ["0"])[0] or 0))}
     if path == "/api/social/notes":

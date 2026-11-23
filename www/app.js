@@ -4254,6 +4254,40 @@ function renderSocialSummary() {
     ${outgoing ? `<h4>보낸 친구 신청</h4>${outgoing}` : ""}
     <h4>친구 ${(s.friends || []).length}</h4>${friends || '<div class="social-empty">위에서 직원을 찾아 친구 신청을 보내 보세요.</div>'}`;
   bindSocialFriendActions($("socialFriendList"));
+  renderSocialPeople(s);
+}
+
+// 접속 중인 사람과 전체 사용자(오프라인 포함): 바로 친구 신청·대화·쪽지를 할 수 있다.
+function renderSocialPeople(s) {
+  const p = s.people;
+  const bar = $("socialPeopleBar"), box = $("socialPeopleList");
+  if (!p || !Array.isArray(p.items)) { bar?.classList.add("hidden"); if (box) box.innerHTML = ""; return; }
+  if (bar) {
+    bar.innerHTML = `<i class="presence-dot on" aria-hidden="true"></i><span>지금 접속 중 <b>${p.online}</b>명</span><small>전체 사용자 ${p.total}명 · 친구 추가 ›</small>`;
+    bar.classList.remove("hidden");
+  }
+  if (!box) return;
+  const rel = new Map();
+  (s.friends || []).forEach((f) => rel.set(String(f.friend), "friend"));
+  (s.outgoing || []).forEach((f) => rel.set(String(f.friend), "outgoing"));
+  (s.incoming || []).forEach((f) => rel.set(String(f.friend), "incoming"));
+  (s.blocked || []).forEach((f) => rel.set(String(f.friend), "blocked"));
+  const row = (u) => {
+    const r = rel.get(String(u.id));
+    const name = escapeHtml(u.name || "-");
+    let actions = "";
+    if (u.me) actions = "<small>나</small>";
+    else if (r === "friend") actions = `<button type="button" data-dm="${u.id}" data-name="${name}">대화</button><button type="button" class="ghost" data-note="${u.id}" data-name="${name}">쪽지</button>`;
+    else if (r === "outgoing") actions = "<small>수락 대기</small>";
+    else if (r === "incoming") actions = `<button type="button" data-accept="${u.id}">수락</button>`;
+    else if (r !== "blocked") actions = `<button type="button" data-request="${u.id}" data-name="${name}">친구 신청</button><button type="button" class="ghost" data-note="${u.id}" data-name="${name}">쪽지</button>`;
+    return `<div class="social-row static">${socialAvatar(u.id, u.name)}<span class="social-row-main"><strong><i class="presence-dot${u.online ? " on" : ""}" aria-hidden="true"></i>${name}</strong><span>${u.online ? "접속 중" : "오프라인"}</span></span><span class="social-row-actions">${actions}</span></div>`;
+  };
+  const on = p.items.filter((u) => u.online), off = p.items.filter((u) => !u.online);
+  box.innerHTML = `<h4>지금 접속 중 ${p.online}명 <small>· 전체 사용자 ${p.total}명</small></h4>${on.length ? on.map(row).join("") : '<div class="social-empty">지금 접속 중인 사람이 없어요.</div>'}`
+    + (off.length ? `<details class="social-offline"${social.offlineOpen ? " open" : ""}><summary>오프라인 ${off.length}명</summary>${off.map(row).join("")}</details>` : "");
+  box.querySelector(".social-offline")?.addEventListener("toggle", (e) => { social.offlineOpen = e.target.open; });
+  bindSocialFriendActions(box);
 }
 
 function bindSocialFriendActions(root) {
@@ -4362,6 +4396,7 @@ async function refreshSocialNotes() {
 }
 
 document.querySelectorAll("[data-social-tab]").forEach((b) => b.addEventListener("click", () => switchSocialTab(b.dataset.socialTab)));
+$("socialPeopleBar")?.addEventListener("click", () => switchSocialTab("friends"));
 $("socialRoomBack").addEventListener("click", () => switchSocialTab("rooms"));
 $("socialRoomLeave").addEventListener("click", async () => {
   if (!social.roomId || !window.confirm("이 대화방에서 나갈까요?")) return;

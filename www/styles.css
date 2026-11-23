@@ -5355,3 +5355,12 @@ body.theme-getter .cycle-shuffle-chip { background: rgba(57, 255, 136, .1); colo
 .cycle-beam-glow { stroke: rgba(190, 242, 100, .7); stroke-width: 9; }
 .cycle-beam-line { stroke-width: 5; }
 .target-cycle-card.multiple .cycle-shuffle-chip { align-self: center; }
+
+/* 채팅: 접속자 표시 */
+.social-people-bar { display: flex; align-items: center; gap: 8px; width: 100%; margin: 0 0 8px; padding: 10px 12px; border: 1px solid rgba(0, 0, 0, .08); border-radius: 12px; background: rgba(46, 160, 67, .08); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.social-people-bar span { flex: 1; }
+.social-people-bar small { opacity: .7; }
+.presence-dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: #b8b8b8; vertical-align: middle; flex: none; }
+.presence-dot.on { background: #2ea043; box-shadow: 0 0 0 2px rgba(46, 160, 67, .2); }
+.social-offline > summary { padding: 10px 4px; cursor: pointer; font-weight: 700; opacity: .75; }
+.social-offline .social-row { opacity: .85; }
